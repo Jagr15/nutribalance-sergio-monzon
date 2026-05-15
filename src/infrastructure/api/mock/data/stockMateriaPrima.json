@@ -1,0 +1,58 @@
+[
+  {
+    "uid": "stk-001",
+    "id_insumo": "i-2",
+    "id_proveedor": "p-1",
+    "lote": "OP-20215",
+    "cantidad_actual": 5000,
+    "cantidad_inicial": 10000,
+    "cantidad_comprometida": 1200,
+    "costo_unitario": 1.45,
+    "costo_total": 14500,
+    "fecha_ingreso": "2026-05-10T08:30:00Z",
+    "remito_nro": "GR-001-5542",
+    "ubicacion": "Silo A1",
+    "id_usuario": "usr-admin-01",
+    "createdAt": "2026-05-10T08:35:00Z",
+    "updatedAt": "2026-05-10T10:00:00Z",
+    "operaciones": {
+      "fecha": "2026-05-10T10:00:00Z",
+      "cantidad": 5000,
+      "destino": "PT-202654",
+      "id_operacion": "op-9982",
+      "nro_operacion": "PROD-2026-01",
+      "operacion": "CONSUMO PRODUCCIÓN"
+    },
+    "stock_transito": {
+      "id_orden": "ORD-2026-005",
+      "nro_operacion": "OP-20215",
+      "cantidad": 1200
+    }
+  },
+  {
+    "uid": "stk-002",
+    "id_insumo": "i-1",
+    "id_proveedor": "p-2",
+    "lote": "L-SOY-998",
+    "cantidad_actual": 2500,
+    "cantidad_inicial": 2500,
+    "cantidad_comprometida": 0,
+    "costo_unitario": 2.80,
+    "costo_total": 7000,
+    "fecha_ingreso": "2026-05-11T09:00:00Z",
+    "remito_nro": "FAC-002-8871",
+    "ubicacion": "Almacén Norte",
+    "id_usuario": "usr-admin-01",
+    "createdAt": "2026-05-11T09:15:00Z",
+    "updatedAt": "2026-05-11T09:15:00Z",
+    "operaciones": {
+      "fecha": "2026-05-11T09:15:00Z",
+      "cantidad": 0,
+      "destino": "PT-202633",
+      "id_operacion": "op-1054",
+      "nro_operacion": "ING-8841",
+      "operacion": "INGRESO COMPRA"
+    },
+    "stock_transito": null
+  }
+]

@@ -1,0 +1,101 @@
+[
+  {
+    "id": "OP-2026-001",
+    "lote": "OP-2026-001",
+    "id_formula": "F-101",
+    "nombre_producto": "NUTRI-RECRÍA PREMIUM",
+    "version_formula": 1.2,
+    "cantidad_objetivo": 1500,
+    "cantidad_real": null,
+    "merma_manual": null,
+    "id_silo": null,
+    "destino_silo": null,
+    "estado": "PENDIENTE",
+    "fecha_creacion": "2026-05-11T10:00:00Z",
+    "usuario_responsable": "E. MAMANI",
+    "costo_total_insumos": 1450.80,
+    "detalle_insumos": [
+      {
+        "id_lote": "L-MAIZ-10",
+        "id_insumo": "INS-001",
+        "nombre_insumo": "MAÍZ AMARILLO",
+        "cantidad_usada": 800,
+        "tipo_unidad": "KG",
+        "costo_unitario": 1.2,
+        "costo_total": 960.0
+      },
+      {
+        "id_lote": "L-SOYA-22",
+        "id_insumo": "INS-002",
+        "nombre_insumo": "SOYA INTEGRAL",
+        "cantidad_usada": 700,
+        "tipo_unidad": "KG",
+        "costo_unitario": 0.7,
+        "costo_total": 490.8
+      }
+    ]
+  },
+  {
+    "id": "OP-2026-002",
+    "lote": "OP-2026-002",
+    "id_formula": "F-202",
+    "nombre_producto": "ENGORDE FAUNA ESPECIAL",
+    "version_formula": 2.1,
+    "cantidad_objetivo": 3000,
+    "cantidad_real": null,
+    "merma_manual": null,
+    "id_silo": null,
+    "destino_silo": null,
+    "estado": "EN PROCESO",
+    "fecha_creacion": "2026-05-11T11:30:00Z",
+    "usuario_responsable": "SISTEMA",
+    "costo_total_insumos": 2100.0,
+    "detalle_insumos": [
+      {
+        "id_lote": "L-AFRE-01",
+        "id_insumo": "INS-003",
+        "nombre_insumo": "AFRECHILLO",
+        "cantidad_usada": 1500,
+        "tipo_unidad": "KG",
+        "costo_unitario": 0.8,
+        "costo_total": 1200.0
+      },
+      {
+        "id_lote": "L-PELLE-09",
+        "id_insumo": "INS-004",
+        "nombre_insumo": "PELLET PROTEICO",
+        "cantidad_usada": 1500,
+        "tipo_unidad": "KG",
+        "costo_unitario": 0.6,
+        "costo_total": 900.0
+      }
+    ]
+  },
+  {
+    "id": "OP-2026-003",
+    "lote": "OP-2026-003",
+    "id_formula": "F-303",
+    "nombre_producto": "INICIO AVÍCOLA PLUS",
+    "version_formula": 1.0,
+    "cantidad_objetivo": 1000,
+    "cantidad_real": 988.50,
+    "merma_manual": 11.50,
+    "id_silo": null,
+    "destino_silo": "SILO-04-NORTE",
+    "estado": "FINALIZADA",
+    "fecha_creacion": "2026-05-10T09:00:00Z",
+    "usuario_responsable": "E. MAMANI",
+    "costo_total_insumos": 1150.0,
+    "detalle_insumos": [
+      {
+        "id_lote": "L-MIX-05",
+        "id_insumo": "INS-005",
+        "nombre_insumo": "MIX VITAMÍNICO",
+        "cantidad_usada": 1000,
+        "tipo_unidad": "KG",
+        "costo_unitario": 1.15,
+        "costo_total": 1150.0
+      }
+    ]
+  }
+]

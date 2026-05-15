@@ -1,0 +1,46 @@
+[
+  {
+    "uid": "for-003",
+    "nombre_producto": "ALIMENTO CRECIMIENTO PREMIUM",
+    "version": 1,
+    "esta_activa": true,
+    "ultima_edicion": "2026-05-09T10:00:00Z",
+    "id_usuario": "usr-101",
+    "author": "ADMIN",
+    "createdAt": "2026-05-09T10:00:00Z",
+    "ingredientes": [
+      {
+        "id_insumo": "i-1",
+        "nombre_insumo": "Maíz Amarillo",
+        "porcentaje": 60
+      },
+      {
+        "id_insumo": "i-2",
+        "nombre_insumo": "Núcleo Vitamínico",
+        "porcentaje": 40
+      }
+    ]
+  },
+  {
+    "uid": "for-002",
+    "nombre_producto": "RECRÍA",
+    "version": 1,
+    "esta_activa": true,
+    "ultima_edicion": "2026-05-10T15:30:00.000Z",
+    "id_usuario": "usr-101",
+    "author": "ADMIN",
+    "createdAt": "2026-05-10T15:30:00.000Z",
+    "ingredientes": [
+      {
+        "id_insumo": "i-1",
+        "nombre_insumo": "Maíz Amarillo",
+        "porcentaje": 70.0
+      },
+      {
+        "id_insumo": "i-2",
+        "nombre_insumo": "Harina de avena",
+        "porcentaje": 30.0
+      }
+    ]
+  }
+]

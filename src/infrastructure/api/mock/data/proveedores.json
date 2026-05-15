@@ -1,0 +1,22 @@
+[
+    {
+      "uid": "p-1",
+      "nombre_empresa": "Molinos del Sur S.A.",
+      "contacto_nombre": "Carlos Mendoza",
+      "ruc": "20123456789",
+      "telefono": "987654321",
+      "direccion": "Av. Industrial 123, Arequipa",
+      "email": "ventas@molinos.com", 
+      "esta_activo": true
+    },
+    {
+      "uid": "p-2",
+      "nombre_empresa": "Importaciones Agro",
+      "contacto_nombre": "Lucía Torres",
+      "ruc": "20555666777",
+      "telefono": "912333444",
+      "direccion": "Calle Lima 456, Lima",
+      "email": "lucia@agroperu.pe",
+      "esta_activo": true
+    }
+  ]

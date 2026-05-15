@@ -1,0 +1,26 @@
+[
+    {
+      "uid": "u-001",
+      "username": "sergio_admin",
+      "nombre_completo": "Sergio Ramos",
+      "role": "SUPERADMIN",
+      "email": "sergio@nutribalance.com",
+      "esta_activo": true
+    },
+    {
+      "uid": "u-002",
+      "username": "juan_operario",
+      "nombre_completo": "Juan Pérez",
+      "role": "OPERARIO",
+      "email": "juanp@nutribalance.com",
+      "esta_activo": true
+    },
+    {
+      "uid": "u-003",
+      "username": "ana_encargada",
+      "nombre_completo": "Ana García",
+      "role": "ENCARGADO",
+      "email": "ana.g@nutribalance.com",
+      "esta_activo": true
+    }
+  ]
