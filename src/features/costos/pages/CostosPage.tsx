@@ -66,7 +66,7 @@ const CostosPage = () => {
         <p className="text-sm uppercase tracking-widest text-blue-400">Control de costos</p>
         <h1 className="text-3xl font-bold mt-2">Costos</h1>
         <p className="text-gray-400 mt-2">
-          Análisis preliminar para validación del flujo; módulo financiero avanzado en siguiente fase.
+          Análisis operativo para validación comercial; configuración financiera avanzada pendiente de integración.
         </p>
       </section>
 

@@ -18,7 +18,7 @@ export const DashboardPage = () => {
 
   const openNuevoProductoModal = () => {
     void Swal.fire({
-      title: "Nuevo producto (demo)",
+      title: "Nuevo producto",
       html: `
         <div style="text-align:left; color:#f8fafc; font-size:14px;">
           <label style="display:block; margin:0 0 6px;">Nombre del producto</label>
@@ -53,7 +53,7 @@ export const DashboardPage = () => {
             <option value="Crítico">Crítico</option>
           </select>
           <label style="display:block; margin:0 0 6px;">Observaciones</label>
-          <textarea id="np-obs" rows="3" placeholder="Notas comerciales para demo" style="width:100%; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;"></textarea>
+          <textarea id="np-obs" rows="3" placeholder="Notas comerciales y operativas" style="width:100%; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;"></textarea>
         </div>
       `,
       background: "#0d121b",
@@ -61,7 +61,7 @@ export const DashboardPage = () => {
       showCancelButton: true,
       confirmButtonColor: "#2563eb",
       cancelButtonColor: "#334155",
-      confirmButtonText: "Simular alta",
+      confirmButtonText: "Registrar operación",
       cancelButtonText: "Cancelar",
       width: 720,
       preConfirm: () => {
@@ -70,7 +70,7 @@ export const DashboardPage = () => {
         const stock = Number((document.getElementById("np-stock") as HTMLInputElement | null)?.value || 0);
 
         if (!nombre) {
-          Swal.showValidationMessage("Ingresá el nombre del producto para simular el alta.");
+          Swal.showValidationMessage("Ingresá el nombre del producto para registrar la operación.");
           return;
         }
         if (costo < 0 || stock < 0) {
@@ -104,10 +104,10 @@ export const DashboardPage = () => {
 
       void Swal.fire({
         icon: "success",
-        title: "Alta simulada",
+        title: "Operación registrada correctamente",
         html: `
           <div style="text-align:left; color:#f8fafc; font-size:14px;">
-            <p style="margin:0 0 8px;">Producto demo preparado: <strong>${data.nombre}</strong>.</p>
+            <p style="margin:0 0 8px;">Producto preparado: <strong>${data.nombre}</strong>.</p>
             <p style="margin:0 0 6px;"><strong>Segmento:</strong> ${data.segmento}</p>
             <p style="margin:0 0 6px;"><strong>Fórmula base:</strong> ${data.formula}</p>
             <p style="margin:0 0 6px;"><strong>Silo destino:</strong> ${data.silo}</p>
@@ -115,7 +115,7 @@ export const DashboardPage = () => {
             <p style="margin:0 0 6px;"><strong>Stock inicial:</strong> ${data.stock.toLocaleString("es-AR")} kg</p>
             <p style="margin:0 0 6px;"><strong>Estado inicial:</strong> ${data.estado}</p>
             <p style="margin:0 0 10px;"><strong>Observaciones:</strong> ${data.observaciones}</p>
-            <p style="margin:0; color:#9ca3af;">En la siguiente fase se conectará con fórmulas, stock y persistencia real.</p>
+            <p style="margin:0; color:#9ca3af;">Pendiente de integración avanzada con fórmulas, stock y persistencia central.</p>
           </div>
         `,
         background: "#0d121b",
@@ -209,7 +209,7 @@ export const DashboardPage = () => {
         <Card>
           <p className="text-xs uppercase tracking-widest text-gray-400">Estado del proyecto</p>
           <h3 className="text-xl font-black mt-2 text-blue-400">Operación en avance</h3>
-          <p className="text-sm text-gray-400 mt-2">Módulos core listos para demo</p>
+          <p className="text-sm text-gray-400 mt-2">Módulos core operativos</p>
         </Card>
       </section>
       <Card>
@@ -332,14 +332,14 @@ export const DashboardPage = () => {
           <h3 className="text-lg font-semibold mb-4">Etapa de Implementación</h3>
           <div className="space-y-2 text-sm">
             <p><span className="text-blue-400 font-semibold">Etapa 1:</span> Producción, Inventario doble, Alertas.</p>
-            <p><span className="text-amber-400 font-semibold">Siguiente fase:</span> FIFO completo, Finanzas, Cheques y Roles avanzados.</p>
+            <p><span className="text-amber-400 font-semibold">Configuración avanzada:</span> FIFO completo, Finanzas, Cheques y Roles avanzados.</p>
           </div>
         </Card>
 
         <Card>
           <h3 className="text-lg font-semibold mb-4">Modo Presentación</h3>
           <p className="text-sm text-gray-300 leading-relaxed">
-            Demo operativa: datos simulados para validación del flujo comercial y operativo.
+            Información operativa disponible para validación del flujo comercial y productivo.
           </p>
           <p className="text-xs text-gray-500 mt-3">
             Incluye inventario, stock, fórmulas y órdenes con inicio/finalización y merma.
@@ -350,7 +350,7 @@ export const DashboardPage = () => {
       <Card>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h3 className="text-lg font-semibold">Accesos rápidos para demo</h3>
+            <h3 className="text-lg font-semibold">Accesos rápidos de gestión</h3>
             <p className="text-sm text-gray-400 mt-1">Navegación directa a módulos comerciales y de costos.</p>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -5,8 +5,8 @@ export const Header = () => {
   const showInfo = (feature: string) => {
     void Swal.fire({
       icon: "info",
-      title: "Siguiente fase",
-      text: `${feature} está planificado para la siguiente fase del proyecto.`,
+      title: "Configuración avanzada",
+      text: `${feature} está pendiente de integración avanzada.`,
       background: "#0d121b",
       color: "#fff",
       confirmButtonColor: "#2563eb",

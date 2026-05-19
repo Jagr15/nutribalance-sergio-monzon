@@ -64,8 +64,8 @@ export const Sidebar = () => {
   const showComingSoon = (name: string) => {
     void Swal.fire({
       icon: "info",
-      title: "Siguiente fase",
-      text: `${name} está planificado para la siguiente fase del proyecto.`,
+      title: "Configuración avanzada",
+      text: `${name} está pendiente de integración avanzada.`,
       background: "#0d121b",
       color: "#fff",
       confirmButtonColor: "#2563eb",
@@ -134,7 +134,7 @@ export const Sidebar = () => {
                             <Icon size={15} />
                           </div>
                           <span className="text-[13px] font-medium">{item.name}</span>
-                          <span className="ml-auto text-[9px] uppercase tracking-widest">Siguiente fase</span>
+                          <span className="ml-auto text-[9px] uppercase tracking-widest">Avanzado</span>
                         </button>
                       );
                     }

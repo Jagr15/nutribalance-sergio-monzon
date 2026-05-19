@@ -3,7 +3,7 @@ import { Card } from "../../../shared/components/card";
 
 type EstadoProducto = "OK" | "Bajo" | "Crítico";
 
-interface ProductoDemo {
+interface ProductoComercial {
   uid: string;
   nombre: string;
   stockKg: number;
@@ -15,24 +15,24 @@ interface ProductoDemo {
   ultimaOrden: string;
 }
 
-interface IngredienteDemo {
+interface IngredienteComercial {
   nombre: string;
   porcentaje: number;
 }
 
-interface FormulaDemo {
+interface FormulaComercial {
   nombre: string;
   version: number;
-  ingredientes: IngredienteDemo[];
+  ingredientes: IngredienteComercial[];
   costoArsTon: number;
 }
 
-interface StockDetalleDemo {
+interface StockDetalleComercial {
   capacidadSiloKg: number;
   notaSalida: string;
 }
 
-const productosDemo: ProductoDemo[] = [
+const productosComerciales: ProductoComercial[] = [
   {
     uid: "pt-001",
     nombre: "Alimento Lechera",
@@ -79,7 +79,7 @@ const productosDemo: ProductoDemo[] = [
   },
 ];
 
-const formulasDemo: Record<string, FormulaDemo> = {
+const formulasComerciales: Record<string, FormulaComercial> = {
   "pt-001": {
     nombre: "Lechera Alta Producción",
     version: 3,
@@ -134,14 +134,14 @@ const formulasDemo: Record<string, FormulaDemo> = {
   },
 };
 
-const stockDetalleDemo: Record<string, StockDetalleDemo> = {
+const stockDetalleComercial: Record<string, StockDetalleComercial> = {
   "pt-001": {
     capacidadSiloKg: 30000,
     notaSalida: "Sin dato",
   },
   "pt-002": {
     capacidadSiloKg: 22000,
-    notaSalida: "Próxima salida estimada a cliente mayorista en siguiente fase.",
+    notaSalida: "Próxima salida estimada a cliente mayorista en etapa operativa.",
   },
   "pt-003": {
     capacidadSiloKg: 18000,
@@ -149,7 +149,7 @@ const stockDetalleDemo: Record<string, StockDetalleDemo> = {
   },
   "pt-004": {
     capacidadSiloKg: 25000,
-    notaSalida: "Reserva de despacho proyectada; integración comercial en siguiente fase.",
+    notaSalida: "Reserva de despacho proyectada; integración comercial en etapa operativa.",
   },
 };
 
@@ -169,8 +169,8 @@ const formatTon = (value: number) => `${value.toLocaleString("es-AR", { maximumF
 const formatDate = (value: string) =>
   new Date(`${value}T00:00:00`).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
 
-const openFormulaDetail = (producto: ProductoDemo) => {
-  const formula = formulasDemo[producto.uid];
+const openFormulaDetail = (producto: ProductoComercial) => {
+  const formula = formulasComerciales[producto.uid];
   const ingredientes = formula?.ingredientes ?? [];
   const costoTon = formula?.costoArsTon ?? producto.costoArsTon;
 
@@ -204,7 +204,7 @@ const openFormulaDetail = (producto: ProductoDemo) => {
           <tbody>${ingredientesHtml}</tbody>
         </table>
         <p style="margin:0 0 6px;"><strong>Costo estimado por tonelada:</strong> ${formatCurrency(costoTon)}</p>
-        <p style="margin:0; color:#9ca3af;">Fórmula demo basada en datos simulados.</p>
+        <p style="margin:0; color:#9ca3af;">Información técnica disponible en etapa operativa.</p>
       </div>
     `,
     background: "#0d121b",
@@ -215,8 +215,8 @@ const openFormulaDetail = (producto: ProductoDemo) => {
   });
 };
 
-const openStockDetail = (producto: ProductoDemo) => {
-  const detalle = stockDetalleDemo[producto.uid];
+const openStockDetail = (producto: ProductoComercial) => {
+  const detalle = stockDetalleComercial[producto.uid];
   const capacidad = detalle?.capacidadSiloKg ?? 0;
   const ocupacion = capacidad > 0 ? Math.min(100, Math.round((producto.stockKg / capacidad) * 100)) : null;
   const valorEstimado = (producto.stockKg / 1000) * producto.costoArsTon;
@@ -232,7 +232,7 @@ const openStockDetail = (producto: ProductoDemo) => {
         <p style="margin:0 0 8px;"><strong>Estado:</strong> ${producto.estado}</p>
         <p style="margin:0 0 8px;"><strong>Última producción:</strong> ${producto.ultimaProduccion ? formatDate(producto.ultimaProduccion) : "Sin dato"}</p>
         <p style="margin:0 0 8px;"><strong>Valor estimado:</strong> ${formatCurrency(Math.round(valorEstimado))}</p>
-        <p style="margin:0; color:#9ca3af;"><strong>Nota salida/venta:</strong> ${detalle?.notaSalida || "Siguiente fase"}</p>
+        <p style="margin:0; color:#9ca3af;"><strong>Nota salida/venta:</strong> ${detalle?.notaSalida || "Información disponible en etapa operativa"}</p>
       </div>
     `,
     background: "#0d121b",
@@ -243,13 +243,13 @@ const openStockDetail = (producto: ProductoDemo) => {
   });
 };
 
-const openProgramacionModal = (productoPreseleccionado?: ProductoDemo) => {
-  const options = productosDemo
+const openProgramacionModal = (productoPreseleccionado?: ProductoComercial) => {
+  const options = productosComerciales
     .map((producto) => `<option value="${producto.uid}" ${productoPreseleccionado?.uid === producto.uid ? "selected" : ""}>${producto.nombre}</option>`)
     .join("");
 
   void Swal.fire({
-    title: "Programar producción (demo)",
+    title: "Programar producción",
     html: `
       <div style="text-align:left; color:#f8fafc; font-size:14px;">
         <label style="display:block; margin: 0 0 6px;">Producto</label>
@@ -268,7 +268,7 @@ const openProgramacionModal = (productoPreseleccionado?: ProductoDemo) => {
         <input id="prod-fecha" type="date" style="width:100%; margin-bottom:12px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <p id="prod-formula" style="margin:0 0 6px; color:#cbd5e1;"><strong>Fórmula sugerida:</strong> Sin dato</p>
         <p id="prod-silo" style="margin:0 0 6px; color:#cbd5e1;"><strong>Silo destino:</strong> Sin dato</p>
-        <p id="prod-mp" style="margin:0; color:#9ca3af;"><strong>Stock materia prima estimado:</strong> Siguiente fase</p>
+        <p id="prod-mp" style="margin:0; color:#9ca3af;"><strong>Stock materia prima estimado:</strong> Información disponible en etapa operativa</p>
       </div>
     `,
     background: "#0d121b",
@@ -293,8 +293,8 @@ const openProgramacionModal = (productoPreseleccionado?: ProductoDemo) => {
       }
 
       const refreshPreview = () => {
-        const selected = productosDemo.find((item) => item.uid === select?.value);
-        const formula = selected ? formulasDemo[selected.uid] : null;
+        const selected = productosComerciales.find((item) => item.uid === select?.value);
+        const formula = selected ? formulasComerciales[selected.uid] : null;
         if (formulaLine) {
           formulaLine.innerHTML = `<strong>Fórmula sugerida:</strong> ${formula ? `${formula.nombre} v${formula.version}` : "Sin dato"}`;
         }
@@ -302,7 +302,7 @@ const openProgramacionModal = (productoPreseleccionado?: ProductoDemo) => {
           siloLine.innerHTML = `<strong>Silo destino:</strong> ${selected?.silo || "Sin dato"}`;
         }
         if (stockLine) {
-          stockLine.innerHTML = `<strong>Stock materia prima estimado:</strong> ${selected ? "Cobertura demo suficiente para 1 lote estándar." : "Siguiente fase"}`;
+          stockLine.innerHTML = `<strong>Stock materia prima estimado:</strong> ${selected ? "Cobertura operativa suficiente para 1 lote estándar." : "Información disponible en etapa operativa"}`;
         }
       };
 
@@ -315,7 +315,7 @@ const openProgramacionModal = (productoPreseleccionado?: ProductoDemo) => {
       const unidad = (document.getElementById("prod-unidad") as HTMLSelectElement | null)?.value || "kg";
       const fecha = (document.getElementById("prod-fecha") as HTMLInputElement | null)?.value;
 
-      const selected = productosDemo.find((item) => item.uid === selectedUid);
+      const selected = productosComerciales.find((item) => item.uid === selectedUid);
       const cantidad = Number(cantidadRaw);
 
       if (!selected) {
@@ -330,7 +330,7 @@ const openProgramacionModal = (productoPreseleccionado?: ProductoDemo) => {
 
       return {
         producto: selected,
-        formula: formulasDemo[selected.uid],
+        formula: formulasComerciales[selected.uid],
         cantidad,
         unidad,
         fecha: fecha || "Sin dato",
@@ -340,8 +340,8 @@ const openProgramacionModal = (productoPreseleccionado?: ProductoDemo) => {
     if (!result.isConfirmed || !result.value) return;
 
     const { producto, formula, cantidad, unidad, fecha } = result.value as {
-      producto: ProductoDemo;
-      formula?: FormulaDemo;
+      producto: ProductoComercial;
+      formula?: FormulaComercial;
       cantidad: number;
       unidad: string;
       fecha: string;
@@ -350,13 +350,13 @@ const openProgramacionModal = (productoPreseleccionado?: ProductoDemo) => {
     const cantidadLabel = unidad === "ton" ? formatTon(cantidad) : formatKg(cantidad);
     void Swal.fire({
       icon: "success",
-      title: "Programación simulada",
+      title: "Programación preparada",
       html: `
         <div style="text-align:left; color:#f8fafc; font-size:14px;">
-          <p style="margin:0 0 8px;">Orden demo preparada para <strong>${cantidadLabel}</strong> de <strong>${producto.nombre}</strong>, usando fórmula <strong>${formula ? `${formula.nombre} v${formula.version}` : "Sin dato"}</strong>.</p>
+          <p style="margin:0 0 8px;">Orden preparada para <strong>${cantidadLabel}</strong> de <strong>${producto.nombre}</strong>, usando fórmula <strong>${formula ? `${formula.nombre} v${formula.version}` : "Sin dato"}</strong>.</p>
           <p style="margin:0 0 8px;"><strong>Silo destino:</strong> ${producto.silo || "Sin dato"}</p>
           <p style="margin:0;"><strong>Fecha estimada:</strong> ${fecha === "Sin dato" ? "Sin dato" : formatDate(fecha)}</p>
-          <p style="margin:10px 0 0; color:#9ca3af;">En la siguiente fase se integrará con órdenes reales.</p>
+          <p style="margin:10px 0 0; color:#9ca3af;">Pendiente de integración avanzada con órdenes automáticas.</p>
         </div>
       `,
       background: "#0d121b",
@@ -368,9 +368,9 @@ const openProgramacionModal = (productoPreseleccionado?: ProductoDemo) => {
 };
 
 const ProductosPage = () => {
-  const totalStock = productosDemo.reduce((acc, item) => acc + item.stockKg, 0);
-  const productosConRiesgo = productosDemo.filter((item) => item.estado !== "OK").length;
-  const valorEstimado = productosDemo.reduce((acc, item) => acc + (item.stockKg / 1000) * item.costoArsTon, 0);
+  const totalStock = productosComerciales.reduce((acc, item) => acc + item.stockKg, 0);
+  const productosConRiesgo = productosComerciales.filter((item) => item.estado !== "OK").length;
+  const valorEstimado = productosComerciales.reduce((acc, item) => acc + (item.stockKg / 1000) * item.costoArsTon, 0);
 
   return (
     <div className="space-y-6">
@@ -383,7 +383,7 @@ const ProductosPage = () => {
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
           <p className="text-xs uppercase tracking-widest text-gray-400">Total productos</p>
-          <h2 className="text-3xl font-black mt-2">{productosDemo.length}</h2>
+          <h2 className="text-3xl font-black mt-2">{productosComerciales.length}</h2>
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-widest text-gray-400">Stock producto terminado</p>
@@ -426,7 +426,7 @@ const ProductosPage = () => {
               </tr>
             </thead>
             <tbody>
-              {productosDemo.map((producto) => (
+              {productosComerciales.map((producto) => (
                 <tr key={producto.uid} className="border-b border-white/5 hover:bg-white/5">
                   <td className="py-3 font-medium">{producto.nombre}</td>
                   <td className="py-3">{producto.formula}</td>

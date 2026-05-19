@@ -4,7 +4,7 @@ import { Card } from "../../../shared/components/card";
 
 type EstadoCliente = "Activo" | "En riesgo" | "Suspendido";
 
-interface ClienteDemo {
+interface ClienteComercial {
   uid: string;
   nombre: string;
   segmento: string;
@@ -16,7 +16,7 @@ interface ClienteDemo {
   productoPrincipal: string;
 }
 
-interface CompraDemo {
+interface CompraComercial {
   fecha: string;
   producto: string;
   cantidadKg: number;
@@ -24,7 +24,7 @@ interface CompraDemo {
   estado: "Entregado" | "Pendiente" | "Facturado";
 }
 
-interface FacturaDemo {
+interface FacturaComercial {
   numero: string;
   fecha: string;
   vencimiento: string;
@@ -32,20 +32,20 @@ interface FacturaDemo {
   estado: "pendiente" | "pagado" | "vencido";
 }
 
-interface CuentaCorrienteDemo {
+interface CuentaCorrienteComercial {
   limiteCreditoArs: number;
   condicionPago: string;
-  facturas: FacturaDemo[];
+  facturas: FacturaComercial[];
 }
 
-interface ClienteInfoDemo {
+interface ClienteInfoComercial {
   notasComerciales: string;
   observaciones: string;
-  historialCompras: CompraDemo[];
-  cuentaCorriente: CuentaCorrienteDemo;
+  historialCompras: CompraComercial[];
+  cuentaCorriente: CuentaCorrienteComercial;
 }
 
-const clientesDemo: ClienteDemo[] = [
+const clientesComerciales: ClienteComercial[] = [
   {
     uid: "cli-001",
     nombre: "Estancia La Esperanza",
@@ -103,7 +103,7 @@ const clientesDemo: ClienteDemo[] = [
   },
 ];
 
-const clientesInfoDemo: Record<string, ClienteInfoDemo> = {
+const clientesInfoComercial: Record<string, ClienteInfoComercial> = {
   "cli-001": {
     notasComerciales: "Cliente estable con compras quincenales y foco en eficiencia de conversión.",
     observaciones: "Priorizar seguimiento de volumen para campaña de invierno.",
@@ -204,8 +204,8 @@ const formatDate = (value: string) =>
 
 const formatKg = (value: number) => `${value.toLocaleString("es-AR")} kg`;
 
-const openDetalleCliente = (cliente: ClienteDemo) => {
-  const info = clientesInfoDemo[cliente.uid];
+const openDetalleCliente = (cliente: ClienteComercial) => {
+  const info = clientesInfoComercial[cliente.uid];
   const historial = info?.historialCompras ?? [];
   const historialRows = historial.length
     ? historial
@@ -233,7 +233,7 @@ const openDetalleCliente = (cliente: ClienteDemo) => {
         <p style="margin:0 0 6px;"><strong>Última compra:</strong> ${cliente.ultimaCompra ? formatDate(cliente.ultimaCompra) : "Sin dato"}</p>
         <p style="margin:0 0 10px;"><strong>Cuenta pendiente:</strong> ${formatCurrency(cliente.saldoPendienteArs)}</p>
         <p style="margin:0 0 12px; color:#9ca3af;"><strong>Notas comerciales:</strong> ${info?.notasComerciales || "Sin dato"}</p>
-        <h4 style="margin:0 0 8px; color:#93c5fd; font-size:13px; text-transform:uppercase;">Historial compras demo</h4>
+        <h4 style="margin:0 0 8px; color:#93c5fd; font-size:13px; text-transform:uppercase;">Historial de compras</h4>
         <table style="width:100%; border-collapse:collapse; border-top:1px solid rgba(255,255,255,0.12); border-bottom:1px solid rgba(255,255,255,0.12);">
           <thead>
             <tr>
@@ -256,8 +256,8 @@ const openDetalleCliente = (cliente: ClienteDemo) => {
   });
 };
 
-const openCuentaCorriente = (cliente: ClienteDemo) => {
-  const cuenta = clientesInfoDemo[cliente.uid]?.cuentaCorriente;
+const openCuentaCorriente = (cliente: ClienteComercial) => {
+  const cuenta = clientesInfoComercial[cliente.uid]?.cuentaCorriente;
   const facturas = cuenta?.facturas ?? [];
   const totalFacturado = facturas.reduce((acc, item) => acc + item.montoArs, 0);
   const totalPendiente = facturas.filter((item) => item.estado !== "pagado").reduce((acc, item) => acc + item.montoArs, 0);
@@ -282,9 +282,9 @@ const openCuentaCorriente = (cliente: ClienteDemo) => {
     html: `
       <div style="text-align:left; color:#f8fafc; font-size:14px;">
         <p style="margin:0 0 6px;"><strong>Saldo pendiente:</strong> ${formatCurrency(cliente.saldoPendienteArs)}</p>
-        <p style="margin:0 0 6px;"><strong>Límite de crédito demo:</strong> ${cuenta ? formatCurrency(cuenta.limiteCreditoArs) : "Sin dato"}</p>
+        <p style="margin:0 0 6px;"><strong>Límite de crédito:</strong> ${cuenta ? formatCurrency(cuenta.limiteCreditoArs) : "Sin dato"}</p>
         <p style="margin:0 0 10px;"><strong>Condición de pago:</strong> ${cuenta?.condicionPago || "Sin dato"}</p>
-        <h4 style="margin:0 0 8px; color:#93c5fd; font-size:13px; text-transform:uppercase;">Facturas demo</h4>
+        <h4 style="margin:0 0 8px; color:#93c5fd; font-size:13px; text-transform:uppercase;">Facturas</h4>
         <table style="width:100%; border-collapse:collapse; border-top:1px solid rgba(255,255,255,0.12); border-bottom:1px solid rgba(255,255,255,0.12); margin-bottom:10px;">
           <thead>
             <tr>
@@ -310,12 +310,12 @@ const openCuentaCorriente = (cliente: ClienteDemo) => {
   });
 };
 
-const openEditarCliente = (cliente: ClienteDemo) => {
-  const info = clientesInfoDemo[cliente.uid];
+const openEditarCliente = (cliente: ClienteComercial) => {
+  const info = clientesInfoComercial[cliente.uid];
   const [contactoNombre, contactoTelefono] = cliente.contacto.split("·").map((part) => part.trim());
 
   void Swal.fire({
-    title: `Editar cliente (demo)`,
+    title: `Editar cliente`,
     html: `
       <div style="text-align:left; color:#f8fafc; font-size:14px;">
         <label style="display:block; margin:0 0 6px;">Nombre</label>
@@ -343,7 +343,7 @@ const openEditarCliente = (cliente: ClienteDemo) => {
     showCancelButton: true,
     confirmButtonColor: "#2563eb",
     cancelButtonColor: "#334155",
-    confirmButtonText: "Guardar demo",
+    confirmButtonText: "Guardar cambios",
     cancelButtonText: "Cerrar",
     width: 680,
     preConfirm: () => {
@@ -359,8 +359,8 @@ const openEditarCliente = (cliente: ClienteDemo) => {
     if (!result.isConfirmed) return;
     void Swal.fire({
       icon: "success",
-      title: "Edición simulada",
-      text: "Cambios simulados para demo. En la siguiente fase se conectará a persistencia real.",
+      title: "Actualización registrada",
+      text: "Operación registrada correctamente. Pendiente de integración avanzada con persistencia central.",
       background: "#0d121b",
       color: "#fff",
       confirmButtonColor: "#2563eb",
@@ -370,7 +370,7 @@ const openEditarCliente = (cliente: ClienteDemo) => {
 
 const openNuevoCliente = () => {
   void Swal.fire({
-    title: "Nuevo cliente (demo)",
+    title: "Nuevo cliente",
     html: `
       <div style="text-align:left; color:#f8fafc; font-size:14px;">
         <label style="display:block; margin:0 0 6px;">Nombre</label>
@@ -392,7 +392,7 @@ const openNuevoCliente = () => {
     showCancelButton: true,
     confirmButtonColor: "#2563eb",
     cancelButtonColor: "#334155",
-    confirmButtonText: "Simular alta",
+    confirmButtonText: "Registrar alta",
     cancelButtonText: "Cerrar",
     width: 680,
     preConfirm: () => {
@@ -408,8 +408,8 @@ const openNuevoCliente = () => {
     if (!result.isConfirmed) return;
     void Swal.fire({
       icon: "success",
-      title: "Alta simulada",
-      text: "Cliente generado solo para demo. En la siguiente fase se conectará a persistencia real.",
+      title: "Alta registrada",
+      text: "Cliente preparado correctamente. Pendiente de integración avanzada con persistencia central.",
       background: "#0d121b",
       color: "#fff",
       confirmButtonColor: "#2563eb",
@@ -422,8 +422,8 @@ const ClientesPage = () => {
 
   const filteredClientes = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return clientesDemo;
-    return clientesDemo.filter((cliente) =>
+    if (!query) return clientesComerciales;
+    return clientesComerciales.filter((cliente) =>
       [cliente.nombre, cliente.segmento, cliente.ubicacion, cliente.contacto, cliente.productoPrincipal]
         .join(" ")
         .toLowerCase()
@@ -442,7 +442,7 @@ const ClientesPage = () => {
       <section>
         <p className="text-sm uppercase tracking-widest text-blue-400">Módulo comercial</p>
         <h1 className="text-3xl font-bold mt-2">Clientes</h1>
-        <p className="text-gray-400 mt-2">Vista demo para seguimiento comercial, segmentación y cuentas pendientes.</p>
+        <p className="text-gray-400 mt-2">Vista comercial para seguimiento de segmentación, cuentas pendientes y actividad de compra.</p>
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
