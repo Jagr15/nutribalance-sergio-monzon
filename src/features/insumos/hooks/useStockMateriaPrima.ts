@@ -1,6 +1,7 @@
 // src/features/insumos/hooks/useStockMateriaPrima.ts
 import { useState, useCallback } from 'react';
 import { stockMateriaPrimaService } from '../services/stockMateriaPrimaService';
+import type { NewStockEntryData } from '../services/stockMateriaPrimaService';
 import type { StockMateriaPrima, StockEnTransito } from '../types';
 
 export const useStockMateriaPrima = () => {
@@ -19,12 +20,10 @@ export const useStockMateriaPrima = () => {
     }
   }, []);
 
-  const create = async (data: any) => {
+  const create = async (data: NewStockEntryData) => {
     setIsLoading(true);
     try {
-      console.log("data recibida", data)
       const nuevo = await stockMateriaPrimaService.create(data);
-      console.log("registro",nuevo)
       setLotes((prev) => [nuevo, ...prev]);
       return nuevo;
     } catch (error) {
@@ -40,8 +39,11 @@ export const useStockMateriaPrima = () => {
       await stockMateriaPrimaService.delete(uid);
       setLotes((prev) => prev.filter((item) => item.uid !== uid));
       return true;
-    } catch (error: any) {
-      throw new Error(error.message || "Error al eliminar");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error("Error al eliminar", { cause: error });
     }
   };
 
@@ -100,8 +102,8 @@ export const useStockMateriaPrima = () => {
       const nuevaCantidadComprometida = Math.max(0, (loteAfectado.cantidad_comprometida || 0) - cantidadARestar);
 
       // 2. Preparamos el update para limpiar el campo (null/undefined)
-      const updateData: any = {
-        stock_transito: null, // O borrar el campo según tu DB
+      const updateData: Partial<StockMateriaPrima> = {
+        stock_transito: undefined,
         cantidad_comprometida: nuevaCantidadComprometida,
         updatedAt: new Date()
       };

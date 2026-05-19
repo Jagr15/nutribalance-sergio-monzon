@@ -1,45 +1,75 @@
 [
   {
-    "uid": "for-003",
-    "nombre_producto": "ALIMENTO CRECIMIENTO PREMIUM",
-    "version": 1,
+    "uid": "for-001",
+    "nombre_producto": "Alimento Lechera",
+    "version": 2,
     "esta_activa": true,
-    "ultima_edicion": "2026-05-09T10:00:00Z",
+    "ultima_edicion": "2026-05-15T10:00:00Z",
     "id_usuario": "usr-101",
-    "author": "ADMIN",
-    "createdAt": "2026-05-09T10:00:00Z",
+    "author": "Sergio Monzón",
+    "createdAt": "2026-05-10T09:00:00Z",
     "ingredientes": [
       {
         "id_insumo": "i-1",
-        "nombre_insumo": "Maíz Amarillo",
-        "porcentaje": 60
+        "nombre_insumo": "Maíz",
+        "porcentaje": 48
       },
       {
         "id_insumo": "i-2",
+        "nombre_insumo": "Soja",
+        "porcentaje": 30
+      },
+      {
+        "id_insumo": "i-5",
+        "nombre_insumo": "Afrechillo",
+        "porcentaje": 15
+      },
+      {
+        "id_insumo": "i-3",
         "nombre_insumo": "Núcleo Vitamínico",
-        "porcentaje": 40
+        "porcentaje": 5
+      },
+      {
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "porcentaje": 2
       }
     ]
   },
   {
     "uid": "for-002",
-    "nombre_producto": "RECRÍA",
+    "nombre_producto": "Pellet Cerdo Crecimiento",
     "version": 1,
     "esta_activa": true,
-    "ultima_edicion": "2026-05-10T15:30:00.000Z",
+    "ultima_edicion": "2026-05-16T15:30:00Z",
     "id_usuario": "usr-101",
-    "author": "ADMIN",
-    "createdAt": "2026-05-10T15:30:00.000Z",
+    "author": "Sergio Monzón",
+    "createdAt": "2026-05-12T13:30:00Z",
     "ingredientes": [
       {
         "id_insumo": "i-1",
-        "nombre_insumo": "Maíz Amarillo",
-        "porcentaje": 70.0
+        "nombre_insumo": "Maíz",
+        "porcentaje": 42
       },
       {
         "id_insumo": "i-2",
-        "nombre_insumo": "Harina de avena",
-        "porcentaje": 30.0
+        "nombre_insumo": "Soja",
+        "porcentaje": 34
+      },
+      {
+        "id_insumo": "i-5",
+        "nombre_insumo": "Afrechillo",
+        "porcentaje": 18
+      },
+      {
+        "id_insumo": "i-3",
+        "nombre_insumo": "Núcleo Vitamínico",
+        "porcentaje": 4
+      },
+      {
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "porcentaje": 2
       }
     ]
   }

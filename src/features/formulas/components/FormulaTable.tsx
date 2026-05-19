@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   FiEdit2, FiTrash2, FiFileText, FiCalendar, 
   FiChevronDown, FiChevronUp, FiSearch, FiClock,
@@ -19,11 +19,6 @@ const FormulaTable: React.FC<Props> = ({ data = [], onEdit, onDelete }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
-  // Forzar el reset de página si los datos cambian (por si vienes de una búsqueda)
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [data.length]);
-
   // 1. FILTRADO (Aseguramos que data sea procesable)
   const filteredData = useMemo(() => {
     const source = Array.isArray(data) ? data : [];
@@ -42,7 +37,8 @@ const FormulaTable: React.FC<Props> = ({ data = [], onEdit, onDelete }) => {
  
   // 2. PAGINACIÓN
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
-  const startIndex = (currentPage - 1) * itemsPerPage;
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * itemsPerPage;
   const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
   const handlePageChange = (newPage: number) => {
@@ -158,7 +154,7 @@ const FormulaTable: React.FC<Props> = ({ data = [], onEdit, onDelete }) => {
                             <FiClock size={10} />
                             <span className="text-[8px] font-black uppercase">Última Edición:</span>
                             <span className="text-[9px] text-gray-500 font-mono">
-                              {formula.ultima_edicion ? format(new Date(formula.ultima_edicion), "dd/MM/yyyy HH:mm") : '---'}
+                              {formula.ultima_edicion ? format(new Date(formula.ultima_edicion), "dd/MM/yyyy HH:mm") : 'Sin dato'}
                             </span>
                           </div>
                         </div>
@@ -180,20 +176,20 @@ const FormulaTable: React.FC<Props> = ({ data = [], onEdit, onDelete }) => {
         {/* Paginación */}
         <div className="px-5 py-3 border-t border-white/5 bg-white/[0.01] flex items-center justify-between">
           <span className="text-[9px] text-gray-600 font-bold uppercase tracking-widest">
-            {filteredData.length} registros • Pág {currentPage} de {totalPages}
+            {filteredData.length} registros • Pág {safeCurrentPage} de {totalPages}
           </span>
           <div className="flex items-center gap-2">
-            <button disabled={currentPage === 1} onClick={() => handlePageChange(currentPage - 1)} className="p-1.5 rounded-lg border border-white/5 bg-white/[0.02] text-gray-500 hover:text-white disabled:opacity-20 transition-all">
+            <button disabled={safeCurrentPage === 1} onClick={() => handlePageChange(safeCurrentPage - 1)} className="p-1.5 rounded-lg border border-white/5 bg-white/[0.02] text-gray-500 hover:text-white disabled:opacity-20 transition-all">
               <FiChevronLeft size={14} />
             </button>
             <div className="flex gap-1">
               {Array.from({ length: totalPages }, (_, i) => (
-                <button key={i} onClick={() => handlePageChange(i + 1)} className={`w-6 h-6 rounded-lg text-[9px] font-black transition-all border ${currentPage === i + 1 ? 'bg-blue-600 border-blue-500 text-white' : 'border-white/5 text-gray-600'}`}>
+                <button key={i} onClick={() => handlePageChange(i + 1)} className={`w-6 h-6 rounded-lg text-[9px] font-black transition-all border ${safeCurrentPage === i + 1 ? 'bg-blue-600 border-blue-500 text-white' : 'border-white/5 text-gray-600'}`}>
                   {i + 1}
                 </button>
               ))}
             </div>
-            <button disabled={currentPage === totalPages || filteredData.length === 0} onClick={() => handlePageChange(currentPage + 1)} className="p-1.5 rounded-lg border border-white/5 bg-white/[0.02] text-gray-500 hover:text-white disabled:opacity-20 transition-all">
+            <button disabled={safeCurrentPage === totalPages || filteredData.length === 0} onClick={() => handlePageChange(safeCurrentPage + 1)} className="p-1.5 rounded-lg border border-white/5 bg-white/[0.02] text-gray-500 hover:text-white disabled:opacity-20 transition-all">
               <FiChevronRight size={14} />
             </button>
           </div>

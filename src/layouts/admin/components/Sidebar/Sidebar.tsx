@@ -1,21 +1,36 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom"; // Importación clave
 import { ROUTES } from "../../../../app/config/routes"; // Tus constantes de rutas
+import Swal from "sweetalert2";
 import {
   FiGrid, FiUsers, FiPackage, FiTruck, FiBarChart2,
    FiLogOut,FiInbox,FiDatabase,
   FiLayers, FiArchive, FiChevronDown, FiChevronRight,
 } from "react-icons/fi";
+import type { IconType } from "react-icons";
+
+interface SidebarItem {
+  name: string;
+  icon: IconType;
+  path: string;
+  enabled?: boolean;
+}
+
+interface SidebarGroup {
+  section: string;
+  collapsible: boolean;
+  items: SidebarItem[];
+}
 
 // Agregamos el campo 'path' al objeto para vincularlo con el Router
-const menuItems = [
+const menuItems: SidebarGroup[] = [
   {
     section: "GENERAL",
     collapsible: false,
     items: [
       { name: "Dashboard", icon: FiGrid, path: ROUTES.DASHBOARD },
-      { name: "Clientes", icon: FiUsers, path: "/clientes" },
-      { name: "Productos", icon: FiPackage, path: "/productos" },
+      { name: "Clientes", icon: FiUsers, path: ROUTES.CLIENTES },
+      { name: "Productos", icon: FiPackage, path: ROUTES.PRODUCTOS },
       { name: "Proveedores", icon: FiTruck, path: ROUTES.PROVEEDORES },
     ],
   },
@@ -27,7 +42,7 @@ const menuItems = [
       { name: "Insumos", icon: FiArchive, path: ROUTES.INSUMOS },
       { name: "Fórmulas", icon: FiLayers, path: ROUTES.FORMULAS },
       { name: "Órdenes", icon: FiLayers, path: ROUTES.ORDENES},
-      { name: "Costos", icon: FiBarChart2, path: "/produccion/costos" },
+      { name: "Costos", icon: FiBarChart2, path: ROUTES.COSTOS },
     ],
   },
   {
@@ -37,7 +52,7 @@ const menuItems = [
       
     
       { name: "Stock Materia Prima", icon: FiInbox, path: ROUTES.STOCKMATERIAPRIMA },
-      { name: "Terminado", icon: FiPackage, path: "/inventario/terminado" },
+      { name: "Terminado", icon: FiPackage, path: "/inventario/terminado", enabled: false },
     ],
   },
   // ... resto de secciones (puedes añadir los paths que necesites)
@@ -46,6 +61,16 @@ const menuItems = [
 export const Sidebar = () => {
   const location = useLocation();
   const [openSections, setOpenSections] = useState<string[]>(["PRODUCCIÓN", "INVENTARIO"]);
+  const showComingSoon = (name: string) => {
+    void Swal.fire({
+      icon: "info",
+      title: "Siguiente fase",
+      text: `${name} está planificado para la siguiente fase del proyecto.`,
+      background: "#0d121b",
+      color: "#fff",
+      confirmButtonColor: "#2563eb",
+    });
+  };
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) =>
@@ -64,8 +89,8 @@ export const Sidebar = () => {
             N
           </div>
           <div>
-            <h1 className="text-[15px] font-semibold text-white">NutriBalance</h1>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500">ERP</p>
+            <h1 className="text-[15px] font-semibold text-white">Nutribalance</h1>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-gray-500">Producción e Inventario</p>
           </div>
         </div>
       </div>
@@ -78,6 +103,7 @@ export const Sidebar = () => {
             <div key={group.section}>
               <button
                 onClick={() => group.collapsible && toggleSection(group.section)}
+                aria-label={`Alternar sección ${group.section}`}
                 className="w-full flex items-center justify-between px-3 mb-2"
               >
                 <p className="text-[10px] tracking-[0.25em] uppercase text-gray-600 font-semibold text-left">
@@ -95,6 +121,24 @@ export const Sidebar = () => {
                   {group.items.map((item) => {
                     const Icon = item.icon;
                     const isActive = location.pathname === item.path;
+                    if (item.enabled === false) {
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          aria-label={`${item.name} no disponible`}
+                          onClick={() => showComingSoon(item.name)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-gray-500 hover:bg-white/5 hover:text-gray-300"
+                        >
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5">
+                            <Icon size={15} />
+                          </div>
+                          <span className="text-[13px] font-medium">{item.name}</span>
+                          <span className="ml-auto text-[9px] uppercase tracking-widest">Siguiente fase</span>
+                        </button>
+                      );
+                    }
+
                     return (
                       <NavLink
                         key={item.name}
@@ -132,7 +176,12 @@ export const Sidebar = () => {
               <h4 className="font-medium text-[13px]">Edwin</h4>
               <p className="text-[11px] text-gray-500">Admin</p>
             </div>
-            <button className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center hover:bg-red-500/10 hover:text-red-400 transition">
+            <button
+              type="button"
+              aria-label="Cerrar sesión"
+              onClick={() => showComingSoon("Cerrar sesión")}
+              className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center hover:bg-red-500/10 hover:text-red-400 transition"
+            >
               <FiLogOut size={14} />
             </button>
           </div>

@@ -1,10 +1,11 @@
 import type { TipoUnidad } from "../../../shared/types/global.interface";
 
-export enum TipoCategoria {
-    Grano = "Grano",
-    Suplemento = "Suplemento",
-    Aditivo ="Aditivo"
-}
+export const TipoCategoria = {
+  Grano: "Grano",
+  Suplemento: "Suplemento",
+  Aditivo: "Aditivo",
+} as const;
+export type TipoCategoria = (typeof TipoCategoria)[keyof typeof TipoCategoria];
 export interface Insumo {
     uid: string;
     nombre: string; // Ej: "Maíz"

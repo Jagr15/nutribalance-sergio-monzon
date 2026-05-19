@@ -12,7 +12,7 @@ export const useProveedores = () => {
     try {
       const data = await proveedorService.findAll();
       // Mostramos solo los activos en la lista principal
-      setProveedores(data.filter(p => p.esta_activo));
+      setProveedores(data.filter((p: Proveedor) => p.esta_activo));
     } catch (error) {
       console.error("Error al cargar proveedores:", error);
     } finally {
@@ -47,7 +47,7 @@ export const useProveedores = () => {
       await proveedorService.delete(uid);
       setProveedores(prev => prev.filter(p => p.uid !== uid));
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   };

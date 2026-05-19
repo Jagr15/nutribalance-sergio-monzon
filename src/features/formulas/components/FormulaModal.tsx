@@ -4,6 +4,7 @@ import { FiX, FiPlus, FiTrash2, FiChevronDown, FiSearch, FiCheckCircle, FiLayers
 import { useFormulas } from '../hooks/useFormulas';
 import { ApiService } from '../../../infrastructure/api';
 import type { Formula, Ingrediente as InsumoFormula } from '../types';
+import type { Insumo } from '../../insumos/types';
 import Swal from 'sweetalert2';
 
 interface Props {
@@ -22,7 +23,7 @@ const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
   const [estaActiva, setEstaActiva] = useState(formula?.esta_activa ?? true);
   const [insumosSeleccionados, setInsumosSeleccionados] = useState<InsumoFormula[]>(formula?.ingredientes || []);
   
-  const [maestroInsumos, setMaestroInsumos] = useState<any[]>([]);
+  const [maestroInsumos, setMaestroInsumos] = useState<Insumo[]>([]);
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -74,7 +75,7 @@ const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
     return nombre.trim() !== '' && isSumaValida && hayCambios && insumosSeleccionados.length > 0;
   }, [nombre, isSumaValida, hasStructuralChanges, hasStatusChanged, insumosSeleccionados]);
 
-  const handleSelectInsumo = (index: number, ins: any) => {
+  const handleSelectInsumo = (index: number, ins: Insumo) => {
     const yaExiste = insumosSeleccionados.some((item, i) => item.id_insumo === ins.uid && i !== index);
     if (yaExiste) {
       Toast.fire({ icon: 'error', title: 'Insumo ya presente en la mezcla' });

@@ -1,15 +1,17 @@
-export enum TipoMovimiento {
-    ENTRADA = "ENTRADA",
-    SALIDA = "SALIDA",
-    AJUSTE = "AJUSTE"
-}
+export const TipoMovimiento = {
+  ENTRADA: "ENTRADA",
+  SALIDA: "SALIDA",
+  AJUSTE: "AJUSTE",
+} as const;
+export type TipoMovimiento = (typeof TipoMovimiento)[keyof typeof TipoMovimiento];
 
-export enum OrigenMovimiento {
-    COMPRA = "COMPRA",
-    PRODUCCION = "PRODUCCION",
-    VENTA = "VENTA",
-    MERMA = "MERMA"
-}
+export const OrigenMovimiento = {
+  COMPRA: "COMPRA",
+  PRODUCCION: "PRODUCCION",
+  VENTA: "VENTA",
+  MERMA: "MERMA",
+} as const;
+export type OrigenMovimiento = (typeof OrigenMovimiento)[keyof typeof OrigenMovimiento];
 
 export interface Movimiento {
   uid: string;

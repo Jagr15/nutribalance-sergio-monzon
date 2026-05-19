@@ -3,8 +3,15 @@ import { type Movimiento, TipoMovimiento, OrigenMovimiento } from "../../../../f
 import { TipoUnidad } from "../../../../shared/types/global.interface";
 import initialDataRaw from "../data/stockMateriaPrima.json";
 
+type StockMateriaPrimaRaw = Omit<StockMateriaPrima, 'fecha_ingreso' | 'createdAt' | 'updatedAt' | 'operaciones'> & {
+  fecha_ingreso: string;
+  createdAt: string;
+  updatedAt: string;
+  operaciones?: Omit<NonNullable<StockMateriaPrima['operaciones']>, 'fecha'> & { fecha: string };
+};
+
 // Convertimos las strings del JSON a objetos Date reales
-const initialData: StockMateriaPrima[] = (initialDataRaw as any[]).map(item => ({
+const initialData: StockMateriaPrima[] = (initialDataRaw as unknown as StockMateriaPrimaRaw[]).map(item => ({
   ...item,
   fecha_ingreso: new Date(item.fecha_ingreso),
   createdAt: new Date(item.createdAt),
@@ -21,7 +28,7 @@ const initialData: StockMateriaPrima[] = (initialDataRaw as any[]).map(item => (
 })) as StockMateriaPrima[];
 
 let stockDB: StockMateriaPrima[] = [...initialData];
-let movimientosDB: Movimiento[] = [];
+const movimientosDB: Movimiento[] = [];
 
 export const mockMateriaPrimaService = {
   

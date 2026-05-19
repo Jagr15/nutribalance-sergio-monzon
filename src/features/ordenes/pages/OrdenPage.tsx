@@ -5,19 +5,61 @@ import OrdenTable from '../components/OrdenTable';
 import OrdenModal from '../components/OrdenModal';
 import FinalizarOrdenModal from '../components/FinalizarOrdenModal';
 import { useOrdenes } from '../hooks/useOrdenes';
+import type { FinalizarOrdenPayload } from '../services/ordenService';
 import type { OrdenProduccion } from '../types/orden';
+import Swal from 'sweetalert2';
 
 const OrdenPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [ordenAFinalizar, setOrdenAFinalizar] = useState<OrdenProduccion | null>(null);
   
   // Extraemos fetchOrdenes para poder refrescar la lista
-  const { ordenes, isLoading, handleFinishProduction, fetchOrdenes } = useOrdenes();
+  const { ordenes, isLoading, handleStartProduction, handleDeleteOrder, handleFinishProduction, fetchOrdenes } = useOrdenes();
 
-  const onConfirmFinish = async (data: any) => {
+  const onConfirmFinish = async (data: FinalizarOrdenPayload) => {
     if (!ordenAFinalizar) return;
     await handleFinishProduction(ordenAFinalizar.id, data);
+    await Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: `Orden ${ordenAFinalizar.lote} finalizada`,
+      timer: 2200,
+      showConfirmButton: false,
+      background: '#0d121b',
+      color: '#fff',
+    });
     setOrdenAFinalizar(null);
+  };
+
+  const onStartOrder = async (orden: OrdenProduccion) => {
+    await handleStartProduction(orden.id);
+    await Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: `Orden ${orden.lote} iniciada`,
+      timer: 2200,
+      showConfirmButton: false,
+      background: '#0d121b',
+      color: '#fff',
+    });
+  };
+
+  const onDeleteOrder = async (orden: OrdenProduccion) => {
+    const result = await Swal.fire({
+      title: '¿Eliminar orden?',
+      text: `Se eliminará ${orden.lote}. Esta acción no se puede revertir.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      background: '#0d121b',
+      color: '#fff',
+      confirmButtonColor: '#dc2626',
+    });
+    if (!result.isConfirmed) return;
+    await handleDeleteOrder(orden.id);
   };
 
   return (
@@ -40,6 +82,20 @@ const OrdenPage: React.FC = () => {
           <FiPlus size={16}/> Nueva Orden
         </button>
       </header>
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-[#0d121b] border border-white/5 rounded-xl px-4 py-3">
+          <p className="text-[10px] uppercase tracking-widest text-gray-500">Producción</p>
+          <p className="text-sm text-gray-300 mt-1">Seguimiento de lotes activos y cierres.</p>
+        </div>
+        <div className="bg-[#0d121b] border border-white/5 rounded-xl px-4 py-3">
+          <p className="text-[10px] uppercase tracking-widest text-gray-500">Inventario</p>
+          <p className="text-sm text-gray-300 mt-1">Consumo de insumos y costo por orden.</p>
+        </div>
+        <div className="bg-[#0d121b] border border-white/5 rounded-xl px-4 py-3">
+          <p className="text-[10px] uppercase tracking-widest text-gray-500">Estado Operativo</p>
+          <p className="text-sm text-gray-300 mt-1">Pendiente, en proceso y finalizada.</p>
+        </div>
+      </section>
 
       {/* Buscador Slim */}
       <div className="relative group max-w-md">
@@ -57,9 +113,16 @@ const OrdenPage: React.FC = () => {
           <div className="w-8 h-8 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
           <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Cargando registros...</p>
         </div>
+      ) : ordenes.length === 0 ? (
+        <div className="h-64 flex flex-col items-center justify-center gap-3 bg-[#0d121b] border border-white/5 rounded-[1.5rem]">
+          <p className="text-sm font-bold text-gray-300">Todavía no hay órdenes cargadas</p>
+          <p className="text-xs text-gray-500">Creá una orden para iniciar el flujo de producción.</p>
+        </div>
       ) : (
         <OrdenTable 
           data={ordenes} 
+          onIniciar={onStartOrder}
+          onEliminar={onDeleteOrder}
           onFinalizar={(orden) => setOrdenAFinalizar(orden)} 
         />
       )}

@@ -1,11 +1,12 @@
 import type { TipoUnidad } from "../../../shared/types/global.interface";
 
-export enum EstadoOrden {
-  PENDIENTE = 'PENDIENTE',
-  EN_PROCESO = 'EN PROCESO',
-  FINALIZADO = 'FINALIZADO',
-  ANULADO = 'ANULADO'
-}
+export const EstadoOrden = {
+  PENDIENTE: "PENDIENTE",
+  EN_PROCESO: "EN PROCESO",
+  FINALIZADO: "FINALIZADO",
+  ANULADO: "ANULADO",
+} as const;
+export type EstadoOrden = (typeof EstadoOrden)[keyof typeof EstadoOrden];
 
 
 export interface DetalleInsumoLote {
@@ -29,8 +30,8 @@ export interface OrdenProduccion {
   estado: EstadoOrden;
   fecha_creacion: string;
   usuario_responsable: string;
-  id_silo: string;
-  destino_silo: string
+  id_silo: string | null;
+  destino_silo: string | null;
   
   // EL HISTORIAL DE TRAZABILIDAD
   detalle_insumos: DetalleInsumoLote[]; 

@@ -1,22 +1,32 @@
 [
-    {
-      "uid": "p-1",
-      "nombre_empresa": "Molinos del Sur S.A.",
-      "contacto_nombre": "Carlos Mendoza",
-      "ruc": "20123456789",
-      "telefono": "987654321",
-      "direccion": "Av. Industrial 123, Arequipa",
-      "email": "ventas@molinos.com", 
-      "esta_activo": true
-    },
-    {
-      "uid": "p-2",
-      "nombre_empresa": "Importaciones Agro",
-      "contacto_nombre": "Lucía Torres",
-      "ruc": "20555666777",
-      "telefono": "912333444",
-      "direccion": "Calle Lima 456, Lima",
-      "email": "lucia@agroperu.pe",
-      "esta_activo": true
-    }
-  ]
+  {
+    "uid": "p-1",
+    "nombre_empresa": "AgroGranos Pampeanos S.A.",
+    "contacto_nombre": "Mariano Fernández",
+    "telefono": "+54 9 11 4455 7788",
+    "direccion": "Ruta 8 Km 212, Pergamino, Buenos Aires",
+    "email": "ventas@agrogranos.com.ar",
+    "documento": "30-71234567-9",
+    "esta_activo": true
+  },
+  {
+    "uid": "p-2",
+    "nombre_empresa": "NutriSoja del Litoral SRL",
+    "contacto_nombre": "Luciana Rivas",
+    "telefono": "+54 9 341 522 3344",
+    "direccion": "Av. Circunvalación 1450, Rosario, Santa Fe",
+    "email": "comercial@nutrisoja.com.ar",
+    "documento": "30-70999888-1",
+    "esta_activo": true
+  },
+  {
+    "uid": "p-3",
+    "nombre_empresa": "Premezclas Andinas",
+    "contacto_nombre": "Gustavo Páez",
+    "telefono": "+54 9 261 611 2300",
+    "direccion": "Parque Industrial 3, Godoy Cruz, Mendoza",
+    "email": "pedidos@premezclasandinas.com.ar",
+    "documento": "30-70111222-4",
+    "esta_activo": true
+  }
+]

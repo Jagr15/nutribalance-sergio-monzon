@@ -1,8 +1,11 @@
 // src/features/insumos/components/StockMateriaPrimaModal.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { FiX, FiSave, FiBox, FiTruck, FiMapPin, FiCalendar, FiHash, FiFileText, FiChevronDown, FiDollarSign } from "react-icons/fi";
+import { FiX, FiSave, FiBox, FiTruck, FiMapPin, FiCalendar, FiHash, FiFileText, FiDollarSign } from "react-icons/fi";
 import { useStockMateriaPrima } from '../hooks';
 import { ApiService } from '../../../infrastructure/api';
+import type { Insumo } from '../types';
+import type { Proveedor } from '../../proveedores/types';
+import type { Silo } from '../../silos/types';
 import Swal from 'sweetalert2';
 
 interface Props {
@@ -14,9 +17,9 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const { create, isLoading } = useStockMateriaPrima();
   
   // Listas para catálogos
-  const [insumos, setInsumos] = useState<any[]>([]);
-  const [proveedores, setProveedores] = useState<any[]>([]);
-  const [silos, setSilos] = useState<any[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [silos, setSilos] = useState<Silo[]>([]);
   
   // Control de Dropdowns y Búsqueda
   const [activeDropdown, setActiveDropdown] = useState<'insumo' | 'prov' | 'silo' | null>(null);
@@ -56,7 +59,7 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     loadData();
   }, []);
 
-  // CÁLCULO DINÁMICO DEL COSTO UNITARIO (S/ por KG)
+  // CÁLCULO DINÁMICO DEL COSTO UNITARIO (ARS por KG)
   const costoUnitarioCalculado = useMemo(() => {
     if (formData.cantidad <= 0 || formData.costo_total <= 0) return 0;
     const cantidadEnKg = formData.unidad_entrada === 'TON' ? formData.cantidad * 1000 : formData.cantidad;
@@ -216,7 +219,7 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
           {/* SECCIÓN 3: COSTOS DINÁMICOS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-5 bg-emerald-500/[0.03] rounded-2xl border border-emerald-500/10">
             <div className="space-y-1">
-              <label className={labelStyles}><FiDollarSign className="text-emerald-500"/> Costo Total de Compra (S/)</label>
+              <label className={labelStyles}><FiDollarSign className="text-emerald-500"/> Costo Total de Compra (ARS)</label>
               <div className="relative">
                 <input 
                   required type="number" step="any" 
@@ -231,7 +234,7 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
               <label className={labelStyles}>Precio Unitario Proyectado</label>
               <div className="h-[42px] flex items-center px-4 bg-white/[0.02] border border-white/5 rounded-xl">
                 <span className="text-sm font-black text-white">
-                  S/ {costoUnitarioCalculado.toFixed(2)} 
+                  ARS {costoUnitarioCalculado.toFixed(2)} 
                   <span className="text-[10px] ml-2 text-emerald-500/50 font-bold uppercase tracking-widest">x kilogramo</span>
                 </span>
               </div>

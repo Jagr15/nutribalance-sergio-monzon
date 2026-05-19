@@ -1,7 +1,8 @@
-export enum TipoCliente {
-    PERSONA = "PERSONA",
-    EMPRESA = "EMPRESA"
-}
+export const TipoCliente = {
+  PERSONA: "PERSONA",
+  EMPRESA: "EMPRESA",
+} as const;
+export type TipoCliente = (typeof TipoCliente)[keyof typeof TipoCliente];
 
 export interface Cliente {
   uid: string;

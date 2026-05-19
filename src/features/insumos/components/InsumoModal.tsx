@@ -65,7 +65,7 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, onClose, onSuccess })
     
       await onSuccess(); 
       onClose();
-    } catch (error) {
+    } catch {
       Swal.fire({
         icon: 'error',
         title: 'Error al procesar',

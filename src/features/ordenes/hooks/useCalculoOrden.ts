@@ -1,20 +1,30 @@
 // src/features/ordenes/hooks/useCalculoOrden.ts
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { stockMateriaPrimaService } from '../../insumos/services/stockMateriaPrimaService';
 import type { Formula } from '../../formulas/types';
 import type { StockMateriaPrima } from '../../insumos/types'; // Asegúrate de importar la interfaz
+import type { DetalleInsumoLote } from '../types/orden';
+import { TipoUnidad } from '../../../shared/types/global.interface';
+
+export interface CalculoOrdenResultado {
+  inversionTotal: number;
+  costoPorKg: number;
+  lotesInvolucrados: DetalleInsumoLote[];
+  stockSuficiente: boolean;
+  ingredientesFaltantes: string[];
+}
 
 export const useCalculoOrden = () => {
   const [isCalculando, setIsCalculando] = useState(false);
 
-  const calcularInversionLote = async (cantidadObjetivo: number, formula: Formula) => {
+  const calcularInversionLote = useCallback(async (cantidadObjetivo: number, formula: Formula): Promise<CalculoOrdenResultado | null> => {
     if (!cantidadObjetivo || !formula) return null;
     
     setIsCalculando(true);
     try {
       const todosLosLotes: StockMateriaPrima[] = await stockMateriaPrimaService.findAll();
       let inversionTotal = 0;
-      const lotesInvolucrados: any[] = [];
+      const lotesInvolucrados: DetalleInsumoLote[] = [];
       const ingredientesFaltantes: string[] = []; 
       let stockSuficienteGlobal = true;
 
@@ -48,6 +58,7 @@ export const useCalculoOrden = () => {
             id_insumo: ingrediente.id_insumo,
             nombre_insumo: ingrediente.nombre_insumo,
             cantidad_usada: cantidadATomar,
+            tipo_unidad: TipoUnidad.KG,
             costo_unitario: lote.costo_unitario,
             costo_total: costoTramo
           });
@@ -73,7 +84,7 @@ export const useCalculoOrden = () => {
     } finally {
       setIsCalculando(false);
     }
-  };
+  }, []);
 
   return { calcularInversionLote, isCalculando };
 };

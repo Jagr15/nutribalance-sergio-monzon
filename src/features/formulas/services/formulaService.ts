@@ -50,6 +50,9 @@ export const formulaService = {
       ingredientes: baseFormula.ingredientes,
       version: baseFormula.version + 1,
       esta_activa: true,
+      id_usuario: baseFormula.id_usuario,
+      author: baseFormula.author,
+      createdAt: baseFormula.createdAt,
     };
     return ApiService.formulas.create(nextVersion);
   }

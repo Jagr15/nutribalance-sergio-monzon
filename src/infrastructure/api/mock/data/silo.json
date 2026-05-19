@@ -1,17 +1,22 @@
 [
-    {
-      "uid": "silo-001",
-      "nombre": "Silo grano G3",
-      "descripcion": "Almacenamiento principal de maíz amarillo y granos de alta densidad."
-    },
-    {
-      "uid": "silo-002",
-      "nombre": "Silo torta T1",
-      "descripcion": "Depósito especializado para torta de soya y subproductos de molienda."
-    },
-    {
-      "uid": "silo-003",
-      "nombre": "Bodega MP-A",
-      "descripcion": "Zona de almacenamiento para sacos de harina de pescado y aditivos a granel."
-    }
-  ]
+  {
+    "uid": "silo-001",
+    "nombre": "Silo Maíz",
+    "descripcion": "Silo principal para grano de maíz de alta rotación."
+  },
+  {
+    "uid": "silo-002",
+    "nombre": "Silo Soja",
+    "descripcion": "Silo dedicado a harina y expeller de soja."
+  },
+  {
+    "uid": "silo-003",
+    "nombre": "Silo Lechera",
+    "descripcion": "Destino de producto terminado para línea lechera."
+  },
+  {
+    "uid": "silo-004",
+    "nombre": "Silo Cerdo",
+    "descripcion": "Destino de producto terminado para línea porcina."
+  }
+]

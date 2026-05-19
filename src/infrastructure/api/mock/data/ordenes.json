@@ -1,100 +1,190 @@
 [
   {
-    "id": "OP-2026-001",
-    "lote": "OP-2026-001",
-    "id_formula": "F-101",
-    "nombre_producto": "NUTRI-RECRÍA PREMIUM",
-    "version_formula": 1.2,
-    "cantidad_objetivo": 1500,
+    "id": "OP-2026-101",
+    "lote": "OP-2026-101",
+    "id_formula": "for-001",
+    "nombre_producto": "Alimento Lechera",
+    "version_formula": 2,
+    "cantidad_objetivo": 2000,
     "cantidad_real": null,
     "merma_manual": null,
     "id_silo": null,
     "destino_silo": null,
     "estado": "PENDIENTE",
-    "fecha_creacion": "2026-05-11T10:00:00Z",
-    "usuario_responsable": "E. MAMANI",
-    "costo_total_insumos": 1450.80,
+    "fecha_creacion": "2026-05-17T10:00:00Z",
+    "usuario_responsable": "Sergio Monzón",
+    "costo_total_insumos": 702.4,
     "detalle_insumos": [
       {
-        "id_lote": "L-MAIZ-10",
-        "id_insumo": "INS-001",
-        "nombre_insumo": "MAÍZ AMARILLO",
-        "cantidad_usada": 800,
+        "id_lote": "MZ-2505-A",
+        "id_insumo": "i-1",
+        "nombre_insumo": "Maíz",
+        "cantidad_usada": 960,
         "tipo_unidad": "KG",
-        "costo_unitario": 1.2,
-        "costo_total": 960.0
+        "costo_unitario": 0.29,
+        "costo_total": 278.4
       },
       {
-        "id_lote": "L-SOYA-22",
-        "id_insumo": "INS-002",
-        "nombre_insumo": "SOYA INTEGRAL",
-        "cantidad_usada": 700,
+        "id_lote": "SJ-2505-C",
+        "id_insumo": "i-2",
+        "nombre_insumo": "Soja",
+        "cantidad_usada": 600,
         "tipo_unidad": "KG",
-        "costo_unitario": 0.7,
-        "costo_total": 490.8
+        "costo_unitario": 0.41,
+        "costo_total": 246
+      },
+      {
+        "id_lote": "AF-2505-D",
+        "id_insumo": "i-5",
+        "nombre_insumo": "Afrechillo",
+        "cantidad_usada": 300,
+        "tipo_unidad": "KG",
+        "costo_unitario": 0.24,
+        "costo_total": 72
+      },
+      {
+        "id_lote": "NV-2505-B",
+        "id_insumo": "i-3",
+        "nombre_insumo": "Núcleo Vitamínico",
+        "cantidad_usada": 100,
+        "tipo_unidad": "KG",
+        "costo_unitario": 1.95,
+        "costo_total": 195
+      },
+      {
+        "id_lote": "SAL-2505-A",
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "cantidad_usada": 40,
+        "tipo_unidad": "KG",
+        "costo_unitario": 0.18,
+        "costo_total": 7.2
       }
     ]
   },
   {
-    "id": "OP-2026-002",
-    "lote": "OP-2026-002",
-    "id_formula": "F-202",
-    "nombre_producto": "ENGORDE FAUNA ESPECIAL",
-    "version_formula": 2.1,
+    "id": "OP-2026-102",
+    "lote": "OP-2026-102",
+    "id_formula": "for-002",
+    "nombre_producto": "Pellet Cerdo Crecimiento",
+    "version_formula": 1,
     "cantidad_objetivo": 3000,
     "cantidad_real": null,
     "merma_manual": null,
     "id_silo": null,
     "destino_silo": null,
     "estado": "EN PROCESO",
-    "fecha_creacion": "2026-05-11T11:30:00Z",
-    "usuario_responsable": "SISTEMA",
-    "costo_total_insumos": 2100.0,
+    "fecha_creacion": "2026-05-17T11:30:00Z",
+    "usuario_responsable": "Edwin",
+    "costo_total_insumos": 1018.2,
     "detalle_insumos": [
       {
-        "id_lote": "L-AFRE-01",
-        "id_insumo": "INS-003",
-        "nombre_insumo": "AFRECHILLO",
-        "cantidad_usada": 1500,
+        "id_lote": "MZ-2505-A",
+        "id_insumo": "i-1",
+        "nombre_insumo": "Maíz",
+        "cantidad_usada": 1260,
         "tipo_unidad": "KG",
-        "costo_unitario": 0.8,
-        "costo_total": 1200.0
+        "costo_unitario": 0.29,
+        "costo_total": 365.4
       },
       {
-        "id_lote": "L-PELLE-09",
-        "id_insumo": "INS-004",
-        "nombre_insumo": "PELLET PROTEICO",
-        "cantidad_usada": 1500,
+        "id_lote": "SJ-2505-C",
+        "id_insumo": "i-2",
+        "nombre_insumo": "Soja",
+        "cantidad_usada": 1020,
         "tipo_unidad": "KG",
-        "costo_unitario": 0.6,
-        "costo_total": 900.0
+        "costo_unitario": 0.41,
+        "costo_total": 418.2
+      },
+      {
+        "id_lote": "AF-2505-D",
+        "id_insumo": "i-5",
+        "nombre_insumo": "Afrechillo",
+        "cantidad_usada": 540,
+        "tipo_unidad": "KG",
+        "costo_unitario": 0.24,
+        "costo_total": 129.6
+      },
+      {
+        "id_lote": "NV-2505-B",
+        "id_insumo": "i-3",
+        "nombre_insumo": "Núcleo Vitamínico",
+        "cantidad_usada": 120,
+        "tipo_unidad": "KG",
+        "costo_unitario": 1.95,
+        "costo_total": 234
+      },
+      {
+        "id_lote": "SAL-2505-A",
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "cantidad_usada": 60,
+        "tipo_unidad": "KG",
+        "costo_unitario": 0.18,
+        "costo_total": 10.8
       }
     ]
   },
   {
-    "id": "OP-2026-003",
-    "lote": "OP-2026-003",
-    "id_formula": "F-303",
-    "nombre_producto": "INICIO AVÍCOLA PLUS",
-    "version_formula": 1.0,
-    "cantidad_objetivo": 1000,
-    "cantidad_real": 988.50,
-    "merma_manual": 11.50,
-    "id_silo": null,
-    "destino_silo": "SILO-04-NORTE",
-    "estado": "FINALIZADA",
-    "fecha_creacion": "2026-05-10T09:00:00Z",
-    "usuario_responsable": "E. MAMANI",
-    "costo_total_insumos": 1150.0,
+    "id": "OP-2026-103",
+    "lote": "OP-2026-103",
+    "id_formula": "for-001",
+    "nombre_producto": "Alimento Lechera",
+    "version_formula": 2,
+    "cantidad_objetivo": 1800,
+    "cantidad_real": 1765,
+    "merma_manual": 35,
+    "id_silo": "silo-003",
+    "destino_silo": "Silo Lechera",
+    "estado": "FINALIZADO",
+    "fecha_creacion": "2026-05-16T09:00:00Z",
+    "usuario_responsable": "Sergio Monzón",
+    "costo_total_insumos": 632.16,
     "detalle_insumos": [
       {
-        "id_lote": "L-MIX-05",
-        "id_insumo": "INS-005",
-        "nombre_insumo": "MIX VITAMÍNICO",
-        "cantidad_usada": 1000,
+        "id_lote": "MZ-2505-A",
+        "id_insumo": "i-1",
+        "nombre_insumo": "Maíz",
+        "cantidad_usada": 864,
         "tipo_unidad": "KG",
-        "costo_unitario": 1.15,
-        "costo_total": 1150.0
+        "costo_unitario": 0.29,
+        "costo_total": 250.56
+      },
+      {
+        "id_lote": "SJ-2505-C",
+        "id_insumo": "i-2",
+        "nombre_insumo": "Soja",
+        "cantidad_usada": 540,
+        "tipo_unidad": "KG",
+        "costo_unitario": 0.41,
+        "costo_total": 221.4
+      },
+      {
+        "id_lote": "AF-2505-D",
+        "id_insumo": "i-5",
+        "nombre_insumo": "Afrechillo",
+        "cantidad_usada": 270,
+        "tipo_unidad": "KG",
+        "costo_unitario": 0.24,
+        "costo_total": 64.8
+      },
+      {
+        "id_lote": "NV-2505-B",
+        "id_insumo": "i-3",
+        "nombre_insumo": "Núcleo Vitamínico",
+        "cantidad_usada": 90,
+        "tipo_unidad": "KG",
+        "costo_unitario": 1.95,
+        "costo_total": 175.5
+      },
+      {
+        "id_lote": "SAL-2505-A",
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "cantidad_usada": 36,
+        "tipo_unidad": "KG",
+        "costo_unitario": 0.18,
+        "costo_total": 6.48
       }
     ]
   }

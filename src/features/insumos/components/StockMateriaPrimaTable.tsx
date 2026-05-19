@@ -1,9 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  FiTrash2, FiBox, FiChevronDown, FiCalendar, FiClock, FiActivity, 
+  FiTrash2, FiBox, FiChevronDown, FiActivity, 
   FiMapPin, FiSearch, FiTruck, FiFileText, FiChevronLeft, FiChevronRight 
 } from "react-icons/fi";
-import { format } from 'date-fns';
 import type { StockMateriaPrima, Insumo } from '../types';
 import type { Proveedor } from '../../proveedores/types';
 
@@ -38,9 +37,17 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ data = [], insumos, proveedor
              insu.toLowerCase().includes(search);
     });
   }, [data, insumos, proveedores, searchTerm]);
-  console.log(filteredData)
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
   const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  if (filteredData.length === 0) {
+    return (
+      <div className="bg-[#0f1722] border border-white/5 rounded-2xl p-10 text-center">
+        <p className="text-sm font-bold text-gray-300">No hay lotes para mostrar</p>
+        <p className="text-xs text-gray-500 mt-2">Registrá un ingreso de materia prima para comenzar.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -75,14 +82,26 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ data = [], insumos, proveedor
                 // Cruce de datos para obtener el Insumo y su unidad
                 const insu = insumos.find(i => i.uid === lote.id_insumo);
                 const unidad = insu?.unidad_medida || 'KG';
-                const insuNombre = insu?.nombre || "---";
-                const provNombre = proveedores.find(p => p.uid === lote.id_proveedor)?.nombre_empresa || "---";
+                const insuNombre = insu?.nombre || "Sin dato";
+                const provNombre = proveedores.find(p => p.uid === lote.id_proveedor)?.nombre_empresa || "Sin dato";
 
                 // Cálculos de Stock
                 const porcentajeFisico = (lote.cantidad_actual / lote.cantidad_inicial) * 100;
                 const comprometido = lote.cantidad_comprometida || 0;
                 const porcentajeComprometido = (comprometido / lote.cantidad_inicial) * 100;
                 const dispReal = lote.cantidad_actual - comprometido;
+                const estadoStock =
+                  dispReal <= (insu?.umbral_alerta || 0) * 0.6
+                    ? "CRÍTICO"
+                    : dispReal <= (insu?.umbral_alerta || 0)
+                      ? "BAJO"
+                      : "OK";
+                const estadoClass =
+                  estadoStock === "CRÍTICO"
+                    ? "text-red-400 bg-red-500/10 border-red-500/20"
+                    : estadoStock === "BAJO"
+                      ? "text-orange-400 bg-orange-500/10 border-orange-500/20"
+                      : "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
 
                 return (
                   <React.Fragment key={lote.uid}>
@@ -133,9 +152,14 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ data = [], insumos, proveedor
 
                           <div className="flex justify-between text-[7px] font-black uppercase tracking-tighter">
                             <span className="text-gray-600">Disponibilidad Real:</span>
-                            <span className={dispReal < (lote.cantidad_inicial * 0.1) ? 'text-orange-400' : 'text-white'}>
-                              {dispReal.toLocaleString()} {unidad}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={dispReal < (lote.cantidad_inicial * 0.1) ? 'text-orange-400' : 'text-white'}>
+                                {dispReal.toLocaleString()} {unidad}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded border text-[7px] ${estadoClass}`}>
+                                {estadoStock}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Tooltip Detalle Reserva */}
@@ -163,7 +187,7 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ data = [], insumos, proveedor
         year: 'numeric',
         timeZone: 'UTC' // <--- ESTO EVITA QUE RESTE LAS 5 HORAS
       }) 
-    : '---'}
+    : 'Sin dato'}
 </span>
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/5 border border-blue-500/10 text-blue-400/80 text-[9px] font-black uppercase">
       <FiMapPin size={10} /> {lote.ubicacion}
@@ -207,13 +231,13 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ data = [], insumos, proveedor
                                 <div className="bg-black/20 p-2.5 rounded-xl border border-white/5">
                                   <p className="text-[7px] text-gray-500 uppercase font-bold mb-1">Costo Total</p>
                                   <p className="text-[11px] text-emerald-500 font-black tracking-tight">
-                                    S/ {lote.costo_total?.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                    ARS {lote.costo_total?.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                   </p>
                                 </div>
                                 <div className="bg-black/20 p-2.5 rounded-xl border border-white/5">
                                   <p className="text-[7px] text-gray-500 uppercase font-bold mb-1">Por {unidad}</p>
                                   <p className="text-[11px] text-white font-bold tracking-tight">
-                                    S/ {lote.costo_unitario?.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                    ARS {lote.costo_unitario?.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                   </p>
                                 </div>
                                 <div className="bg-black/20 p-2.5 rounded-xl border border-white/5 group/doc hover:border-blue-500/30 transition-all">

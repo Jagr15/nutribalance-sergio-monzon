@@ -1,20 +1,14 @@
-import { mockUsuarioService } from './mock/services/mockUsuarioService';
-import { mockProveedorService } from './mock/services/mockProveedorService';
-import { mockInsumoService } from './mock/services/mockInsumoService';
-import { mockFormulaService } from './mock/services/mockFormulaService';
-import { mockMateriaPrimaService } from './mock/services/mockMateriaPrimaService'; // El que creamos hoy
-import {mockSiloService} from './mock/services/mockSiloService';
-import { mockOrdenService } from './mock/services/mockOrdenService';
+import { mockAdapter } from './adapters/mockAdapter';
+import { supabaseAdapter } from './adapters/supabaseAdapter';
+import type { ApiServices } from './types';
 
-const USE_MOCKS = true;
+const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false';
+const hasSupabaseConfig = Boolean(import.meta.env.VITE_SUPABASE_URL) && Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-export const ApiService = {
-  usuarios: USE_MOCKS ? mockUsuarioService : ({} as any),
-  proveedores: USE_MOCKS ? mockProveedorService : ({} as any),
-  insumos: USE_MOCKS ? mockInsumoService : ({} as any),
-  formulas: USE_MOCKS ? mockFormulaService : ({} as any),
-  // Nuevo: Gestión de Stock y Lotes
-  stockMP: USE_MOCKS ? mockMateriaPrimaService : ({} as any),
-  silos: USE_MOCKS ? mockSiloService : ({} as any),
-  ordenes: USE_MOCKS ? mockOrdenService: ({} as any),
-};
+const shouldUseSupabase = !useMocks && hasSupabaseConfig;
+
+if (!useMocks && !hasSupabaseConfig) {
+  console.warn('[api] VITE_USE_MOCKS=false pero faltan variables de Supabase. Se usan mocks.');
+}
+
+export const ApiService: ApiServices = shouldUseSupabase ? supabaseAdapter : mockAdapter;

@@ -46,7 +46,7 @@ const SiloModal: React.FC<Props> = ({ silo, onClose, onSuccess }) => {
       
       await onSuccess(); 
       onClose();
-    } catch (error) {
+    } catch {
       Swal.fire({
         icon: 'error',
         title: 'Error al procesar',

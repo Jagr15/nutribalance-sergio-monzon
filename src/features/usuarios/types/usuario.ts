@@ -1,4 +1,11 @@
 
+export const Role = {
+  SUPERADMIN: "SUPERADMIN",
+  ENCARGADO: "ENCARGADO",
+  OPERARIO: "OPERARIO",
+} as const;
+export type Role = (typeof Role)[keyof typeof Role];
+
 export interface Usuario {
     uid: string;
     username: string;
@@ -8,9 +15,3 @@ export interface Usuario {
     esta_activo: boolean;
     fecha_creacion: Date;
   }
-
-enum Role {
-    SUPERADMIN ="SUPERADMIN",
-    ENCARGADO ="ENCARGADO",
-    OPERARIO="OPERARIO"
-}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FiPlus, FiSearch, FiFileText } from "react-icons/fi";
+import { FiPlus, FiFileText } from "react-icons/fi";
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 
@@ -15,7 +15,7 @@ const FormulaPage: React.FC = () => {
   const { formulas, isLoading, getAll, remove } = useFormulas();
 
   // Estados locales de la UI
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFormula, setSelectedFormula] = useState<Formula | undefined>();
 

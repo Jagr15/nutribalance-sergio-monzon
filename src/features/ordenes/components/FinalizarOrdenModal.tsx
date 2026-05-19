@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   FiX, FiActivity, FiLayers, FiCheck, 
@@ -21,13 +21,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
   const [merma, setMerma] = useState<number>(0);
   const [loteSalida, setLoteSalida] = useState("");
   const [destinoSilo, setDestinoSilo] = useState("");
-  const [cantidadReal, setCantidadReal] = useState(orden.cantidad_objetivo);
-
-  // Lógica: La cantidad real es lo planificado menos lo que se perdió (merma)
-  useEffect(() => {
-    const calculo = orden.cantidad_objetivo - merma;
-    setCantidadReal(calculo > 0 ? calculo : 0);
-  }, [merma, orden.cantidad_objetivo]);
+  const cantidadReal = Math.max(orden.cantidad_objetivo - merma, 0);
 
   const handleConfirm = () => {
     if (!loteSalida || !destinoSilo) return;

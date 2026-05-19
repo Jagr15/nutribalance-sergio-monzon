@@ -1,6 +1,7 @@
 // src/features/ordenes/hooks/useOrdenes.ts
 import { useState, useEffect, useCallback } from 'react';
 import { useOrdenService } from '../services';
+import type { FinalizarOrdenPayload } from '../services/ordenService';
 import type { OrdenProduccion } from '../types/orden';
 
 export const useOrdenes = () => {
@@ -10,7 +11,6 @@ export const useOrdenes = () => {
 
   // Carga inicial de datos
   const fetchOrdenes = useCallback(async () => {
-    setIsLoading(true);
     try {
       const data = await useOrdenService.getAll();
       setOrdenes(data);
@@ -24,7 +24,10 @@ export const useOrdenes = () => {
   }, []);
 
   useEffect(() => {
-    fetchOrdenes();
+    const timer = setTimeout(() => {
+      void fetchOrdenes();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [fetchOrdenes]);
 
   // Iniciar producción (Transición PENDIENTE -> EN PROCESO)
@@ -37,8 +40,18 @@ export const useOrdenes = () => {
     }
   };
 
+  const handleDeleteOrder = async (id: string) => {
+    try {
+      await useOrdenService.delete(id);
+      setOrdenes(prev => prev.filter(o => o.id !== id));
+    } catch (err) {
+      console.error("No se pudo eliminar la orden:", err);
+      throw err;
+    }
+  };
+
   // Finalizar producción (Transición EN PROCESO -> FINALIZADA)
-  const handleFinishProduction = async (id: string, payload: any) => {
+  const handleFinishProduction = async (id: string, payload: FinalizarOrdenPayload) => {
     try {
       const updated = await useOrdenService.finishProduction(id, payload);
       setOrdenes(prev => prev.map(o => o.id === id ? updated : o));
@@ -54,6 +67,7 @@ export const useOrdenes = () => {
     error,
     refresh: fetchOrdenes,
     handleStartProduction,
+    handleDeleteOrder,
     handleFinishProduction,
     fetchOrdenes
   };

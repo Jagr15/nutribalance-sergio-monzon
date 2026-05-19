@@ -1,42 +1,39 @@
 // src/features/insumos/pages/StockMateriaPrimaPage.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { FiPlus, FiDatabase } from "react-icons/fi";
+import { FiPlus } from "react-icons/fi";
 import { useStockMateriaPrima } from '../hooks';
 import StockMateriaPrimaTable from '../components/StockMateriaPrimaTable';
 import StockMateriaPrimaModal from '../components/StockMateriaPrimaModal';
 import { ApiService } from '../../../infrastructure/api';
+import type { Insumo } from '../types';
+import type { Proveedor } from '../../proveedores/types';
 import Swal from 'sweetalert2';
 
 const StockMateriaPrimaPage: React.FC = () => {
   const { lotes, isLoading, getAll, remove } = useStockMateriaPrima();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm] = useState('');
 
   // NUEVOS ESTADOS PARA LOS NOMBRES
-  const [insumos, setInsumos] = useState<any[]>([]);
-  const [proveedores, setProveedores] = useState<any[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
 
   useEffect(() => {
+    const loadCatalogos = async () => {
+      try {
+        const [resI, resP] = await Promise.all([
+          ApiService.insumos.getAllInsumos(),
+          ApiService.proveedores.getAll()
+        ]);
+        setInsumos(resI);
+        setProveedores(resP);
+      } catch (error) {
+        console.error("Error cargando catálogos:", error);
+      }
+    };
     getAll();
-    loadCatalogos(); // Cargar los catálogos al montar el componente
+    void loadCatalogos();
   }, [getAll]);
-
-  // Función para cargar insumos y proveedores
-  const loadCatalogos = async () => {
-    try {
-      const [resI, resP] = await Promise.all([
-        ApiService.insumos.getAllInsumos(),
-        ApiService.proveedores.getAll()
-      ]);
-      setInsumos(resI);
-      setProveedores(resP);
-    } catch (error) {
-      console.error("Error cargando catálogos:", error);
-    }
-  };
-
-
-  useEffect(() => { getAll(); }, [getAll]);
 
   const handleDelete = async (uid: string) => {
     const result = await Swal.fire({
@@ -55,8 +52,9 @@ const StockMateriaPrimaPage: React.FC = () => {
       try {
         await remove(uid);
         Swal.fire({ icon: 'success', title: 'Lote eliminado', background: '#0d121b', color: '#fff', timer: 1500, showConfirmButton: false });
-      } catch (error: any) {
-        Swal.fire({ icon: 'error', title: 'Error', text: error.message, background: '#0d121b', color: '#fff' });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Error inesperado';
+        Swal.fire({ icon: 'error', title: 'Error', text: message, background: '#0d121b', color: '#fff' });
       }
     }
   };

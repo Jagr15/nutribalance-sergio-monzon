@@ -1,18 +1,42 @@
 [
-    {
-      "uid": "i-1",
-      "nombre": "Maíz Amarillo",
-      "unidad_medida": "kg",
-      "umbral_alerta": 500,
-      "ref_costo_unitario":10,
-      "categoria": "Grano"
-    },
-    {
-      "uid": "i-2",
-      "nombre": "Núcleo Vitamínico",
-      "unidad_medida": "kg",
-      "umbral_alerta": 50,
-      "ref_costo_unitario":6,
-      "categoria": "Suplemento"
-    }
-  ]
+  {
+    "uid": "i-1",
+    "nombre": "Maíz",
+    "unidad_medida": "kg",
+    "umbral_alerta": 1200,
+    "ref_costo_unitario": 0.29,
+    "categoria": "Grano"
+  },
+  {
+    "uid": "i-2",
+    "nombre": "Soja",
+    "unidad_medida": "kg",
+    "umbral_alerta": 900,
+    "ref_costo_unitario": 0.41,
+    "categoria": "Grano"
+  },
+  {
+    "uid": "i-3",
+    "nombre": "Núcleo Vitamínico",
+    "unidad_medida": "kg",
+    "umbral_alerta": 180,
+    "ref_costo_unitario": 1.95,
+    "categoria": "Suplemento"
+  },
+  {
+    "uid": "i-4",
+    "nombre": "Sal",
+    "unidad_medida": "kg",
+    "umbral_alerta": 200,
+    "ref_costo_unitario": 0.18,
+    "categoria": "Aditivo"
+  },
+  {
+    "uid": "i-5",
+    "nombre": "Afrechillo",
+    "unidad_medida": "kg",
+    "umbral_alerta": 800,
+    "ref_costo_unitario": 0.24,
+    "categoria": "Suplemento"
+  }
+]

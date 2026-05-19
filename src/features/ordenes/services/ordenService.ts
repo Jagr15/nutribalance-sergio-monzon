@@ -1,6 +1,13 @@
 // src/features/ordenes/services/useOrdenService.ts
 import { ApiService } from '../../../infrastructure/api/';
-import type { OrdenProduccion } from '../types/orden';
+import { EstadoOrden, type OrdenProduccion } from '../types/orden';
+
+export interface FinalizarOrdenPayload {
+  lote_salida: string;
+  merma: number;
+  cantidad_real: number;
+  destino_silo: string;
+}
 
 export const useOrdenService = {
   // ==========================================
@@ -19,7 +26,7 @@ export const useOrdenService = {
    */
   getById: async (id: string): Promise<OrdenProduccion | undefined> => {
     const all = await ApiService.ordenes.getAll();
-    return all.find(o => o.id === id);
+    return all.find((o: OrdenProduccion) => o.id === id);
   },
 
   /**
@@ -39,7 +46,7 @@ export const useOrdenService = {
   /**
    * Elimina una orden (Normalmente solo permitido si está PENDIENTE)
    */
-  delete: (id: string): Promise<void> => {
+  delete: (id: string): Promise<boolean> => {
     return ApiService.ordenes.delete(id);
   },
 
@@ -52,7 +59,7 @@ export const useOrdenService = {
    */
   startProduction: (id: string): Promise<OrdenProduccion> => {
     return ApiService.ordenes.update(id, { 
-      estado: 'EN PROCESO' as any,
+      estado: EstadoOrden.EN_PROCESO,
       // Aquí podrías enviar un timestamp de inicio si el backend lo requiere
     });
   },
@@ -62,17 +69,12 @@ export const useOrdenService = {
    */
   finishProduction: (
     id: string, 
-    payload: { 
-      lote_salida: string; 
-      merma: number; 
-      cantidad_real: number; 
-      destino_silo: string; 
-    }
+    payload: FinalizarOrdenPayload
   ): Promise<OrdenProduccion> => {
     return ApiService.ordenes.update(id, {
       ...payload,
       merma_manual: payload.merma, // Mapeo para el backend si el campo difiere
-      estado: 'FINALIZADA' as any,
+      estado: EstadoOrden.FINALIZADO,
     });
   }
 };

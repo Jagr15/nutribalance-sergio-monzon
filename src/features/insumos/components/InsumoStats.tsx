@@ -20,7 +20,7 @@ const InsumoStats: React.FC<Props> = ({ insumos }) => {
       <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">Muestras Monitoreadas</p>
       <span className="text-green-400 text-xs font-bold">+12%</span>
     </div>
-    <h3 className="text-3xl font-bold text-white">4</h3>
+    <h3 className="text-3xl font-bold text-white">{totalSKUs}</h3>
     <p className="text-gray-500 text-[11px] mt-2">Insumos activos en catálogo</p>
   </div>
 
@@ -30,7 +30,7 @@ const InsumoStats: React.FC<Props> = ({ insumos }) => {
       <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">Alertas de Reabastecimiento</p>
       <span className="text-orange-500 text-[10px] font-bold px-2 py-0.5 bg-orange-500/10 rounded-full">CRÍTICO</span>
     </div>
-    <h3 className="text-3xl font-bold text-white">1</h3>
+    <h3 className="text-3xl font-bold text-white">{alertasActivas}</h3>
     <p className="text-gray-500 text-[11px] mt-2">Insumos por debajo del umbral</p>
   </div>
 

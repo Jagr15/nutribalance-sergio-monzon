@@ -11,6 +11,9 @@ import StockMateriaPrimaPage from '../../features/insumos/pages/StockMateriaPrim
 import SiloPage from '../../features/silos/pages/SiloPage';
 import FormulaPage from '../../features/formulas/pages/FormulaPage';
 import OrdenPage from '../../features/ordenes/pages/OrdenPage';
+import ClientesPage from '../../features/clientes/pages/ClientesPage';
+import ProductosPage from '../../features/productos/pages/ProductosPage';
+import CostosPage from '../../features/costos/pages/CostosPage';
 
 const AppRouter: React.FC = () => {
   return (
@@ -27,6 +30,9 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.SILOS} element= {<SiloPage />} />
           <Route path={ROUTES.FORMULAS} element={<FormulaPage />} />
           <Route path={ROUTES.ORDENES} element={<OrdenPage />} />
+          <Route path={ROUTES.CLIENTES} element={<ClientesPage />} />
+          <Route path={ROUTES.PRODUCTOS} element={<ProductosPage />} />
+          <Route path={ROUTES.COSTOS} element={<CostosPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

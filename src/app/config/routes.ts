@@ -1,11 +1,14 @@
 export const ROUTES = {
-    DASHBOARD: '/',
-    USUARIOS: '/usuarios',
-    PROVEEDORES: '/proveedores',
-    INSUMOS: '/insumos', // <-- Agregamos esta
-    FORMULAS: '/formulas',
-    PRODUCCION: '/produccion',
-    STOCKMATERIAPRIMA: '/stockMateriaPrima',
-    SILOS: '/silos',
-    ORDENES: '/Ordenes'
-  };
+  DASHBOARD: '/',
+  USUARIOS: '/usuarios',
+  PROVEEDORES: '/proveedores',
+  CLIENTES: '/clientes',
+  PRODUCTOS: '/productos',
+  COSTOS: '/costos',
+  INSUMOS: '/insumos',
+  FORMULAS: '/formulas',
+  PRODUCCION: '/produccion',
+  STOCKMATERIAPRIMA: '/stockMateriaPrima',
+  SILOS: '/silos',
+  ORDENES: '/Ordenes',
+} as const;

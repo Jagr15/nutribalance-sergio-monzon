@@ -16,7 +16,7 @@ export const siloService = {
    */
   getById: async (uid: string): Promise<Silo | undefined> => {
     const all = await ApiService.silos.getAll();
-    return all.find(s => s.uid === uid);
+    return all.find((s: Silo) => s.uid === uid);
   },
 
   /**
@@ -40,7 +40,7 @@ export const siloService = {
    * Elimina un silo del catálogo.
    * @param uid Identificador único del silo.
    */
-  delete: (uid: string): Promise<void> => {
+  delete: (uid: string): Promise<boolean> => {
     return ApiService.silos.delete(uid);
   }
 };

@@ -14,7 +14,7 @@ export const insumoService = {
   // Agregamos este método que es útil para modales de edición
   getById: async (uid: string): Promise<Insumo | undefined> => {
     const all = await ApiService.insumos.getAllInsumos();
-    return all.find(i => i.uid === uid);
+    return all.find((i: Insumo) => i.uid === uid);
   },
 
   create: (data: Omit<Insumo, 'uid'>): Promise<Insumo> => {

@@ -3,8 +3,10 @@ import type { Formula } from '../../../../features/formulas/types';
 import formulasData from '../data/formulas.json';
 import { mockApiCall } from '../mockClient';
 
+type FormulaRaw = Omit<Formula, 'ultima_edicion'> & { ultima_edicion: string };
+
 // Mapeo inicial para asegurar que las fechas sean objetos Date
-let mockFormulas: Formula[] = (formulasData as any).map((f: any) => ({
+let mockFormulas: Formula[] = (formulasData as unknown as FormulaRaw[]).map((f) => ({
   ...f,
   ultima_edicion: new Date(f.ultima_edicion)
 }));

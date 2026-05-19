@@ -1,6 +1,14 @@
 // src/features/ordenes/services/mockOrdenService.ts
 import type { OrdenProduccion } from '../../../../features/ordenes/types';
+import { EstadoOrden } from '../../../../features/ordenes/types';
 import initialData from '../data/ordenes.json';
+
+interface FinishProductionPayload {
+  merma: number;
+  cantidad_real: number;
+  destino_silo: string;
+  lote_salida: string;
+}
 
 let ordersDb: OrdenProduccion[] = [...initialData] as OrdenProduccion[];
 
@@ -46,14 +54,14 @@ export const mockOrdenService = {
   // Estos métodos por debajo llaman al 'update', pero con nombres claros para la UI
 
   startProduction: async (id: string) => {
-    return mockOrdenService.update(id, { estado: 'EN PROCESO' as any });
+    return mockOrdenService.update(id, { estado: EstadoOrden.EN_PROCESO });
   },
 
-  finishProduction: async (id: string, payload: any) => {
+  finishProduction: async (id: string, payload: FinishProductionPayload) => {
     return mockOrdenService.update(id, { 
       ...payload, 
       merma_manual: payload.merma, 
-      estado: 'FINALIZADA' as any 
+      estado: EstadoOrden.FINALIZADO 
     });
   }
 };

@@ -1,10 +1,12 @@
 // src/features/ordenes/components/OrdenModal.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiDatabase, FiTarget, FiSearch, FiChevronRight, FiLayers, FiCheck, FiAlertCircle } from "react-icons/fi";
 import { ApiService } from '../../../infrastructure/api';
+import { EstadoOrden } from '../types/orden';
+import type { DetalleInsumoLote } from '../types/orden';
 import type { Formula } from '../../formulas/types';
-import { useCalculoOrden } from '../hooks/useCalculoOrden';
+import { useCalculoOrden, type CalculoOrdenResultado } from '../hooks/useCalculoOrden';
 import { useStockMateriaPrima } from '../../insumos/hooks/useStockMateriaPrima'; // NUEVO
 import Swal from 'sweetalert2';
 
@@ -19,7 +21,6 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const [unidad, setUnidad] = useState<'KG' | 'TON'>('KG');
   const [searchTerm, setSearchTerm] = useState("");
   const [formulas, setFormulas] = useState<Formula[]>([]);
-  const [filteredFormulas, setFilteredFormulas] = useState<Formula[]>([]);
   const [selectedFormula, setSelectedFormula] = useState<Formula | null>(null);
   const [showResults, setShowResults] = useState(false);
   
@@ -27,7 +28,7 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const { calcularInversionLote, isCalculando } = useCalculoOrden();
   const { agregarStockTransito } = useStockMateriaPrima(); // NUEVO: Hook para comprometer stock
 
-  const [datosInversion, setDatosInversion] = useState<any>(null);
+  const [datosInversion, setDatosInversion] = useState<CalculoOrdenResultado | null>(null);
   const [stockSuficiente, setStockSuficiente] = useState(true);
   const [insumosFaltantes, setInsumosFaltantes] = useState<string[]>([]);
 
@@ -43,15 +44,11 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     cargarFormulas();
   }, []);
 
-  useEffect(() => {
-    if (searchTerm.trim() === "") {
-      setFilteredFormulas([]);
-      return;
-    }
-    const filtered = formulas.filter(f => 
+  const filteredFormulas = useMemo(() => {
+    if (searchTerm.trim() === "") return [];
+    return formulas.filter((f) =>
       f.nombre_producto.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    setFilteredFormulas(filtered);
   }, [searchTerm, formulas]);
 
   useEffect(() => {
@@ -70,7 +67,7 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       }
     };
     realizarCalculo();
-  }, [selectedFormula, pesoObjetivo, unidad]);
+  }, [selectedFormula, pesoObjetivo, unidad, calcularInversionLote]);
 
   const handleSelectFormula = (formula: Formula) => {
     setSelectedFormula(formula);
@@ -87,23 +84,23 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         lote: nroOrden,
         id_formula: selectedFormula.uid,
         nombre_producto: selectedFormula.nombre_producto,
+        version_formula: selectedFormula.version,
         cantidad_objetivo: unidad === 'TON' ? Number(pesoObjetivo) * 1000 : Number(pesoObjetivo),
         detalle_insumos: datosInversion.lotesInvolucrados, // Detalle FIFO
-        estado: 'PENDIENTE',
+        costo_total_insumos: datosInversion.inversionTotal,
+        usuario_responsable: 'Admin IAWARE',
+        id_silo: null,
+        destino_silo: null,
+        estado: EstadoOrden.PENDIENTE,
         fecha_creacion: new Date().toISOString()
       };
 
       const nuevaOrden = await ApiService.ordenes.create(payload);
-console.log("datos lotes comprome", datosInversion)
       // 2. NUEVA FUNCIONALIDAD: COMPROMETER STOCK EN TRÁNSITO
       // Recorremos los lotes que el cálculo FIFO seleccionó para esta orden
       if (datosInversion.lotesInvolucrados && datosInversion.lotesInvolucrados.length > 0) {
-        const promesasCompromiso = datosInversion.lotesInvolucrados.map((item: any) => {
+        const promesasCompromiso = datosInversion.lotesInvolucrados.map((item: DetalleInsumoLote) => {
           // Importante: item.id_lote_uid debe venir del resultado de tu hook de cálculo
-          console.log("datos no",nuevaOrden.id)
-          console.log("datos nuro orden",nroOrden)
-          console.log("datos cantidad usada",item.cantidad_usada)
-          console.log("datos lote",item.id_lote)
           return agregarStockTransito(item.id_lote, {
             id_orden: nuevaOrden.id,
             nro_operacion: nroOrden,
@@ -222,7 +219,7 @@ console.log("datos lotes comprome", datosInversion)
               </div>
               <select 
                 value={unidad} 
-                onChange={(e) => setUnidad(e.target.value as any)} 
+                onChange={(e) => setUnidad(e.target.value as 'KG' | 'TON')} 
                 className="bg-[#161b26] text-[10px] font-black text-blue-400 px-4 outline-none border-l border-white/10 cursor-pointer hover:bg-blue-500/5 transition-colors"
               >
                 <option value="KG">KG</option>
@@ -247,7 +244,7 @@ console.log("datos lotes comprome", datosInversion)
             <div className="space-y-1">
               <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest block">Inversión Estimada</span>
               <div className="flex items-baseline gap-1">
-                <span className="text-[10px] font-bold text-emerald-500/50">S/</span>
+                <span className="text-[10px] font-bold text-emerald-500/50">ARS</span>
                 <span className="text-xl font-black text-emerald-400 italic tracking-tighter">
                   {datosInversion ? datosInversion.inversionTotal.toLocaleString('en-US', { minimumFractionDigits: 2 }) : "0.00"}
                 </span>
@@ -256,7 +253,7 @@ console.log("datos lotes comprome", datosInversion)
             <div className="text-right border-l border-white/5 pl-4">
               <span className="text-[8px] font-black text-gray-600 uppercase block">Costo x Kg</span>
               <span className="text-xs font-bold text-emerald-400/80">
-                S/ {datosInversion ? datosInversion.costoPorKg.toFixed(3) : "0.00"}
+                ARS {datosInversion ? datosInversion.costoPorKg.toFixed(3) : "0.00"}
               </span>
             </div>
           </div>

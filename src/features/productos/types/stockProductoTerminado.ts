@@ -36,8 +36,9 @@ export interface StockProductoTerminado {
     unidad_medida: TipoUnidad;
   }
 
-export enum ControlEstado {
-    OK ="OK",
-    BAJO = "BAJO",
-    CRITICO = "CRITICO"
-}
+export const ControlEstado = {
+  OK: "OK",
+  BAJO: "BAJO",
+  CRITICO: "CRITICO",
+} as const;
+export type ControlEstado = (typeof ControlEstado)[keyof typeof ControlEstado];

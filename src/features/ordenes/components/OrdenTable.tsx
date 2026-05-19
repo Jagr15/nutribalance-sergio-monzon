@@ -8,9 +8,11 @@ import { EstadoOrden, type OrdenProduccion } from '../types/orden';
 interface OrdenTableProps {
   data: OrdenProduccion[];
   onFinalizar: (orden: OrdenProduccion) => void;
+  onIniciar?: (orden: OrdenProduccion) => void;
+  onEliminar?: (orden: OrdenProduccion) => void;
 }
 
-const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar }) => {
+const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, onEliminar }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
@@ -96,9 +98,9 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar }) => {
 
                     <td className="px-4 py-4 text-center">
                       <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border tracking-widest ${
-                        orden.estado === EstadoOrden.FINALIZADO ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500' : 
-                        orden.estado === EstadoOrden.EN_PROCESO ? 'bg-blue-500/5 border-blue-500/10 text-blue-400' :
-                        'bg-amber-500/5 border-amber-500/10 text-amber-500'
+                        orden.estado === EstadoOrden.FINALIZADO ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 
+                        orden.estado === EstadoOrden.EN_PROCESO ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' :
+                        'bg-blue-500/10 border-blue-500/20 text-blue-300'
                       }`}>
                         {orden.estado}
                       </span>
@@ -108,16 +110,28 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar }) => {
                       <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                         {orden.estado === 'PENDIENTE' && (
                           <>
-                            <button className="p-2 bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all">
+                            <button
+                              type="button"
+                              aria-label={`Iniciar orden ${orden.lote}`}
+                              onClick={() => onIniciar?.(orden)}
+                              className="p-2 bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all"
+                            >
                               <FiPlay size={14}/>
                             </button>
-                            <button className="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all">
+                            <button
+                              type="button"
+                              aria-label={`Eliminar orden ${orden.lote}`}
+                              onClick={() => onEliminar?.(orden)}
+                              className="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
+                            >
                               <FiTrash2 size={14}/>
                             </button>
                           </>
                         )}
                         {orden.estado === 'EN PROCESO' && (
                           <button 
+                            type="button"
+                            aria-label={`Finalizar orden ${orden.lote}`}
                             onClick={() => onFinalizar(orden)}
                             className="p-2 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-white transition-all"
                           >
@@ -152,7 +166,7 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar }) => {
                                <div className="flex flex-col">
                                   <span className="text-[8px] text-emerald-500 uppercase font-black tracking-widest mb-1">Inversión Estimada</span>
                                   <span className="text-[14px] text-emerald-400 font-mono font-black">
-                                    S/ {orden.costo_total_insumos.toFixed(2)}
+                                    ARS {orden.costo_total_insumos.toFixed(2)}
                                   </span>
                                </div>
                             </div>
@@ -178,7 +192,7 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar }) => {
                                         {lote.cantidad_usada} <small className="opacity-40 font-sans uppercase">{lote.tipo_unidad}</small>
                                       </td>
                                       <td className="px-4 py-3 text-right text-emerald-500/80 font-bold">
-                                        S/ {lote.costo_total.toFixed(2)}
+                                        ARS {lote.costo_total.toFixed(2)}
                                       </td>
                                     </tr>
                                   ))
