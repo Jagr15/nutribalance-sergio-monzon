@@ -1,7 +1,9 @@
 import { FiBell, FiSearch } from "react-icons/fi";
 import Swal from "sweetalert2";
+import { getSessionUser } from "../../../../features/auth/session";
 
 export const Header = () => {
+  const currentUser = getSessionUser();
   const showInfo = (feature: string) => {
     void Swal.fire({
       icon: "info",
@@ -51,11 +53,11 @@ export const Header = () => {
 
           <div>
             <h4 className="font-semibold">
-              Edwin
+              {currentUser.name}
             </h4>
 
             <p className="text-xs text-gray-400">
-              Administrador
+              {currentUser.role}
             </p>
           </div>
         </div>

@@ -1,7 +1,8 @@
 import React, { Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../config/routes';
 import { MainLayout } from '../../shared/layouts/MainLayout';
+import { isAuthenticated } from '../../features/auth/session';
 
 // Usamos importación directa para estar seguros, luego puedes volver a lazy
 import DashboardPage from '../../features/dashboard/pages/DashboardPage';
@@ -14,12 +15,43 @@ import OrdenPage from '../../features/ordenes/pages/OrdenPage';
 import ClientesPage from '../../features/clientes/pages/ClientesPage';
 import ProductosPage from '../../features/productos/pages/ProductosPage';
 import CostosPage from '../../features/costos/pages/CostosPage';
+import LoginPage from '../../features/auth/pages/LoginPage';
+
+const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const location = useLocation();
+  if (!isAuthenticated()) {
+    return <Navigate to={ROUTES.LOGIN} replace state={{ from: location }} />;
+  }
+  return children;
+};
+
+const GuestRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  if (isAuthenticated()) {
+    return <Navigate to={ROUTES.DASHBOARD} replace />;
+  }
+  return children;
+};
 
 const AppRouter: React.FC = () => {
   return (
     <Suspense fallback={<div className="loading-screen">Cargando NutriBalance...</div>}>
       <Routes>
-        <Route element={<MainLayout />}>
+        <Route
+          path={ROUTES.LOGIN}
+          element={
+            <GuestRoute>
+              <LoginPage />
+            </GuestRoute>
+          }
+        />
+
+        <Route
+          element={
+            <ProtectedRoute>
+              <MainLayout />
+            </ProtectedRoute>
+          }
+        >
           {/* Ruta base */}
           <Route index element={<DashboardPage />} /> 
           
@@ -35,7 +67,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.COSTOS} element={<CostosPage />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to={isAuthenticated() ? ROUTES.DASHBOARD : ROUTES.LOGIN} replace />} />
       </Routes>
     </Suspense>
   );

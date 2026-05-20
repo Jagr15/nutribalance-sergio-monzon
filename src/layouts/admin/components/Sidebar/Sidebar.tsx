@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, useLocation } from "react-router-dom"; // Importación clave
+import { NavLink, useLocation, useNavigate } from "react-router-dom"; // Importación clave
 import { ROUTES } from "../../../../app/config/routes"; // Tus constantes de rutas
 import Swal from "sweetalert2";
 import {
@@ -8,6 +8,7 @@ import {
   FiLayers, FiArchive, FiChevronDown, FiChevronRight,
 } from "react-icons/fi";
 import type { IconType } from "react-icons";
+import { clearSession, getSessionUser } from "../../../../features/auth/session";
 
 interface SidebarItem {
   name: string;
@@ -59,7 +60,9 @@ const menuItems: SidebarGroup[] = [
 ];
 
 export const Sidebar = () => {
+  const navigate = useNavigate();
   const location = useLocation();
+  const currentUser = getSessionUser();
   const [openSections, setOpenSections] = useState<string[]>(["PRODUCCIÓN", "INVENTARIO"]);
   const showComingSoon = (name: string) => {
     void Swal.fire({
@@ -76,6 +79,11 @@ export const Sidebar = () => {
     setOpenSections((prev) =>
       prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]
     );
+  };
+
+  const handleLogout = () => {
+    clearSession();
+    navigate(ROUTES.LOGIN, { replace: true });
   };
 
   return (
@@ -173,13 +181,13 @@ export const Sidebar = () => {
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500" />
             <div className="flex-1">
-              <h4 className="font-medium text-[13px]">Edwin</h4>
-              <p className="text-[11px] text-gray-500">Admin</p>
+              <h4 className="font-medium text-[13px]">{currentUser.name}</h4>
+              <p className="text-[11px] text-gray-500">{currentUser.role}</p>
             </div>
             <button
               type="button"
               aria-label="Cerrar sesión"
-              onClick={() => showComingSoon("Cerrar sesión")}
+              onClick={handleLogout}
               className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center hover:bg-red-500/10 hover:text-red-400 transition"
             >
               <FiLogOut size={14} />
