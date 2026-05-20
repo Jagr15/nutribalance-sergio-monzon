@@ -207,6 +207,19 @@ const formatKg = (value: number) => `${value.toLocaleString("es-AR")} kg`;
 const openDetalleCliente = (cliente: ClienteComercial) => {
   const info = clientesInfoComercial[cliente.uid];
   const historial = info?.historialCompras ?? [];
+  const topProductos = [...historial]
+    .sort((a, b) => b.cantidadKg - a.cantidadKg)
+    .slice(0, 3)
+    .map((item) => item.producto)
+    .join(", ") || "Sin dato";
+  const creditoDisponible = Math.max(0, (info?.cuentaCorriente.limiteCreditoArs || 0) - cliente.saldoPendienteArs);
+  const estadoCredito = cliente.saldoPendienteArs <= creditoDisponible ? "Saludable" : cliente.saldoPendienteArs > 0 ? "En revisión" : "Sin deuda";
+  const proximaAccion =
+    cliente.estado === "Suspendido"
+      ? "Coordinar regularización de deuda antes de nuevos despachos."
+      : cliente.estado === "En riesgo"
+        ? "Contactar cobranzas y acordar plan de pago."
+        : "Proponer nueva orden comercial con volumen objetivo.";
   const historialRows = historial.length
     ? historial
         .map(
@@ -232,6 +245,10 @@ const openDetalleCliente = (cliente: ClienteComercial) => {
         <p style="margin:0 0 6px;"><strong>Producto principal:</strong> ${cliente.productoPrincipal || "Sin dato"}</p>
         <p style="margin:0 0 6px;"><strong>Última compra:</strong> ${cliente.ultimaCompra ? formatDate(cliente.ultimaCompra) : "Sin dato"}</p>
         <p style="margin:0 0 10px;"><strong>Cuenta pendiente:</strong> ${formatCurrency(cliente.saldoPendienteArs)}</p>
+        <p style="margin:0 0 6px;"><strong>Productos más comprados:</strong> ${topProductos}</p>
+        <p style="margin:0 0 6px;"><strong>Estado de crédito:</strong> ${estadoCredito}</p>
+        <p style="margin:0 0 6px;"><strong>Cuenta corriente resumida:</strong> Disponible ${formatCurrency(creditoDisponible)}</p>
+        <p style="margin:0 0 10px;"><strong>Próxima acción sugerida:</strong> ${proximaAccion}</p>
         <p style="margin:0 0 12px; color:#9ca3af;"><strong>Notas comerciales:</strong> ${info?.notasComerciales || "Sin dato"}</p>
         <h4 style="margin:0 0 8px; color:#93c5fd; font-size:13px; text-transform:uppercase;">Historial de compras</h4>
         <table style="width:100%; border-collapse:collapse; border-top:1px solid rgba(255,255,255,0.12); border-bottom:1px solid rgba(255,255,255,0.12);">

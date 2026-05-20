@@ -7,9 +7,27 @@ import { ROUTES } from "../../../app/config/routes";
 import type { StockMateriaPrima } from "../../insumos/types";
 import type { Insumo } from "../../insumos/types";
 import { EstadoOrden, type OrdenProduccion } from "../../ordenes/types";
+import { FiAlertTriangle, FiArrowUpRight, FiClipboard, FiPackage, FiTruck, FiUsers } from "react-icons/fi";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(value);
+
+const safePercent = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
+
+const productosTerminadosDemo = [
+  { stockKg: 18400, capacidadKg: 30000, costoArsTon: 196500 },
+  { stockKg: 7900, capacidadKg: 22000, costoArsTon: 214200 },
+  { stockKg: 3200, capacidadKg: 18000, costoArsTon: 228900 },
+  { stockKg: 5600, capacidadKg: 25000, costoArsTon: 221400 },
+];
+
+const getEstadoByRatio = (stock: number, capacidad: number) => {
+  if (capacidad <= 0) return "Crítico";
+  const ratio = (stock / capacidad) * 100;
+  if (ratio <= 20) return "Crítico";
+  if (ratio <= 40) return "Bajo";
+  return "OK";
+};
 
 export const DashboardPage = () => {
   const [insumos, setInsumos] = useState<Insumo[]>([]);
@@ -115,7 +133,6 @@ export const DashboardPage = () => {
             <p style="margin:0 0 6px;"><strong>Stock inicial:</strong> ${data.stock.toLocaleString("es-AR")} kg</p>
             <p style="margin:0 0 6px;"><strong>Estado inicial:</strong> ${data.estado}</p>
             <p style="margin:0 0 10px;"><strong>Observaciones:</strong> ${data.observaciones}</p>
-            <p style="margin:0; color:#9ca3af;">Pendiente de integración avanzada con fórmulas, stock y persistencia central.</p>
           </div>
         `,
         background: "#0d121b",
@@ -146,80 +163,93 @@ export const DashboardPage = () => {
   const metrics = useMemo(() => {
     const totalStockMP = lotes.reduce((acc, item) => acc + (item.cantidad_actual || 0), 0);
     const valorInventario = lotes.reduce((acc, item) => acc + (item.costo_total || 0), 0);
-    const insumosCriticos = insumos.filter((insumo) => {
+    const alertasCriticasMP = insumos.filter((insumo) => {
       const totalInsumo = lotes
         .filter((l) => l.id_insumo === insumo.uid)
         .reduce((acc, l) => acc + (l.cantidad_actual || 0), 0);
-      return totalInsumo <= insumo.umbral_alerta;
+      const capacidadInsumo = lotes
+        .filter((l) => l.id_insumo === insumo.uid)
+        .reduce((acc, l) => acc + (l.cantidad_inicial || 0), 0);
+      const ratio = capacidadInsumo > 0 ? (totalInsumo / capacidadInsumo) * 100 : 0;
+      return ratio <= 20 || totalInsumo <= insumo.umbral_alerta;
     }).length;
-    const ordenesActivas = ordenes.filter((o) => o.estado !== EstadoOrden.FINALIZADO).length;
+    const alertasBajasMP = insumos.filter((insumo) => {
+      const totalInsumo = lotes
+        .filter((l) => l.id_insumo === insumo.uid)
+        .reduce((acc, l) => acc + (l.cantidad_actual || 0), 0);
+      const capacidadInsumo = lotes
+        .filter((l) => l.id_insumo === insumo.uid)
+        .reduce((acc, l) => acc + (l.cantidad_inicial || 0), 0);
+      const ratio = capacidadInsumo > 0 ? (totalInsumo / capacidadInsumo) * 100 : 0;
+      return ratio > 20 && ratio <= 40;
+    }).length;
+
+    const alertasPT = productosTerminadosDemo.filter((item) => getEstadoByRatio(item.stockKg, item.capacidadKg) !== "OK").length;
+    const valorPT = productosTerminadosDemo.reduce((acc, item) => acc + (item.stockKg / 1000) * item.costoArsTon, 0);
+    const ordenesActivas = ordenes.filter((o) => o.estado !== EstadoOrden.FINALIZADO && o.estado !== EstadoOrden.ANULADO).length;
     const produccionDelDia = ordenes
       .filter((o) => o.estado === EstadoOrden.FINALIZADO)
       .reduce((acc, o) => acc + (o.cantidad_real || 0), 0);
 
+    const capacidadTotal = lotes.reduce((acc, item) => acc + (item.cantidad_inicial || 0), 0);
+    const stockPercent = capacidadTotal > 0 ? (totalStockMP / capacidadTotal) * 100 : 0;
+    const produccionObjetivo = ordenes.reduce((acc, item) => acc + (item.cantidad_objetivo || 0), 0);
+    const produccionPercent = produccionObjetivo > 0 ? (produccionDelDia / produccionObjetivo) * 100 : 0;
+
+    const costoPromedioKg = totalStockMP > 0 ? valorInventario / totalStockMP : 0;
+    const costoBase = 450;
+    const costoPercent = costoBase > 0 ? (costoPromedioKg / costoBase) * 100 : 0;
+
     return {
       totalStockMP,
-      valorInventario,
-      insumosCriticos,
+      valorInventario: valorInventario + valorPT,
+      alertasAutomaticas: alertasCriticasMP + alertasBajasMP + alertasPT,
       ordenesActivas,
       produccionDelDia,
+      stockPercent: safePercent(stockPercent),
+      produccionPercent: safePercent(produccionPercent),
+      costoPercent: safePercent(costoPercent),
+      costoPromedioKg,
     };
   }, [insumos, lotes, ordenes]);
 
+  const ultimosMovimientos = useMemo(() => {
+    return lotes
+      .slice()
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 5)
+      .map((lote) => {
+        const insumo = insumos.find((item) => item.uid === lote.id_insumo);
+        const restante = lote.cantidad_inicial > 0 ? (lote.cantidad_actual / lote.cantidad_inicial) * 100 : 0;
+        return {
+          id: lote.uid,
+          titulo: insumo?.nombre || "Materia prima",
+          detalle: `${lote.lote} · ${lote.ubicacion || "Ubicación operativa"}`,
+          cantidad: `${(lote.cantidad_actual || 0).toLocaleString("es-AR")} kg`,
+          restante: safePercent(restante),
+        };
+      });
+  }, [insumos, lotes]);
+
+  const ordenesRecientes = useMemo(() => {
+    return ordenes
+      .slice()
+      .sort((a, b) => new Date(b.fecha_creacion).getTime() - new Date(a.fecha_creacion).getTime())
+      .slice(0, 5);
+  }, [ordenes]);
+
   return (
     <div className="space-y-6">
-      <section>
-        <p className="text-sm uppercase tracking-widest text-blue-400">
-          Estado operativo
-        </p>
-        <h1 className="text-4xl font-bold mt-2">
-          Panel de Producción e Inventario
-        </h1>
-        <p className="text-gray-400 mt-3 max-w-3xl">
-          Vista ejecutiva para decisiones rápidas sobre stock, producción, alertas y costo operativo.
-        </p>
-      </section>
+      <section className="rounded-3xl border border-cyan-200/20 bg-gradient-to-br from-[#0f2239] via-[#163355] to-[#0f1e33] p-7 md:p-9 shadow-2xl relative overflow-hidden">
+        <div className="absolute -right-16 -top-20 w-72 h-72 rounded-full bg-cyan-400/20 blur-3xl" />
+        <div className="absolute -left-20 -bottom-20 w-80 h-80 rounded-full bg-blue-600/20 blur-3xl" />
 
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Inventario</p>
-          <h3 className="text-3xl font-black mt-2">{metrics.totalStockMP.toLocaleString()} kg</h3>
-          <p className="text-sm text-gray-400 mt-2">Total stock MP</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Alertas</p>
-          <h3 className="text-3xl font-black mt-2 text-red-400">{metrics.insumosCriticos}</h3>
-          <p className="text-sm text-gray-400 mt-2">Insumos críticos</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Producción</p>
-          <h3 className="text-3xl font-black mt-2 text-blue-400">{metrics.ordenesActivas}</h3>
-          <p className="text-sm text-gray-400 mt-2">Órdenes activas</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Producción del día</p>
-          <h3 className="text-3xl font-black mt-2 text-emerald-400">{metrics.produccionDelDia.toLocaleString()} kg</h3>
-          <p className="text-sm text-gray-400 mt-2">Lotes finalizados</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Costo</p>
-          <h3 className="text-3xl font-black mt-2 text-emerald-400">ARS {metrics.valorInventario.toLocaleString()}</h3>
-          <p className="text-sm text-gray-400 mt-2">Valor inventario ARS</p>
-        </Card>
-        <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Estado del proyecto</p>
-          <h3 className="text-xl font-black mt-2 text-blue-400">Operación en avance</h3>
-          <p className="text-sm text-gray-400 mt-2">Módulos core operativos</p>
-        </Card>
-      </section>
-      <Card>
-        <div className="flex items-center justify-between mb-6">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
           <div>
-            <h2 className="text-xl font-semibold">
-              Inventario y Alertas
-            </h2>
-            <p className="text-sm text-gray-400 mt-1">
-              Lectura rápida de estado operativo por rubro
+            <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">Estado operativo</p>
+            <h1 className="text-3xl md:text-4xl font-black mt-2">Centro Ejecutivo de Producción</h1>
+            <p className="text-slate-200/90 mt-3 max-w-3xl leading-relaxed">
+              Inventario unificado de stock de materia prima y stock de productos terminados, con alertas automáticas, valorización ARS y foco operativo.
             </p>
           </div>
 
@@ -227,123 +257,179 @@ export const DashboardPage = () => {
             type="button"
             aria-label="Nuevo producto"
             onClick={openNuevoProductoModal}
-            className="bg-blue-600 hover:bg-blue-700 transition px-4 py-2 rounded-xl text-sm font-medium"
+            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-5 py-3 rounded-xl transition"
           >
             Nuevo Producto
           </button>
         </div>
-        <div className="overflow-auto">
-          <table className="w-full">
+      </section>
+
+      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <Card className="bg-[#132235]">
+          <p className="text-xs uppercase tracking-widest text-cyan-200">Inventario integral</p>
+          <h3 className="text-2xl font-black mt-2 text-cyan-100">Stock consolidado</h3>
+          <p className="text-sm text-slate-300 mt-2">Materia prima y producto terminado en una vista ejecutiva.</p>
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-widest text-gray-400">Valor inventario ARS</p>
+          <h3 className="text-3xl font-black mt-2 text-emerald-300">{formatCurrency(metrics.valorInventario)}</h3>
+          <p className="text-sm text-gray-400 mt-2">Valuación consolidada de stock actual.</p>
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-widest text-gray-400">Órdenes activas</p>
+          <h3 className="text-3xl font-black mt-2 text-blue-300">{metrics.ordenesActivas}</h3>
+          <p className="text-sm text-gray-400 mt-2">Órdenes abiertas entre pendientes y en proceso.</p>
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-widest text-gray-400">Alertas automáticas</p>
+          <h3 className="text-3xl font-black mt-2 text-red-300">{metrics.alertasAutomaticas}</h3>
+          <p className="text-sm text-gray-400 mt-2">Total de alertas entre MP y productos terminados.</p>
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-widest text-gray-400">Producción del día</p>
+          <h3 className="text-3xl font-black mt-2 text-cyan-300">{metrics.produccionDelDia.toLocaleString("es-AR")} kg</h3>
+          <p className="text-sm text-gray-400 mt-2">Volumen finalizado en lotes productivos.</p>
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-widest text-gray-400">Stock materia prima</p>
+          <h3 className="text-3xl font-black mt-2 text-violet-300">{metrics.totalStockMP.toLocaleString("es-AR")} kg</h3>
+          <p className="text-sm text-gray-400 mt-2">Disponibilidad base para continuidad productiva.</p>
+        </Card>
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <Card className="lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold">Últimos movimientos</h2>
+              <p className="text-sm text-gray-400 mt-1">Cambios recientes en stock y disponibilidad por lote.</p>
+            </div>
+            <FiArrowUpRight className="text-cyan-300" />
+          </div>
+
+          <div className="space-y-3">
+            {ultimosMovimientos.map((item) => (
+              <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">{item.titulo}</p>
+                    <p className="text-xs text-gray-400 mt-1">{item.detalle}</p>
+                  </div>
+                  <p className="text-sm font-medium text-cyan-200">{item.cantidad}</p>
+                </div>
+                <div className="mt-3 h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500" style={{ width: `${item.restante}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <h2 className="text-xl font-semibold mb-4">Indicadores visuales</h2>
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-gray-300">Stock MP</span>
+                <span className="text-cyan-200">{metrics.stockPercent}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full bg-cyan-500" style={{ width: `${metrics.stockPercent}%` }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-gray-300">Producción</span>
+                <span className="text-emerald-200">{metrics.produccionPercent}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full bg-emerald-500" style={{ width: `${metrics.produccionPercent}%` }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-gray-300">Costos</span>
+                <span className="text-amber-200">{metrics.costoPercent}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full bg-amber-500" style={{ width: `${metrics.costoPercent}%` }} />
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Costo promedio actual: {formatCurrency(metrics.costoPromedioKg)} / kg
+              </p>
+            </div>
+          </div>
+        </Card>
+      </section>
+
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold">Órdenes recientes</h2>
+            <p className="text-sm text-gray-400 mt-1">Seguimiento rápido del avance operativo por orden.</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px]">
             <thead>
               <tr className="border-b border-white/10 text-left text-gray-400 text-sm">
-                <th className="pb-4">Producto</th>
-                <th className="pb-4">Tipo</th>
-                <th className="pb-4">Existencia</th>
-                <th className="pb-4">Estado</th>
+                <th className="py-3">Lote</th>
+                <th className="py-3">Producto</th>
+                <th className="py-3">Responsable</th>
+                <th className="py-3">Objetivo</th>
+                <th className="py-3">Estado</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-white/5 hover:bg-white/5 transition">
-                <td className="py-4 font-medium">
-                  Maíz
-                </td>
-                <td>
-                  Grano
-                </td>
-                <td>
-                  7,800 kg
-                </td>
-                <td>
-                  <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-lg text-sm">
-                    OK
-                  </span>
-                </td>
-              </tr>
+              {ordenesRecientes.map((orden) => {
+                const estadoClass =
+                  orden.estado === EstadoOrden.FINALIZADO
+                    ? "bg-emerald-500/20 text-emerald-300"
+                    : orden.estado === EstadoOrden.EN_PROCESO
+                      ? "bg-blue-500/20 text-blue-300"
+                      : orden.estado === EstadoOrden.ANULADO
+                        ? "bg-gray-500/25 text-gray-300"
+                        : "bg-amber-500/20 text-amber-300";
 
-              <tr className="border-b border-white/5 hover:bg-white/5 transition">
-                <td className="py-4 font-medium">
-                  Soja
-                </td>
-                <td>
-                  Grano
-                </td>
-                <td>
-                  1,100 kg
-                </td>
-                <td>
-                  <span className="bg-orange-500/20 text-orange-400 px-3 py-1 rounded-lg text-sm">
-                    Bajo
-                  </span>
-                </td>
-              </tr>
-
-              <tr className="border-b border-white/5 hover:bg-white/5 transition">
-                <td className="py-4 font-medium">
-                  Núcleo Vitamínico
-                </td>
-                <td>
-                  Suplemento
-                </td>
-                <td>
-                  140 kg
-                </td>
-                <td>
-                  <span className="bg-red-500/20 text-red-400 px-3 py-1 rounded-lg text-sm">
-                    Crítico
-                  </span>
-                </td>
-              </tr>
-
-              <tr className="hover:bg-white/5 transition">
-                <td className="py-4 font-medium">
-                  Afrechillo
-                </td>
-                <td>
-                  Suplemento
-                </td>
-                <td>
-                  2,600 kg
-                </td>
-                <td>
-                  <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-lg text-sm">
-                    OK
-                  </span>
-                </td>
-              </tr>
+                return (
+                  <tr key={orden.id} className="border-b border-white/5">
+                    <td className="py-3 text-sm font-medium">{orden.lote || "Sin lote"}</td>
+                    <td className="py-3 text-sm text-gray-300">{orden.nombre_producto || "Sin producto"}</td>
+                    <td className="py-3 text-sm text-gray-300">{orden.usuario_responsable || "Sin responsable"}</td>
+                    <td className="py-3 text-sm text-gray-300">{(orden.cantidad_objetivo || 0).toLocaleString("es-AR")} kg</td>
+                    <td className="py-3 text-sm">
+                      <span className={`px-3 py-1 rounded-lg ${estadoClass}`}>{orden.estado}</span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </Card>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <Card>
-          <h3 className="text-lg font-semibold mb-4">Impacto de Negocio</h3>
-          <ul className="space-y-2 text-sm text-gray-300">
-            <li>Menor dependencia de Excel.</li>
-            <li>Control de lotes de producción.</li>
-            <li>Visibilidad de stock en tiempo real.</li>
-            <li>Control de costos por orden.</li>
-            <li>Alertas tempranas de faltantes.</li>
-            <li>Base preparada para trazabilidad y finanzas.</li>
-          </ul>
-        </Card>
-
-        <Card>
-          <h3 className="text-lg font-semibold mb-4">Etapa de Implementación</h3>
-          <div className="space-y-2 text-sm">
-            <p><span className="text-blue-400 font-semibold">Etapa 1:</span> Producción, Inventario doble, Alertas.</p>
-            <p><span className="text-amber-400 font-semibold">Configuración avanzada:</span> FIFO completo, Finanzas, Cheques y Roles avanzados.</p>
+        <Card className="flex items-start gap-3">
+          <FiPackage className="text-cyan-300 mt-1" />
+          <div>
+            <h3 className="font-semibold">Inventario por lotes</h3>
+            <p className="text-sm text-gray-400 mt-1">Trazabilidad más clara para sostener abastecimiento y continuidad de producción.</p>
           </div>
         </Card>
-
-        <Card>
-          <h3 className="text-lg font-semibold mb-4">Modo Presentación</h3>
-          <p className="text-sm text-gray-300 leading-relaxed">
-            Información operativa disponible para validación del flujo comercial y productivo.
-          </p>
-          <p className="text-xs text-gray-500 mt-3">
-            Incluye inventario, stock, fórmulas y órdenes con inicio/finalización y merma.
-          </p>
+        <Card className="flex items-start gap-3">
+          <FiClipboard className="text-emerald-300 mt-1" />
+          <div>
+            <h3 className="font-semibold">Ejecución de órdenes</h3>
+            <p className="text-sm text-gray-400 mt-1">Seguimiento directo de objetivos, estado y responsables por lote operativo.</p>
+          </div>
+        </Card>
+        <Card className="flex items-start gap-3">
+          <FiAlertTriangle className="text-amber-300 mt-1" />
+          <div>
+            <h3 className="font-semibold">Gestión de alertas</h3>
+            <p className="text-sm text-gray-400 mt-1">Priorización temprana de insumos críticos para reducir riesgo de quiebre.</p>
+          </div>
         </Card>
       </section>
 
@@ -354,14 +440,17 @@ export const DashboardPage = () => {
             <p className="text-sm text-gray-400 mt-1">Navegación directa a módulos comerciales y de costos.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link to={ROUTES.CLIENTES} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-medium">
-              Clientes
+            <Link to={ROUTES.CLIENTES} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-medium inline-flex items-center gap-2">
+              <FiUsers size={14} /> Clientes
             </Link>
-            <Link to={ROUTES.PRODUCTOS} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-medium">
-              Productos
+            <Link to={ROUTES.STOCK} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-medium inline-flex items-center gap-2">
+              <FiTruck size={14} /> Resumen de Stock
             </Link>
-            <Link to={ROUTES.COSTOS} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-medium">
-              Costos
+            <Link to={ROUTES.COSTOS} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-medium inline-flex items-center gap-2">
+              <FiClipboard size={14} /> Costos
+            </Link>
+            <Link to={ROUTES.TRAZABILIDAD} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-medium inline-flex items-center gap-2">
+              <FiPackage size={14} /> Trazabilidad
             </Link>
           </div>
         </div>
@@ -369,4 +458,5 @@ export const DashboardPage = () => {
     </div>
   );
 };
+
 export default DashboardPage;

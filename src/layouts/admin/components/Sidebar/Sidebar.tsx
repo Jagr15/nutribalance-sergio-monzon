@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom"; // Importación clave
 import { ROUTES } from "../../../../app/config/routes"; // Tus constantes de rutas
-import Swal from "sweetalert2";
 import {
   FiGrid, FiUsers, FiPackage, FiTruck, FiBarChart2,
    FiLogOut,FiInbox,FiDatabase,
-  FiLayers, FiArchive, FiChevronDown, FiChevronRight,
+  FiLayers, FiArchive, FiChevronDown, FiChevronRight, FiGitMerge,
 } from "react-icons/fi";
 import type { IconType } from "react-icons";
 import { clearSession, getSessionUser } from "../../../../features/auth/session";
@@ -14,7 +13,6 @@ interface SidebarItem {
   name: string;
   icon: IconType;
   path: string;
-  enabled?: boolean;
 }
 
 interface SidebarGroup {
@@ -31,7 +29,7 @@ const menuItems: SidebarGroup[] = [
     items: [
       { name: "Dashboard", icon: FiGrid, path: ROUTES.DASHBOARD },
       { name: "Clientes", icon: FiUsers, path: ROUTES.CLIENTES },
-      { name: "Productos", icon: FiPackage, path: ROUTES.PRODUCTOS },
+      { name: "Stock General", icon: FiPackage, path: ROUTES.STOCK },
       { name: "Proveedores", icon: FiTruck, path: ROUTES.PROVEEDORES },
     ],
   },
@@ -44,16 +42,15 @@ const menuItems: SidebarGroup[] = [
       { name: "Fórmulas", icon: FiLayers, path: ROUTES.FORMULAS },
       { name: "Órdenes", icon: FiLayers, path: ROUTES.ORDENES},
       { name: "Costos", icon: FiBarChart2, path: ROUTES.COSTOS },
+      { name: "Trazabilidad", icon: FiGitMerge, path: ROUTES.TRAZABILIDAD },
     ],
   },
   {
     section: "INVENTARIO",
     collapsible: true,
     items: [
-      
-    
       { name: "Stock Materia Prima", icon: FiInbox, path: ROUTES.STOCKMATERIAPRIMA },
-      { name: "Terminado", icon: FiPackage, path: "/inventario/terminado", enabled: false },
+      { name: "Stock de Productos Terminados", icon: FiPackage, path: ROUTES.PRODUCTOS },
     ],
   },
   // ... resto de secciones (puedes añadir los paths que necesites)
@@ -64,16 +61,6 @@ export const Sidebar = () => {
   const location = useLocation();
   const currentUser = getSessionUser();
   const [openSections, setOpenSections] = useState<string[]>(["PRODUCCIÓN", "INVENTARIO"]);
-  const showComingSoon = (name: string) => {
-    void Swal.fire({
-      icon: "info",
-      title: "Configuración avanzada",
-      text: `${name} está pendiente de integración avanzada.`,
-      background: "#0d121b",
-      color: "#fff",
-      confirmButtonColor: "#2563eb",
-    });
-  };
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) =>
@@ -129,23 +116,6 @@ export const Sidebar = () => {
                   {group.items.map((item) => {
                     const Icon = item.icon;
                     const isActive = location.pathname === item.path;
-                    if (item.enabled === false) {
-                      return (
-                        <button
-                          key={item.name}
-                          type="button"
-                          aria-label={`${item.name} no disponible`}
-                          onClick={() => showComingSoon(item.name)}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-gray-500 hover:bg-white/5 hover:text-gray-300"
-                        >
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5">
-                            <Icon size={15} />
-                          </div>
-                          <span className="text-[13px] font-medium">{item.name}</span>
-                          <span className="ml-auto text-[9px] uppercase tracking-widest">Avanzado</span>
-                        </button>
-                      );
-                    }
 
                     return (
                       <NavLink

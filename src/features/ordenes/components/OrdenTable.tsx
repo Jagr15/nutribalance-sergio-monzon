@@ -154,6 +154,16 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
                             </div>
                             <div className="bg-white/5 rounded-2xl p-4 space-y-3">
                                <div className="flex flex-col border-b border-white/5 pb-2">
+                                  <span className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-1">Timeline</span>
+                                  <div className="flex items-center gap-1 text-[9px] font-bold">
+                                    <span className={orden.estado === EstadoOrden.PENDIENTE ? "text-blue-300" : "text-gray-500"}>Pendiente</span>
+                                    <span className="text-gray-600">→</span>
+                                    <span className={orden.estado === EstadoOrden.EN_PROCESO ? "text-orange-300" : "text-gray-500"}>En proceso</span>
+                                    <span className="text-gray-600">→</span>
+                                    <span className={orden.estado === EstadoOrden.FINALIZADO ? "text-emerald-300" : "text-gray-500"}>Finalizada</span>
+                                  </div>
+                               </div>
+                               <div className="flex flex-col border-b border-white/5 pb-2">
                                   <span className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-1">Responsable</span>
                                   <span className="text-[11px] text-white font-bold">{orden.usuario_responsable}</span>
                                </div>
@@ -169,6 +179,12 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
                                     ARS {orden.costo_total_insumos.toFixed(2)}
                                   </span>
                                </div>
+                               <div className="flex flex-col border-t border-white/5 pt-2">
+                                  <span className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-1">Detalle operativo</span>
+                                  <span className="text-[10px] text-gray-300">Merma manual: {orden.merma_manual ? `${orden.merma_manual.toFixed(2)}%` : "Sin dato"}</span>
+                                  <span className="text-[10px] text-gray-300">Silo destino: {orden.destino_silo || "Sin dato"}</span>
+                                  <span className="text-[10px] text-gray-300">Estado operativo: {orden.estado}</span>
+                                </div>
                             </div>
                           </div>
 

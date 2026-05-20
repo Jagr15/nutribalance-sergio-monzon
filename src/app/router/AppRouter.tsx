@@ -15,6 +15,8 @@ import OrdenPage from '../../features/ordenes/pages/OrdenPage';
 import ClientesPage from '../../features/clientes/pages/ClientesPage';
 import ProductosPage from '../../features/productos/pages/ProductosPage';
 import CostosPage from '../../features/costos/pages/CostosPage';
+import StockGeneralPage from '../../features/inventario/pages/StockGeneralPage';
+import TrazabilidadPage from '../../features/trazabilidad/pages/TrazabilidadPage';
 import LoginPage from '../../features/auth/pages/LoginPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -63,6 +65,8 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.FORMULAS} element={<FormulaPage />} />
           <Route path={ROUTES.ORDENES} element={<OrdenPage />} />
           <Route path={ROUTES.CLIENTES} element={<ClientesPage />} />
+          <Route path={ROUTES.STOCK} element={<StockGeneralPage />} />
+          <Route path={ROUTES.TRAZABILIDAD} element={<TrazabilidadPage />} />
           <Route path={ROUTES.PRODUCTOS} element={<ProductosPage />} />
           <Route path={ROUTES.COSTOS} element={<CostosPage />} />
         </Route>

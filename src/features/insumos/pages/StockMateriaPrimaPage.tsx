@@ -69,6 +69,7 @@ const StockMateriaPrimaPage: React.FC = () => {
         <div>
           <p className="text-[10px] uppercase tracking-[0.4em] text-blue-500 font-bold mb-2">OPERACIONES / ALMACÉN</p>
           <h1 className="text-4xl font-extrabold text-white tracking-tight">Stock Materia Prima</h1>
+          <p className="text-sm text-gray-400 mt-2">Inventario de materia prima con alertas automáticas por nivel de stock y umbral crítico.</p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}

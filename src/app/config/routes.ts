@@ -9,7 +9,9 @@ export const ROUTES = {
   INSUMOS: '/insumos',
   FORMULAS: '/formulas',
   PRODUCCION: '/produccion',
+  STOCK: '/stock',
   STOCKMATERIAPRIMA: '/stockMateriaPrima',
+  TRAZABILIDAD: '/trazabilidad',
   SILOS: '/silos',
   ORDENES: '/Ordenes',
 } as const;

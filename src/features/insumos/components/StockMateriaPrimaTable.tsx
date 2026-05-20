@@ -86,14 +86,16 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ data = [], insumos, proveedor
                 const provNombre = proveedores.find(p => p.uid === lote.id_proveedor)?.nombre_empresa || "Sin dato";
 
                 // Cálculos de Stock
-                const porcentajeFisico = (lote.cantidad_actual / lote.cantidad_inicial) * 100;
+                const baseCantidad = lote.cantidad_inicial > 0 ? lote.cantidad_inicial : 1;
+                const porcentajeFisico = (lote.cantidad_actual / baseCantidad) * 100;
                 const comprometido = lote.cantidad_comprometida || 0;
-                const porcentajeComprometido = (comprometido / lote.cantidad_inicial) * 100;
+                const porcentajeComprometido = (comprometido / baseCantidad) * 100;
                 const dispReal = lote.cantidad_actual - comprometido;
+                const umbralCritico = insu?.umbral_alerta || 0;
                 const estadoStock =
-                  dispReal <= (insu?.umbral_alerta || 0) * 0.6
+                  porcentajeFisico <= 20 || dispReal <= umbralCritico
                     ? "CRÍTICO"
-                    : dispReal <= (insu?.umbral_alerta || 0)
+                    : porcentajeFisico <= 40
                       ? "BAJO"
                       : "OK";
                 const estadoClass =
