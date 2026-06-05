@@ -7,7 +7,7 @@
     "version_formula": 2,
     "cantidad_objetivo": 2000,
     "cantidad_real": null,
-    "merma_manual": null,
+    "merma_manual": 145,
     "id_silo": null,
     "destino_silo": null,
     "estado": "PENDIENTE",

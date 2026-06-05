@@ -1,0 +1,28 @@
+export type PrioridadAlerta = "critica" | "media" | "informativa";
+export type AreaAlerta = "stock" | "produccion" | "clientes" | "costos" | "productos";
+export type EstadoAlerta = "pendiente" | "en seguimiento" | "atendida";
+
+export interface DatoAsociadoAlerta {
+  lote?: string;
+  orden?: string;
+  cliente?: string;
+  producto?: string;
+  insumo?: string;
+  disponible_kg?: number;
+  umbral_kg?: number;
+  estado?: string;
+  cantidad_objetivo?: number;
+}
+
+export interface AlertaOperativa {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  prioridad: PrioridadAlerta;
+  area: AreaAlerta;
+  estado: EstadoAlerta;
+  fechaRelativa: string;
+  datoAsociado: DatoAsociadoAlerta;
+  accionRecomendada: string;
+  impactoOperativo: string;
+}

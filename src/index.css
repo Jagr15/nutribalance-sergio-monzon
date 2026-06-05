@@ -3,12 +3,12 @@
 @tailwind utilities;
 /* NutriBalance ERP — operación comercial */
 :root {
-  --bg: #0a0e14;
-  --bg-elevated: #111822;
-  --bg-card: #141c28;
-  --border: rgba(255, 255, 255, 0.07);
-  --text: #e8ecf4;
-  --text-muted: #8b96ab;
+  --bg: #f4f7fb;
+  --bg-elevated: #ffffff;
+  --bg-card: #ffffff;
+  --border: #dbe4f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
   --primary: #3d7eea;
   --primary-soft: rgba(61, 126, 234, 0.18);
   --accent: #e8a54b;
@@ -21,7 +21,7 @@
   --danger-soft: rgba(248, 113, 113, 0.14);
   --radius: 16px;
   --radius-sm: 10px;
-  --shadow: 0 28px 56px rgba(0, 0, 0, 0.5);
+  --shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
   --font: "Outfit", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
@@ -44,9 +44,73 @@ body {
   color: var(--text);
   background: var(--bg);
   background-image:
-    radial-gradient(ellipse 100% 70% at 0% 0%, rgba(61, 126, 234, 0.2), transparent 55%),
-    radial-gradient(ellipse 80% 50% at 100% 10%, rgba(232, 165, 75, 0.1), transparent 50%),
-    linear-gradient(180deg, #0a0e14 0%, #080b10 100%);
+    radial-gradient(ellipse 100% 70% at 0% 0%, rgba(61, 126, 234, 0.08), transparent 55%),
+    radial-gradient(ellipse 80% 50% at 100% 10%, rgba(232, 165, 75, 0.05), transparent 50%),
+    linear-gradient(180deg, #f8fbff 0%, #f3f6fb 100%);
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  50% { transform: translateX(6px); }
+  75% { transform: translateX(-3px); }
+}
+
+@keyframes bounceSoft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.animate-fade-slide {
+  animation: fadeSlideIn 0.45s ease-out;
+}
+
+.animate-shake {
+  animation: shakeX 0.35s ease-in-out;
+}
+
+.animate-bounce-soft {
+  animation: bounceSoft 0.45s ease-out;
+}
+
+@keyframes fadeInSoft {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeInSoft 0.28s ease-out;
+}
+
+.ui-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  transition: all 0.22s ease-out;
+}
+
+.ui-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
+}
+
+.ui-input {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  transition: all 0.2s ease-out;
+}
+
+.ui-input:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
 }
 
 .app-shell {
@@ -161,7 +225,7 @@ body {
 
 .nav-item.nav-target:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(59, 130, 246, 0.08);
 }
 
 .nav-item.active {
@@ -272,7 +336,7 @@ body {
   text-align: left;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: rgba(10, 14, 20, 0.55);
+  background: rgba(255, 255, 255, 0.92);
   padding: 0.85rem 1rem;
   cursor: pointer;
   font-family: var(--font);
@@ -659,7 +723,7 @@ h1 {
 }
 
 .data-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(59, 130, 246, 0.06);
 }
 
 .data-table .mono {

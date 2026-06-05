@@ -107,7 +107,7 @@ export const supabaseStockMPService = {
   },
 
   async update(uid: string, payload: Partial<StockMateriaPrima>): Promise<StockMateriaPrima> {
-    const updateInput: Record<string, unknown> = {
+    const rawInput: Record<string, unknown> = {
       lote: payload.lote,
       remito_nro: payload.remito_nro,
       ubicacion: payload.ubicacion,
@@ -118,6 +118,9 @@ export const supabaseStockMPService = {
       costo_total: payload.costo_total,
       fecha_ingreso: payload.fecha_ingreso?.toISOString(),
     };
+    const updateInput = Object.fromEntries(
+      Object.entries(rawInput).filter(([, value]) => value !== undefined)
+    );
 
     const { data, error } = await supabaseClient
       .from('stock_lotes_mp')

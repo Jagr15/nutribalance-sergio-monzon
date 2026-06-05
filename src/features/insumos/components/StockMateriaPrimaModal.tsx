@@ -6,7 +6,6 @@ import { ApiService } from '../../../infrastructure/api';
 import type { Insumo } from '../types';
 import type { Proveedor } from '../../proveedores/types';
 import type { Silo } from '../../silos/types';
-import Swal from 'sweetalert2';
 
 interface Props {
   onClose: () => void;
@@ -15,6 +14,8 @@ interface Props {
 
 const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const { create, isLoading } = useStockMateriaPrima();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   
   // Listas para catálogos
   const [insumos, setInsumos] = useState<Insumo[]>([]);
@@ -68,15 +69,24 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    if (isSubmitting) return;
+    setSubmitError(null);
+
     if (!formData.id_insumo || !formData.id_proveedor || !formData.ubicacion) {
-      return Swal.fire({ 
-        icon: 'warning', 
-        title: 'Faltan selecciones', 
-        text: 'Por favor seleccione Insumo, Proveedor y Ubicación.',
-        background: '#0d121b', 
-        color: '#fff' 
-      });
+      setSubmitError('Seleccioná insumo, proveedor y ubicación.');
+      return;
+    }
+    if (!formData.lote.trim()) {
+      setSubmitError('El lote es obligatorio.');
+      return;
+    }
+    if (formData.cantidad <= 0) {
+      setSubmitError('La cantidad debe ser mayor a 0.');
+      return;
+    }
+    if (formData.costo_total <= 0) {
+      setSubmitError('El costo total debe ser mayor a 0.');
+      return;
     }
 
     // Conversión a KG para la base de datos
@@ -84,6 +94,8 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
 
     const dataToSave = {
       ...formData,
+      lote: formData.lote.trim().toUpperCase(),
+      remito_nro: formData.remito_nro.trim(),
       cantidad_actual: cantidadFinal,
       cantidad_inicial: cantidadFinal,
       costo_unitario: costoUnitarioCalculado,
@@ -91,29 +103,37 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     };
 
     try {
+      setIsSubmitting(true);
       await create(dataToSave);
       onSuccess();
       onClose();
-    } catch (error) {
-      console.error(error);
+    } catch (error: unknown) {
+      setSubmitError(error instanceof Error ? error.message : 'No se pudo registrar el ingreso.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Clases para quitar el scroll/flechas del input number
   const noSpinnerClasses = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
-  const inputStyles = `w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-600`;
+  const inputStyles = `w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-100 transition-all duration-200 ease-out placeholder:text-gray-600`;
   const labelStyles = "text-[9px] font-bold text-gray-500 uppercase tracking-widest ml-1 flex items-center gap-2 mb-1.5";
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-      <div className="bg-[#0d121b] border border-white/10 rounded-[1.5rem] w-full max-w-4xl shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-white/55 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+      <div className="bg-white border border-slate-200 rounded-[1.5rem] w-full max-w-4xl shadow-xl animate-in fade-in zoom-in-95 duration-200">
         
-        <header className="px-8 py-5 border-b border-white/5 flex justify-between items-center">
-          <h2 className="text-lg font-black text-white uppercase tracking-tight">Ingreso de Materia Prima</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><FiX size={18} /></button>
+        <header className="px-8 py-5 border-b border-slate-200 flex justify-between items-center">
+          <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Ingreso de Materia Prima</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-slate-900 transition-colors duration-200 transition-colors"><FiX size={18} /></button>
         </header>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
+          {submitError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {submitError}
+            </div>
+          ) : null}
           
           {/* SECCIÓN 1: SELECTORES (Originales) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -130,10 +150,10 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                 }}
               />
               {activeDropdown === 'insumo' && (
-                <div className="absolute top-full left-0 w-full bg-[#161b26] border border-white/10 rounded-xl z-50 max-h-40 overflow-y-auto shadow-2xl mt-1">
+                <div className="absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl z-50 max-h-40 overflow-y-auto shadow-xl mt-1">
                   {insumos.filter(i => i.nombre.toLowerCase().includes(searchs.insumo.toLowerCase())).map(i => (
                     <div key={i.uid} onClick={() => { setFormData({ ...formData, id_insumo: i.uid, nombre_insumo: i.nombre }); setActiveDropdown(null); }}
-                      className="px-4 py-2 text-[11px] text-gray-400 hover:bg-blue-600 hover:text-white cursor-pointer transition-colors">{i.nombre}</div>
+                      className="px-4 py-2 text-[11px] text-slate-600 hover:bg-blue-50 hover:text-blue-700 cursor-pointer transition-colors">{i.nombre}</div>
                   ))}
                 </div>
               )}
@@ -152,10 +172,10 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                 }}
               />
               {activeDropdown === 'prov' && (
-                <div className="absolute top-full left-0 w-full bg-[#161b26] border border-white/10 rounded-xl z-50 max-h-40 overflow-y-auto shadow-2xl mt-1">
+                <div className="absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl z-50 max-h-40 overflow-y-auto shadow-xl mt-1">
                   {proveedores.filter(p => p.nombre_empresa.toLowerCase().includes(searchs.prov.toLowerCase())).map(p => (
                     <div key={p.uid} onClick={() => { setFormData({ ...formData, id_proveedor: p.uid, nombre_prov: p.nombre_empresa }); setActiveDropdown(null); }}
-                      className="px-4 py-2 text-[11px] text-gray-400 hover:bg-orange-600 hover:text-white cursor-pointer transition-colors">{p.nombre_empresa}</div>
+                      className="px-4 py-2 text-[11px] text-slate-600 hover:bg-orange-50 hover:text-orange-600 cursor-pointer transition-colors">{p.nombre_empresa}</div>
                   ))}
                 </div>
               )}
@@ -171,10 +191,10 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                 readOnly // Para forzar selección de la lista
               />
               {activeDropdown === 'silo' && (
-                <div className="absolute top-full left-0 w-full bg-[#161b26] border border-white/10 rounded-xl z-50 max-h-40 overflow-y-auto shadow-2xl mt-1">
+                <div className="absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl z-50 max-h-40 overflow-y-auto shadow-xl mt-1">
                   {silos.map(s => (
                     <div key={s.uid} onClick={() => { setFormData({ ...formData, ubicacion: s.nombre }); setActiveDropdown(null); }}
-                      className="px-4 py-2 text-[11px] text-gray-400 hover:bg-emerald-600 hover:text-white cursor-pointer transition-colors">{s.nombre}</div>
+                      className="px-4 py-2 text-[11px] text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 cursor-pointer transition-colors">{s.nombre}</div>
                   ))}
                 </div>
               )}
@@ -185,7 +205,7 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
             <div className="space-y-1">
               <label className={labelStyles}><FiHash /> Lote</label>
-              <input required className={`${inputStyles} font-mono uppercase`} placeholder="L-2026-X" onChange={e => setFormData({ ...formData, lote: e.target.value.toUpperCase() })} />
+              <input required className={`${inputStyles} font-mono uppercase`} placeholder="L-2026-X" onChange={e => setFormData({ ...formData, lote: e.target.value })} />
             </div>
             <div className="space-y-1">
               <label className={labelStyles}><FiFileText /> Nro Remito</label>
@@ -193,15 +213,15 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             </div>
             <div className="space-y-1">
               <label className={labelStyles}>Cantidad Ingreso</label>
-              <div className={`flex bg-white/[0.03] border border-white/10 rounded-xl overflow-hidden focus-within:border-blue-500/50 transition-all`}>
+              <div className={`flex bg-slate-50 border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500/50 transition-all duration-200 ease-out`}>
                 <input 
                   required type="number" step="any" 
-                  className={`w-full bg-transparent px-4 py-2.5 text-xs text-white outline-none ${noSpinnerClasses}`}
+                  className={`w-full bg-transparent px-4 py-2.5 text-xs text-slate-900 outline-none ${noSpinnerClasses}`}
                   placeholder="0.00" 
                   onChange={e => setFormData({ ...formData, cantidad: Number(e.target.value) })} 
                 />
                 <select 
-                  className="bg-[#161b26] text-[10px] font-bold text-blue-400 px-3 border-l border-white/5 outline-none cursor-pointer"
+                  className="bg-slate-50 text-[10px] font-bold text-blue-600 px-3 border-l border-slate-200 outline-none cursor-pointer"
                   value={formData.unidad_entrada} 
                   onChange={e => setFormData({ ...formData, unidad_entrada: e.target.value as 'KG' | 'TON' })}
                 >
@@ -212,7 +232,7 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             </div>
             <div className="space-y-1">
               <label className={labelStyles}><FiCalendar /> Fecha Ingreso</label>
-              <input type="date" className={`${inputStyles} [color-scheme:dark]`} value={formData.fecha_ingreso} onChange={e => setFormData({ ...formData, fecha_ingreso: e.target.value })} />
+              <input type="date" className={`${inputStyles} [color-scheme:light]`} value={formData.fecha_ingreso} onChange={e => setFormData({ ...formData, fecha_ingreso: e.target.value })} />
             </div>
           </div>
 
@@ -232,8 +252,8 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             </div>
             <div className="space-y-1">
               <label className={labelStyles}>Precio Unitario Proyectado</label>
-              <div className="h-[42px] flex items-center px-4 bg-white/[0.02] border border-white/5 rounded-xl">
-                <span className="text-sm font-black text-white">
+              <div className="h-[42px] flex items-center px-4 bg-white/[0.02] border border-slate-200 rounded-xl">
+                <span className="text-sm font-black text-slate-900">
                   ARS {costoUnitarioCalculado.toFixed(2)} 
                   <span className="text-[10px] ml-2 text-emerald-500/50 font-bold uppercase tracking-widest">x kilogramo</span>
                 </span>
@@ -242,11 +262,11 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
           </div>
 
           <footer className="pt-4 flex gap-3">
-            <button type="button" onClick={onClose} className="px-8 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-500 bg-white/5 hover:bg-red-500/10 hover:text-red-400 transition-all">
+            <button type="button" onClick={onClose} className="px-8 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-100 hover:bg-red-50 hover:text-red-500 transition-all duration-200 ease-out">
               Cancelar
             </button>
-            <button type="submit" disabled={isLoading} className="flex-1 h-12 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-30">
-              <FiSave size={14} /> {isLoading ? 'Procesando Registro...' : 'Confirmar Ingreso a Almacén'}
+            <button type="submit" disabled={isLoading || isSubmitting} className="flex-1 h-12 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all duration-200 ease-out disabled:opacity-30">
+              <FiSave size={14} /> {isLoading || isSubmitting ? 'Procesando Registro...' : 'Confirmar Ingreso a Almacén'}
             </button>
           </footer>
         </form>

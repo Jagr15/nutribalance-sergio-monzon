@@ -1,62 +1,61 @@
 // src/features/proveedores/components/ProveedorTable.tsx
 import React from 'react';
-import { FiEdit2, FiTrash2, FiUser, FiPhone } from "react-icons/fi";
+import { FiUser, FiPhone } from "react-icons/fi";
 import type { Proveedor } from '../types/proveedor';
+import { DataTable, EmptyState, TableActions, TableActionButton, TableBody, TableCell, TableHeader, TableRow } from '../../../shared/components/table';
 
 interface Props {
   data: Proveedor[];
   onEdit: (p: Proveedor) => void;
   onDelete: (uid: string) => void;
+  emptyMessage?: string;
 }
 
-const ProveedorTable: React.FC<Props> = ({ data, onEdit, onDelete }) => {
+const ProveedorTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) => {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="text-gray-500 text-[10px] uppercase tracking-[0.2em] bg-white/[0.01] border-b border-white/5">
-            <th className="px-8 py-5 font-bold">Empresa / Documento</th>
-            <th className="px-6 py-5 font-bold">Contacto Principal</th>
-            <th className="px-6 py-5 font-bold">Teléfono</th>
-            <th className="px-8 py-5 font-bold text-right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5">
+    <DataTable minWidthClassName="min-w-[860px]">
+      <TableHeader>
+        <tr>
+          <TableCell header>Empresa / Documento</TableCell>
+          <TableCell header>Contacto Principal</TableCell>
+          <TableCell header>Teléfono</TableCell>
+          <TableCell header>Email</TableCell>
+          <TableCell header className="text-right">Acciones</TableCell>
+        </tr>
+      </TableHeader>
+      <TableBody>
           {data.map((p) => (
-            <tr key={p.uid} className="group hover:bg-white/[0.02] transition-colors">
-              <td className="px-8 py-5">
+            <TableRow key={p.uid}>
+              <TableCell>
                 <div className="flex flex-col">
-                  <span className="text-sm font-bold text-gray-200 uppercase">{p.nombre_empresa}</span>
-                  <span className="text-[10px] font-mono text-gray-500">{p.documento || 'SIN DOC'}</span>
+                  <span className="text-sm font-bold text-slate-900 uppercase">{p.nombre_empresa}</span>
+                  <span className="text-xs font-mono text-slate-500">{p.documento || 'SIN DOC'}</span>
                 </div>
-              </td>
-              <td className="px-6 py-5 text-gray-400 text-sm">
+              </TableCell>
+              <TableCell className="text-slate-900">
                 <div className="flex items-center gap-2">
                   <FiUser className="text-blue-500/50" size={12} />
                   {p.contacto_nombre}
                 </div>
-              </td>
-              <td className="px-6 py-5 text-gray-400 text-sm">
+              </TableCell>
+              <TableCell className="text-slate-900">
                 <div className="flex items-center gap-2">
                   <FiPhone className="text-green-500/50" size={12} />
                   {p.telefono}
                 </div>
-              </td>
-              <td className="px-8 py-5 text-right">
-                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => onEdit(p)} className="p-2 hover:bg-blue-500/10 text-gray-500 hover:text-blue-400 rounded-lg transition-all">
-                    <FiEdit2 size={16} />
-                  </button>
-                  <button onClick={() => onDelete(p.uid)} className="p-2 hover:bg-red-500/10 text-gray-500 hover:text-red-400 rounded-lg transition-all">
-                    <FiTrash2 size={16} />
-                  </button>
-                </div>
-              </td>
-            </tr>
+              </TableCell>
+              <TableCell className="text-slate-700 text-xs">{p.email || 'SIN EMAIL'}</TableCell>
+              <TableCell className="text-right">
+                <TableActions>
+                  <TableActionButton label="Editar" tone="secondary" onClick={() => onEdit(p)} />
+                  <TableActionButton label="Desactivar" tone="danger" onClick={() => onDelete(p.uid)} />
+                </TableActions>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
-    </div>
+          {data.length === 0 ? <EmptyState colSpan={5} message={emptyMessage || "No hay proveedores registrados."} /> : null}
+      </TableBody>
+    </DataTable>
   );
 };
 

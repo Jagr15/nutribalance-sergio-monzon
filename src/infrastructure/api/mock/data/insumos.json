@@ -1,42 +1,129 @@
 [
   {
     "uid": "i-1",
-    "nombre": "Maíz",
-    "unidad_medida": "kg",
-    "umbral_alerta": 1200,
-    "ref_costo_unitario": 0.29,
+    "nombre": "Soja Harina HP",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "ref_costo_unitario": 423.355,
+    "proteina_bruta_pct": 49,
     "categoria": "Grano"
   },
   {
     "uid": "i-2",
-    "nombre": "Soja",
-    "unidad_medida": "kg",
-    "umbral_alerta": 900,
-    "ref_costo_unitario": 0.41,
-    "categoria": "Grano"
+    "nombre": "Pellets Smart",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "ref_costo_unitario": 362,
+    "proteina_bruta_pct": 4,
+    "categoria": "Suplemento"
   },
   {
     "uid": "i-3",
-    "nombre": "Núcleo Vitamínico",
-    "unidad_medida": "kg",
-    "umbral_alerta": 180,
-    "ref_costo_unitario": 1.95,
-    "categoria": "Suplemento"
+    "nombre": "Afrechillo",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 800,
+    "ref_costo_unitario": 215,
+    "proteina_bruta_pct": 16,
+    "categoria": "Grano"
   },
   {
     "uid": "i-4",
     "nombre": "Sal",
-    "unidad_medida": "kg",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
     "umbral_alerta": 200,
-    "ref_costo_unitario": 0.18,
+    "ref_costo_unitario": 79,
     "categoria": "Aditivo"
   },
   {
     "uid": "i-5",
-    "nombre": "Afrechillo",
-    "unidad_medida": "kg",
-    "umbral_alerta": 800,
-    "ref_costo_unitario": 0.24,
+    "nombre": "Núcleo",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "ref_costo_unitario": 4393.5,
     "categoria": "Suplemento"
+  },
+  {
+    "uid": "i-6",
+    "nombre": "Maíz",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 1200,
+    "ref_costo_unitario": 272,
+    "proteina_bruta_pct": 8,
+    "categoria": "Grano"
+  },
+  {
+    "uid": "i-7",
+    "nombre": "Conchilla",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "ref_costo_unitario": 118,
+    "categoria": "Aditivo"
+  },
+  {
+    "uid": "i-8",
+    "nombre": "Magnesio",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "ref_costo_unitario": 1060.5,
+    "categoria": "Aditivo"
+  },
+  {
+    "uid": "i-9",
+    "nombre": "Urea",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "ref_costo_unitario": 804.75,
+    "proteina_bruta_pct": 281,
+    "categoria": "Aditivo"
+  },
+  {
+    "uid": "i-10",
+    "nombre": "Núcleo Crianza",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "categoria": "Suplemento"
+  },
+  {
+    "uid": "i-11",
+    "nombre": "Cáscara de Soja",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "proteina_bruta_pct": 11,
+    "categoria": "Grano"
+  },
+  {
+    "uid": "i-12",
+    "nombre": "Núcleo Mantenimiento",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "categoria": "Suplemento"
+  },
+  {
+    "uid": "i-13",
+    "nombre": "Bentonita",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "categoria": "Aditivo"
+  },
+  {
+    "uid": "i-14",
+    "nombre": "Alfa",
+    "unidad_medida": "KG",
+    "unidad_base": "KG",
+    "umbral_alerta": 0,
+    "categoria": "Grano"
   }
 ]

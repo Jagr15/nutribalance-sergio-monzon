@@ -1,10 +1,18 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  FiTrash2, FiBox, FiChevronDown, FiActivity, 
-  FiMapPin, FiSearch, FiTruck, FiFileText, FiChevronLeft, FiChevronRight 
-} from "react-icons/fi";
+import React, { useMemo, useState } from 'react';
+import { FiChevronDown, FiChevronLeft, FiChevronRight, FiFileText, FiMapPin, FiSearch, FiTruck } from 'react-icons/fi';
 import type { StockMateriaPrima, Insumo } from '../types';
 import type { Proveedor } from '../../proveedores/types';
+import {
+  DataTable,
+  EmptyState,
+  StatusBadge,
+  TableActionButton,
+  TableActions,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from '../../../shared/components/table';
 
 interface Props {
   data: StockMateriaPrima[];
@@ -18,285 +26,176 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ data = [], insumos, proveedor
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
+  const proveedorById = useMemo(
+    () => Object.fromEntries((proveedores ?? []).map((p) => [p.uid, p.nombre_empresa])),
+    [proveedores]
+  );
+  const insumoById = useMemo(
+    () => Object.fromEntries((insumos ?? []).map((i) => [i.uid, i])),
+    [insumos]
+  );
 
-  const truncate = (str: string, n: number) => {
-    return (str?.length > n) ? str.substr(0, n - 1) + "..." : str;
-  };
-
-  // Filtrado Global Slim
   const filteredData = useMemo(() => {
     const source = Array.isArray(data) ? data : [];
-    return source.filter(item => {
-      const search = searchTerm.toLowerCase();
-      const prov = proveedores.find(p => p.uid === item.id_proveedor)?.nombre_empresa || '';
-      const insu = insumos.find(i => i.uid === item.id_insumo)?.nombre || '';
-      const lote = (item.lote || item.lote || "").toLowerCase();
-
-      return lote.includes(search) || 
-             prov.toLowerCase().includes(search) || 
-             insu.toLowerCase().includes(search);
+    const search = searchTerm.toLowerCase();
+    return source.filter((item) => {
+      const prov = proveedorById[item.id_proveedor] || '';
+      const insu = insumoById[item.id_insumo]?.nombre || '';
+      const lote = (item.lote || '').toLowerCase();
+      return lote.includes(search) || prov.toLowerCase().includes(search) || insu.toLowerCase().includes(search);
     });
-  }, [data, insumos, proveedores, searchTerm]);
+  }, [data, insumoById, proveedorById, searchTerm]);
+
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
   const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  if (filteredData.length === 0) {
-    return (
-      <div className="bg-[#0f1722] border border-white/5 rounded-2xl p-10 text-center">
-        <p className="text-sm font-bold text-gray-300">No hay lotes para mostrar</p>
-        <p className="text-xs text-gray-500 mt-2">Registrá un ingreso de materia prima para comenzar.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-3">
-      {/* BUSCADOR MINIMALISTA */}
       <div className="relative max-w-sm">
-        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
-        <input 
+        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+        <input
           type="text"
           placeholder="Buscar lote, insumo o proveedor..."
           value={searchTerm}
           onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-          className="w-full bg-[#0f1722] border border-white/10 rounded-xl py-2 pl-9 pr-4 text-[11px] text-white outline-none focus:border-blue-500/50 transition-all shadow-lg font-medium"
+          className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-sm text-slate-900 outline-none focus:border-blue-500/50"
         />
       </div>
 
-      <div className="bg-[#0f1722] border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse table-fixed">
-            <thead>
-              <tr className="text-gray-500 text-[9px] uppercase tracking-[0.15em] bg-white/[0.02] border-b border-white/5">
-                <th className="px-5 py-3 font-black w-[25%]">Lote / Proveedor</th>
-                <th className="px-4 py-3 font-black w-[30%]">Estado de Consumo</th>
-                <th className="px-4 py-3 font-black w-[15%] text-center">Ubicación</th>
-                <th className="px-4 py-3 font-black w-[18%] text-right">Existencias</th>
-                <th className="px-5 py-3 font-black w-[12%] text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {paginatedData.map((lote) => {
-                const isExpanded = expandedId === lote.uid;
-                
-                // Cruce de datos para obtener el Insumo y su unidad
-                const insu = insumos.find(i => i.uid === lote.id_insumo);
-                const unidad = insu?.unidad_medida || 'KG';
-                const insuNombre = insu?.nombre || "Sin dato";
-                const provNombre = proveedores.find(p => p.uid === lote.id_proveedor)?.nombre_empresa || "Sin dato";
+      <DataTable minWidthClassName="table-fixed min-w-[1100px]">
+        <TableHeader>
+          <tr>
+            <TableCell header className="w-[25%]">Lote / Proveedor</TableCell>
+            <TableCell header className="w-[30%]">Estado de Consumo</TableCell>
+            <TableCell header className="w-[15%] text-center">Ubicación</TableCell>
+            <TableCell header className="w-[18%] text-right">Existencias</TableCell>
+            <TableCell header className="w-[12%] text-right">Acciones</TableCell>
+          </tr>
+        </TableHeader>
+        <TableBody>
+          {paginatedData.map((lote) => {
+            const isExpanded = expandedId === lote.uid;
+            const insu = insumoById[lote.id_insumo];
+            const unidad = insu?.unidad_medida || 'KG';
+            const insuNombre = insu?.nombre || 'Sin dato';
+            const provNombre = proveedorById[lote.id_proveedor] || 'Sin dato';
 
-                // Cálculos de Stock
-                const baseCantidad = lote.cantidad_inicial > 0 ? lote.cantidad_inicial : 1;
-                const porcentajeFisico = (lote.cantidad_actual / baseCantidad) * 100;
-                const comprometido = lote.cantidad_comprometida || 0;
-                const porcentajeComprometido = (comprometido / baseCantidad) * 100;
-                const dispReal = lote.cantidad_actual - comprometido;
-                const umbralCritico = insu?.umbral_alerta || 0;
-                const estadoStock =
-                  porcentajeFisico <= 20 || dispReal <= umbralCritico
-                    ? "CRÍTICO"
-                    : porcentajeFisico <= 40
-                      ? "BAJO"
-                      : "OK";
-                const estadoClass =
-                  estadoStock === "CRÍTICO"
-                    ? "text-red-400 bg-red-500/10 border-red-500/20"
-                    : estadoStock === "BAJO"
-                      ? "text-orange-400 bg-orange-500/10 border-orange-500/20"
-                      : "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+            const baseCantidad = lote.cantidad_inicial > 0 ? lote.cantidad_inicial : 1;
+            const porcentajeFisico = (lote.cantidad_actual / baseCantidad) * 100;
+            const comprometido = lote.cantidad_comprometida || 0;
+            const porcentajeComprometido = (comprometido / baseCantidad) * 100;
+            const dispReal = lote.cantidad_actual - comprometido;
+            const umbralCritico = insu?.umbral_alerta || 0;
+            const estadoStock = porcentajeFisico <= 20 || dispReal <= umbralCritico ? 'CRÍTICO' : porcentajeFisico <= 40 ? 'BAJO' : 'DISPONIBLE';
 
-                return (
-                  <React.Fragment key={lote.uid}>
-                    <tr 
-                      onClick={() => setExpandedId(isExpanded ? null : lote.uid)}
-                      className={`group hover:bg-white/[0.01] transition-colors cursor-pointer ${isExpanded ? 'bg-blue-500/[0.04]' : ''}`}
-                    >
-                      {/* Lote / Proveedor */}
-                      <td className="px-5 py-2.5">
-                        <div className="flex items-center gap-3">
-                          <FiChevronDown size={12} className={`text-gray-600 transition-transform ${isExpanded ? 'rotate-180 text-blue-500' : ''}`} />
-                          <div className="overflow-hidden">
-                            <p className="text-[11px] font-bold text-white truncate uppercase tracking-tight">{lote.lote || lote.lote}</p>
-                            <p className="text-[8px] text-gray-500 font-bold uppercase truncate">{provNombre}</p>
+            return (
+              <React.Fragment key={lote.uid}>
+                <TableRow className={isExpanded ? 'bg-slate-50' : 'cursor-pointer'}>
+                  <TableCell>
+                    <button type="button" onClick={() => setExpandedId(isExpanded ? null : lote.uid)} className="flex items-center gap-3 text-left w-full">
+                      <FiChevronDown size={12} className={`text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      <div className="overflow-hidden">
+                        <p className="text-xs font-semibold text-slate-900 truncate uppercase">{lote.lote}</p>
+                        <p className="text-xs text-slate-500 truncate uppercase">{provNombre}</p>
+                      </div>
+                    </button>
+                  </TableCell>
+
+                  <TableCell>
+                    <div className="space-y-1.5 relative group/tooltip">
+                      <div className="flex justify-between items-center text-xs font-semibold uppercase">
+                        <span className="text-blue-700">{insuNombre}</span>
+                        <span className={porcentajeFisico < 20 ? 'text-red-700' : 'text-blue-700'}>{porcentajeFisico.toFixed(0)}% físico</span>
+                      </div>
+                      <div className="relative h-2 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                        <div className={`absolute h-full ${porcentajeFisico < 20 ? 'bg-red-300' : 'bg-blue-300'}`} style={{ width: `${porcentajeFisico}%` }} />
+                        {comprometido > 0 ? <div className="absolute h-full bg-orange-400" style={{ width: `${porcentajeComprometido}%` }} /> : null}
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Disponibilidad real</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-900">{dispReal.toLocaleString()} {unidad}</span>
+                          <StatusBadge value={estadoStock} />
+                        </div>
+                      </div>
+                      {lote.stock_transito ? (
+                        <div className="absolute hidden group-hover/tooltip:block z-10 bg-white border border-orange-200 p-2 rounded-lg shadow-sm -top-12 left-0 min-w-[160px]">
+                          <p className="text-xs text-orange-700 font-semibold uppercase flex items-center gap-1 mb-1"><FiTruck size={8} /> Stock Reservado</p>
+                          <p className="text-xs text-slate-900 font-semibold">{lote.stock_transito.nro_operacion || 'Sin operación'}</p>
+                          <p className="text-xs text-slate-500">Cant: {(lote.stock_transito.cantidad || 0).toLocaleString()} {unidad}</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-xs text-slate-500">Ingreso: {lote.fecha_ingreso ? new Date(lote.fecha_ingreso).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }) : 'Sin dato'}</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700 text-xs font-semibold uppercase"><FiMapPin size={10} /> {lote.ubicacion}</span>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-sm text-slate-900 font-semibold">{lote.cantidad_actual?.toLocaleString()} <span className="text-xs text-slate-500">{unidad}</span></span>
+                      <span className="text-xs text-slate-500">Inicial: {lote.cantidad_inicial?.toLocaleString()} {unidad}</span>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    <TableActions>
+                      <TableActionButton label="Desactivar" tone="danger" onClick={() => onDelete(lote.uid)} />
+                    </TableActions>
+                  </TableCell>
+                </TableRow>
+
+                {isExpanded ? (
+                  <tr className="bg-slate-50">
+                    <td colSpan={5} className="px-6 py-5 border-l-2 border-blue-200">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="space-y-3">
+                          <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2"><FiFileText size={12} /> Información Económica</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-white p-3 rounded-xl border border-slate-200">
+                              <p className="text-xs text-slate-500 uppercase">Costo Total</p>
+                              <p className="text-sm text-emerald-700 font-semibold">ARS {lote.costo_total?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                            </div>
+                            <div className="bg-white p-3 rounded-xl border border-slate-200">
+                              <p className="text-xs text-slate-500 uppercase">Por {unidad}</p>
+                              <p className="text-sm text-slate-900 font-semibold">ARS {lote.costo_unitario?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                            </div>
                           </div>
                         </div>
-                      </td>
-
-                      {/* Estado de Consumo con Doble Barra */}
-                      <td className="px-4 py-2.5">
-                        <div className="space-y-1.5 relative group/tooltip">
-                          <div className="flex justify-between items-center text-[8px] font-black uppercase">
-                            <span className="text-blue-400 flex items-center gap-1">
-                              <FiBox size={10}/> {truncate(insuNombre, 18)}
-                            </span>
-                            <div className="flex gap-2">
-                              <span className={porcentajeFisico < 20 ? 'text-red-500' : 'text-blue-500'}>
-                                {porcentajeFisico.toFixed(0)}% FÍSICO
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Contenedor de Barras */}
-                          <div className="relative h-1.5 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
-                            {/* Barra Físico */}
-                            <div 
-                              className={`absolute h-full transition-all duration-700 ${porcentajeFisico < 20 ? 'bg-red-500/30' : 'bg-blue-500/20'}`} 
-                              style={{ width: `${porcentajeFisico}%` }} 
-                            />
-                            {/* Barra Comprometida */}
-                            {comprometido > 0 && (
-                              <div 
-                                className="absolute h-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.4)] transition-all duration-700"
-                                style={{ width: `${porcentajeComprometido}%` }}
-                              />
-                            )}
-                          </div>
-
-                          <div className="flex justify-between text-[7px] font-black uppercase tracking-tighter">
-                            <span className="text-gray-600">Disponibilidad Real:</span>
-                            <div className="flex items-center gap-2">
-                              <span className={dispReal < (lote.cantidad_inicial * 0.1) ? 'text-orange-400' : 'text-white'}>
-                                {dispReal.toLocaleString()} {unidad}
-                              </span>
-                              <span className={`px-1.5 py-0.5 rounded border text-[7px] ${estadoClass}`}>
-                                {estadoStock}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Tooltip Detalle Reserva */}
-                          {lote.stock_transito && (
-                            <div className="absolute hidden group-hover/tooltip:block z-50 bg-[#1a222c] border border-orange-500/30 p-2 rounded-lg shadow-2xl -top-12 left-0 min-w-[140px]">
-                              <p className="text-[7px] text-orange-400 font-black uppercase flex items-center gap-1 mb-1">
-                                <FiTruck size={8}/> Stock Reservado
-                              </p>
-                              <p className="text-[9px] text-white font-bold">{lote.stock_transito.nro_operacion}</p>
-                              <p className="text-[8px] text-gray-400">Cant: {lote.stock_transito.cantidad.toLocaleString()} {unidad}</p>
-                            </div>
-                          )}
+                        <div className="bg-white p-3 rounded-xl border border-slate-200">
+                          <p className="text-xs text-slate-500 uppercase mb-1">Documento Ref.</p>
+                          <p className="text-sm text-slate-900 font-semibold uppercase">{lote.remito_nro || 'SIN NÚMERO'}</p>
+                          <p className="text-xs text-slate-500 mt-3">Último movimiento: {lote.operaciones ? `${lote.operaciones.operacion} - ${lote.operaciones.destino}` : 'Sin salidas registradas'}</p>
                         </div>
-                      </td>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </React.Fragment>
+            );
+          })}
 
-                    {/* Ubicación y Fecha */}
-<td className="px-4 py-2.5 text-center">
-  <div className="flex flex-col items-center gap-1">
-    {/* Convertimos Date a String para evitar el error */}
-    <span className="text-[8px] text-gray-600 font-bold uppercase tracking-tighter">
-  Ingreso: {lote.fecha_ingreso 
-    ? new Date(lote.fecha_ingreso).toLocaleDateString('es-PE', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric',
-        timeZone: 'UTC' // <--- ESTO EVITA QUE RESTE LAS 5 HORAS
-      }) 
-    : 'Sin dato'}
-</span>
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/5 border border-blue-500/10 text-blue-400/80 text-[9px] font-black uppercase">
-      <FiMapPin size={10} /> {lote.ubicacion}
-    </span>
-  </div>
-</td>
+          {paginatedData.length === 0 ? (
+            <EmptyState
+              colSpan={5}
+              title="No hay lotes para mostrar"
+              message={searchTerm.trim()
+                ? 'No se encontraron resultados con el filtro aplicado.'
+                : 'Registrá un ingreso de materia prima para comenzar.'}
+            />
+          ) : null}
+        </TableBody>
+      </DataTable>
 
-                      {/* Cantidades con Unidad */}
-                      <td className="px-4 py-2.5 text-right">
-                        <div className="flex flex-col leading-tight">
-                          <span className="text-[11px] text-white font-mono font-bold italic">
-                            {lote.cantidad_actual?.toLocaleString()} <span className="text-[9px] text-blue-500/50">{unidad}</span>
-                          </span>
-                          <span className="text-[8px] text-gray-600 font-bold uppercase">
-                            Inicial: {lote.cantidad_inicial?.toLocaleString()} {unidad}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Acciones */}
-                      <td className="px-5 py-2.5 text-right">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); onDelete(lote.uid); }}
-                          className="p-1.5 hover:bg-red-500/20 text-gray-700 hover:text-red-400 rounded-lg transition-all"
-                        >
-                          <FiTrash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-
-                    {/* DETALLE EXPANDIDO */}
-                    {isExpanded && (
-                      <tr className="bg-white/[0.01]">
-                        <td colSpan={5} className="px-12 py-6 border-l-2 border-blue-500/30">
-                          <div className="grid grid-cols-2 gap-10">
-                            <div className="space-y-4">
-                              <h4 className="text-[8px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-2">
-                                <FiFileText /> Información Económica
-                              </h4>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="bg-black/20 p-2.5 rounded-xl border border-white/5">
-                                  <p className="text-[7px] text-gray-500 uppercase font-bold mb-1">Costo Total</p>
-                                  <p className="text-[11px] text-emerald-500 font-black tracking-tight">
-                                    ARS {lote.costo_total?.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                  </p>
-                                </div>
-                                <div className="bg-black/20 p-2.5 rounded-xl border border-white/5">
-                                  <p className="text-[7px] text-gray-500 uppercase font-bold mb-1">Por {unidad}</p>
-                                  <p className="text-[11px] text-white font-bold tracking-tight">
-                                    ARS {lote.costo_unitario?.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                  </p>
-                                </div>
-                                <div className="bg-black/20 p-2.5 rounded-xl border border-white/5 group/doc hover:border-blue-500/30 transition-all">
-  <p className="text-[7px] text-gray-500 uppercase font-bold mb-1 flex items-center gap-1">
-    <FiFileText size={8} className="text-blue-500" /> Documento Ref.
-  </p>
-  <p className="text-[11px] text-white font-bold tracking-tight uppercase group-hover/doc:text-blue-400 transition-colors">
-    {lote.remito_nro || "SIN NÚMERO"}
-  </p>
-</div>
-                              </div>
-                            </div>
-
-                            <div className="space-y-4">
-                              <h4 className="text-[8px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-2">
-                                <FiActivity /> Último Movimiento
-                              </h4>
-                              {lote.operaciones ? (
-                                <div className="bg-black/30 p-3 rounded-xl border border-white/5 flex items-center justify-between">
-                                  <div>
-                                    <p className="text-[9px] text-white font-black uppercase">{lote.operaciones.operacion}</p>
-                                    <p className="text-[8px] text-gray-500">{lote.operaciones.destino}</p>
-                                  </div>
-                                  <span className="text-[10px] text-blue-400 font-black italic">
-                                    -{lote.operaciones.cantidad.toLocaleString()} {unidad}
-                                  </span>
-                                </div>
-                              ) : (
-                                <p className="text-[9px] text-gray-700 italic border border-dashed border-white/5 p-4 rounded-xl text-center">
-                                  Sin salidas registradas
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* PAGINACIÓN */}
-        <div className="px-5 py-3 border-t border-white/5 flex items-center justify-between bg-white/[0.01]">
-          <span className="text-[9px] text-gray-600 font-bold uppercase tracking-widest">
-            {filteredData.length} Lotes • Página {currentPage} de {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-1.5 rounded-lg border border-white/10 text-gray-500 hover:text-white transition-all">
-              <FiChevronLeft size={16} />
-            </button>
-            <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-1.5 rounded-lg border border-white/10 text-gray-500 hover:text-white transition-all">
-              <FiChevronRight size={16} />
-            </button>
-          </div>
+      <div className="px-5 py-3 border border-slate-200 rounded-2xl bg-white shadow-sm flex items-center justify-between">
+        <span className="text-xs text-slate-600 font-semibold">{filteredData.length} lotes • Página {currentPage} de {totalPages}</span>
+        <div className="flex gap-2">
+          <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 disabled:opacity-30"><FiChevronLeft size={16} /></button>
+          <button disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 disabled:opacity-30"><FiChevronRight size={16} /></button>
         </div>
       </div>
     </div>

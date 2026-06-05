@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { Card } from "../../../shared/components/card";
 
@@ -15,6 +15,16 @@ interface ClienteComercial {
   saldoPendienteArs: number;
   productoPrincipal: string;
 }
+
+type ClienteFormPayload = {
+  nombre: string;
+  segmento: string;
+  ubicacion: string;
+  contacto: string;
+  productoPrincipal: string;
+  estado: EstadoCliente;
+  observaciones: string;
+};
 
 interface CompraComercial {
   fecha: string;
@@ -265,8 +275,8 @@ const openDetalleCliente = (cliente: ClienteComercial) => {
         </table>
       </div>
     `,
-    background: "#0d121b",
-    color: "#fff",
+    background: "#ffffff",
+    color: "#0f172a",
     confirmButtonColor: "#2563eb",
     confirmButtonText: "Cerrar",
     width: 860,
@@ -319,15 +329,15 @@ const openCuentaCorriente = (cliente: ClienteComercial) => {
         <p style="margin:0; color:#9ca3af;"><strong>Vencido:</strong> ${totalVencido > 0 ? formatCurrency(totalVencido) : "Sin dato"}</p>
       </div>
     `,
-    background: "#0d121b",
-    color: "#fff",
+    background: "#ffffff",
+    color: "#0f172a",
     confirmButtonColor: "#2563eb",
     confirmButtonText: "Cerrar",
     width: 900,
   });
 };
 
-const openEditarCliente = (cliente: ClienteComercial) => {
+const openEditarCliente = (cliente: ClienteComercial, onSave: (payload: ClienteFormPayload) => void) => {
   const info = clientesInfoComercial[cliente.uid];
   const [contactoNombre, contactoTelefono] = cliente.contacto.split("·").map((part) => part.trim());
 
@@ -336,27 +346,27 @@ const openEditarCliente = (cliente: ClienteComercial) => {
     html: `
       <div style="text-align:left; color:#f8fafc; font-size:14px;">
         <label style="display:block; margin:0 0 6px;">Nombre</label>
-        <input id="cli-nombre" value="${cliente.nombre}" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="cli-nombre" value="${cliente.nombre}" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <label style="display:block; margin:0 0 6px;">Segmento</label>
-        <input id="cli-segmento" value="${cliente.segmento}" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="cli-segmento" value="${cliente.segmento}" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <label style="display:block; margin:0 0 6px;">Ubicación</label>
-        <input id="cli-ubicacion" value="${cliente.ubicacion}" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="cli-ubicacion" value="${cliente.ubicacion}" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <label style="display:block; margin:0 0 6px;">Contacto</label>
-        <input id="cli-contacto" value="${contactoNombre || ""}" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="cli-contacto" value="${contactoNombre || ""}" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <label style="display:block; margin:0 0 6px;">Producto principal</label>
-        <input id="cli-producto" value="${cliente.productoPrincipal}" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="cli-producto" value="${cliente.productoPrincipal}" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <label style="display:block; margin:0 0 6px;">Estado</label>
-        <select id="cli-estado" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;">
+        <select id="cli-estado" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;">
           <option value="Activo" ${cliente.estado === "Activo" ? "selected" : ""}>Activo</option>
           <option value="En riesgo" ${cliente.estado === "En riesgo" ? "selected" : ""}>En riesgo</option>
           <option value="Suspendido" ${cliente.estado === "Suspendido" ? "selected" : ""}>Suspendido</option>
         </select>
         <label style="display:block; margin:0 0 6px;">Observaciones</label>
-        <textarea id="cli-observaciones" rows="3" style="width:100%; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;">${info?.observaciones || contactoTelefono || "Sin dato"}</textarea>
+        <textarea id="cli-observaciones" rows="3" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;">${info?.observaciones || contactoTelefono || "Sin dato"}</textarea>
       </div>
     `,
-    background: "#0d121b",
-    color: "#fff",
+    background: "#ffffff",
+    color: "#0f172a",
     showCancelButton: true,
     confirmButtonColor: "#2563eb",
     cancelButtonColor: "#334155",
@@ -370,42 +380,48 @@ const openEditarCliente = (cliente: ClienteComercial) => {
         Swal.showValidationMessage("Nombre y segmento son obligatorios para simular edición.");
         return;
       }
-      return true;
+      const ubicacion = (document.getElementById("cli-ubicacion") as HTMLInputElement | null)?.value.trim() ?? "";
+      const contacto = (document.getElementById("cli-contacto") as HTMLInputElement | null)?.value.trim() ?? "";
+      const productoPrincipal = (document.getElementById("cli-producto") as HTMLInputElement | null)?.value.trim() ?? "";
+      const estado = ((document.getElementById("cli-estado") as HTMLSelectElement | null)?.value ?? "Activo") as EstadoCliente;
+      const observaciones = (document.getElementById("cli-observaciones") as HTMLTextAreaElement | null)?.value.trim() ?? "";
+      return { nombre, segmento, ubicacion, contacto, productoPrincipal, estado, observaciones } satisfies ClienteFormPayload;
     },
   }).then((result) => {
-    if (!result.isConfirmed) return;
+    if (!result.isConfirmed || !result.value) return;
+    onSave(result.value);
     void Swal.fire({
       icon: "success",
       title: "Actualización registrada",
-      text: "Operación registrada correctamente. Pendiente de integración avanzada con persistencia central.",
-      background: "#0d121b",
-      color: "#fff",
+      text: "Cliente actualizado correctamente en sesión local.",
+      background: "#ffffff",
+      color: "#0f172a",
       confirmButtonColor: "#2563eb",
     });
   });
 };
 
-const openNuevoCliente = () => {
+const openNuevoCliente = (onCreate: (payload: ClienteFormPayload) => void) => {
   void Swal.fire({
     title: "Nuevo cliente",
     html: `
       <div style="text-align:left; color:#f8fafc; font-size:14px;">
         <label style="display:block; margin:0 0 6px;">Nombre</label>
-        <input id="new-cli-nombre" placeholder="Nombre o razón social" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="new-cli-nombre" placeholder="Nombre o razón social" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <label style="display:block; margin:0 0 6px;">Segmento</label>
-        <input id="new-cli-segmento" placeholder="Ej: Tambo" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="new-cli-segmento" placeholder="Ej: Tambo" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <label style="display:block; margin:0 0 6px;">Ubicación</label>
-        <input id="new-cli-ubicacion" placeholder="Ciudad, provincia" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="new-cli-ubicacion" placeholder="Ciudad, provincia" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <label style="display:block; margin:0 0 6px;">Contacto</label>
-        <input id="new-cli-contacto" placeholder="Nombre · teléfono" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="new-cli-contacto" placeholder="Nombre · teléfono" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <label style="display:block; margin:0 0 6px;">Producto principal</label>
-        <input id="new-cli-producto" placeholder="Producto de mayor demanda" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="new-cli-producto" placeholder="Producto de mayor demanda" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
         <label style="display:block; margin:0 0 6px;">Condición comercial</label>
-        <input id="new-cli-condicion" placeholder="Ej: 30 días / contado" style="width:100%; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="new-cli-condicion" placeholder="Ej: 30 días / contado" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
       </div>
     `,
-    background: "#0d121b",
-    color: "#fff",
+    background: "#ffffff",
+    color: "#0f172a",
     showCancelButton: true,
     confirmButtonColor: "#2563eb",
     cancelButtonColor: "#334155",
@@ -419,34 +435,122 @@ const openNuevoCliente = () => {
         Swal.showValidationMessage("Completá al menos nombre y segmento para simular alta.");
         return;
       }
-      return true;
+      const ubicacion = (document.getElementById("new-cli-ubicacion") as HTMLInputElement | null)?.value.trim() ?? "";
+      const contacto = (document.getElementById("new-cli-contacto") as HTMLInputElement | null)?.value.trim() ?? "";
+      const productoPrincipal = (document.getElementById("new-cli-producto") as HTMLInputElement | null)?.value.trim() ?? "";
+      const observaciones = (document.getElementById("new-cli-condicion") as HTMLInputElement | null)?.value.trim() ?? "";
+      return { nombre, segmento, ubicacion, contacto, productoPrincipal, estado: "Activo", observaciones } satisfies ClienteFormPayload;
     },
   }).then((result) => {
-    if (!result.isConfirmed) return;
+    if (!result.isConfirmed || !result.value) return;
+    onCreate(result.value);
     void Swal.fire({
       icon: "success",
       title: "Alta registrada",
-      text: "Cliente preparado correctamente. Pendiente de integración avanzada con persistencia central.",
-      background: "#0d121b",
-      color: "#fff",
+      text: "Cliente creado correctamente en sesión local.",
+      background: "#ffffff",
+      color: "#0f172a",
       confirmButtonColor: "#2563eb",
     });
   });
 };
 
 const ClientesPage = () => {
+  const [clientes, setClientes] = useState<ClienteComercial[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setIsLoading(true);
+        setLoadError(null);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        setClientes(clientesComerciales);
+      } catch {
+        setLoadError("No se pudieron cargar clientes en este momento.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    void load();
+  }, []);
+
+  const handleCreate = (payload: ClienteFormPayload) => {
+    const nuevo: ClienteComercial = {
+      uid: `cli-${Date.now()}`,
+      nombre: payload.nombre,
+      segmento: payload.segmento,
+      ubicacion: payload.ubicacion || "Sin dato",
+      contacto: payload.contacto || "Sin dato",
+      estado: payload.estado,
+      ultimaCompra: new Date().toISOString().slice(0, 10),
+      saldoPendienteArs: 0,
+      productoPrincipal: payload.productoPrincipal || "Sin dato",
+    };
+    setClientes((prev) => [nuevo, ...prev]);
+    clientesInfoComercial[nuevo.uid] = {
+      notasComerciales: "Cliente creado en sesión local.",
+      observaciones: payload.observaciones || "Sin dato",
+      historialCompras: [],
+      cuentaCorriente: {
+        limiteCreditoArs: 0,
+        condicionPago: "Sin dato",
+        facturas: [],
+      },
+    };
+  };
+
+  const handleEdit = (uid: string, payload: ClienteFormPayload) => {
+    setClientes((prev) =>
+      prev.map((cliente) =>
+        cliente.uid === uid
+          ? {
+              ...cliente,
+              nombre: payload.nombre,
+              segmento: payload.segmento,
+              ubicacion: payload.ubicacion || "Sin dato",
+              contacto: payload.contacto || "Sin dato",
+              productoPrincipal: payload.productoPrincipal || "Sin dato",
+              estado: payload.estado,
+            }
+          : cliente
+      )
+    );
+    if (clientesInfoComercial[uid]) {
+      clientesInfoComercial[uid].observaciones = payload.observaciones || "Sin dato";
+    }
+  };
+
+  const handleToggleEstado = async (cliente: ClienteComercial) => {
+    const nextEstado: EstadoCliente = cliente.estado === "Suspendido" ? "Activo" : "Suspendido";
+    const result = await Swal.fire({
+      title: nextEstado === "Suspendido" ? "¿Suspender cliente?" : "¿Reactivar cliente?",
+      text: nextEstado === "Suspendido" ? "El cliente quedará marcado como suspendido." : "El cliente volverá a estado activo.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: nextEstado === "Suspendido" ? "Sí, suspender" : "Sí, reactivar",
+      cancelButtonText: "Cancelar",
+      background: "#ffffff",
+      color: "#0f172a",
+      confirmButtonColor: "#2563eb",
+      cancelButtonColor: "#334155",
+    });
+    if (!result.isConfirmed) return;
+    setClientes((prev) => prev.map((item) => (item.uid === cliente.uid ? { ...item, estado: nextEstado } : item)));
+  };
 
   const filteredClientes = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return clientesComerciales;
-    return clientesComerciales.filter((cliente) =>
+    if (!query) return clientes;
+    return clientes.filter((cliente) =>
       [cliente.nombre, cliente.segmento, cliente.ubicacion, cliente.contacto, cliente.productoPrincipal]
         .join(" ")
         .toLowerCase()
         .includes(query)
     );
-  }, [search]);
+  }, [search, clientes]);
 
   const totalPendiente = filteredClientes.reduce((acc, item) => acc + item.saldoPendienteArs, 0);
   const clientesActivos = filteredClientes.filter((cliente) => cliente.estado === "Activo").length;
@@ -459,24 +563,24 @@ const ClientesPage = () => {
       <section>
         <p className="text-sm uppercase tracking-widest text-blue-400">Módulo comercial</p>
         <h1 className="text-3xl font-bold mt-2">Clientes</h1>
-        <p className="text-gray-400 mt-2">Vista comercial para seguimiento de segmentación, cuentas pendientes y actividad de compra.</p>
+        <p className="text-slate-500 mt-2">Vista comercial para seguimiento de segmentación, cuentas pendientes y actividad de compra.</p>
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Total clientes</p>
+          <p className="text-xs uppercase tracking-widest text-slate-500">Total clientes</p>
           <h2 className="text-3xl font-black mt-2">{filteredClientes.length}</h2>
         </Card>
         <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Clientes activos</p>
+          <p className="text-xs uppercase tracking-widest text-slate-500">Clientes activos</p>
           <h2 className="text-3xl font-black mt-2 text-emerald-300">{clientesActivos}</h2>
         </Card>
         <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Saldo pendiente</p>
+          <p className="text-xs uppercase tracking-widest text-slate-500">Saldo pendiente</p>
           <h2 className="text-3xl font-black mt-2 text-amber-300">{formatCurrency(totalPendiente)}</h2>
         </Card>
         <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Última venta registrada</p>
+          <p className="text-xs uppercase tracking-widest text-slate-500">Última venta registrada</p>
           <h2 className="text-xl font-black mt-3 text-blue-300">
             {ultimaVentaRegistrada
               ? new Date(ultimaVentaRegistrada).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" })
@@ -493,25 +597,29 @@ const ClientesPage = () => {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Buscar por nombre, segmento, ubicación o producto"
-              className="w-full md:w-[340px] bg-[#0f1623] border border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
+              className="w-full md:w-[340px] bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
             />
             <button
               type="button"
-              onClick={() => openNuevoCliente()}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-medium"
+              onClick={() => openNuevoCliente(handleCreate)}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
             >
               Nuevo cliente
             </button>
           </div>
         </div>
 
-        {filteredClientes.length === 0 ? (
-          <div className="text-center py-10 text-gray-400">No se encontraron clientes con ese criterio.</div>
+        {isLoading ? (
+          <div className="text-center py-10 text-slate-500">Cargando clientes...</div>
+        ) : loadError ? (
+          <div className="text-center py-10 text-red-600">{loadError}</div>
+        ) : filteredClientes.length === 0 ? (
+          <div className="text-center py-10 text-slate-500">No se encontraron clientes con ese criterio.</div>
         ) : (
-          <div className="overflow-auto">
-            <table className="w-full min-w-[920px]">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-auto">
+            <table className="w-full min-w-[920px] text-left">
               <thead>
-                <tr className="text-left border-b border-white/10 text-gray-400 text-sm">
+                <tr className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
                   <th className="pb-3">Cliente</th>
                   <th className="pb-3">Segmento</th>
                   <th className="pb-3">Ubicación</th>
@@ -525,7 +633,7 @@ const ClientesPage = () => {
               </thead>
               <tbody>
                 {filteredClientes.map((cliente) => (
-                  <tr key={cliente.uid} className="border-b border-white/5 hover:bg-white/5">
+                  <tr key={cliente.uid} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 font-medium">{cliente.nombre}</td>
                     <td className="py-3">{cliente.segmento}</td>
                     <td className="py-3">{cliente.ubicacion}</td>
@@ -543,23 +651,30 @@ const ClientesPage = () => {
                         <button
                           type="button"
                           onClick={() => openDetalleCliente(cliente)}
-                          className="text-xs px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20"
+                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                         >
                           Ver detalle
                         </button>
                         <button
                           type="button"
-                          onClick={() => openEditarCliente(cliente)}
-                          className="text-xs px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20"
+                          onClick={() => openEditarCliente(cliente, (payload) => handleEdit(cliente.uid, payload))}
+                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                         >
                           Editar
                         </button>
                         <button
                           type="button"
                           onClick={() => openCuentaCorriente(cliente)}
-                          className="text-xs px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20"
+                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                         >
                           Cuenta corriente
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleEstado(cliente)}
+                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          {cliente.estado === "Suspendido" ? "Reactivar" : "Suspender"}
                         </button>
                       </div>
                     </td>

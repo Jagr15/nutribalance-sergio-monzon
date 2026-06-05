@@ -10,8 +10,9 @@ export const ROUTES = {
   FORMULAS: '/formulas',
   PRODUCCION: '/produccion',
   STOCK: '/stock',
+  ALERTAS: '/alertas',
   STOCKMATERIAPRIMA: '/stockMateriaPrima',
   TRAZABILIDAD: '/trazabilidad',
   SILOS: '/silos',
-  ORDENES: '/Ordenes',
+  ORDENES: '/ordenes',
 } as const;

@@ -12,6 +12,13 @@ export interface Insumo {
     unidad_medida: TipoUnidad;
     umbral_alerta: number; // El usuario define que a los 500kg se ponga rojo
     ref_costo_unitario?:number;
+    proteina_bruta_pct?: number;
+    humedad_pct?: number;
+    fibra_pct?: number;
+    grasa_pct?: number;
+    cenizas_pct?: number;
+    unidad_base?: TipoUnidad;
+    observaciones?: string;
     categoria: TipoCategoria;
   }
 

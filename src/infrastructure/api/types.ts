@@ -1,6 +1,7 @@
 import type { Formula } from '../../features/formulas/types';
 import type { Insumo, StockMateriaPrima } from '../../features/insumos/types';
 import type { OrdenProduccion } from '../../features/ordenes/types';
+import type { StockProductoTerminado } from '../../features/productos/types';
 import type { Proveedor } from '../../features/proveedores/types';
 import type { Silo } from '../../features/silos/types';
 import type { Usuario } from '../../features/usuarios/types';
@@ -76,12 +77,17 @@ export interface OrdenesService {
   delete: (id: string) => Promise<boolean>;
 }
 
+export interface StockPTService {
+  getAll: () => Promise<StockProductoTerminado[]>;
+}
+
 export interface ApiServices {
   usuarios: UsuariosService;
   proveedores: ProveedoresService;
   insumos: InsumosService;
   formulas: FormulasService;
   stockMP: StockMPService;
+  stockPT: StockPTService;
   silos: SilosService;
   ordenes: OrdenesService;
 }

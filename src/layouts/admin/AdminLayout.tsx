@@ -9,7 +9,7 @@ interface Props {
 
 export const AdminLayout = ({ children }: Props) => {
   return (
-    <div className="flex bg-[#0a0e14] text-white min-h-screen">
+    <div className="flex bg-[#f4f7fb] text-slate-900 min-h-screen">
 
       <Sidebar />
 

@@ -7,11 +7,12 @@ export const Card = ({
   return (
     <div
       className={`
-        bg-[#141c28]
-        border border-white/10
+        bg-white
+        border border-slate-200
         rounded-2xl
         p-6
-        shadow-xl
+        shadow-[0_8px_28px_rgba(15,23,42,0.08)]
+        transition-all duration-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.12)] hover:-translate-y-[1px]
         ${className}
       `}
     >

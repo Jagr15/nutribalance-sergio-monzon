@@ -17,7 +17,7 @@ const MySwal = withReactContent(Swal);
 
 const InsumoPage: React.FC = () => {
   // Extraemos lógica y estado del Hook
-  const { insumos, isLoading, getAll, remove } = useInsumos();
+  const { insumos, isLoading, getAll, remove, loadError } = useInsumos();
 
   // Estados locales de la UI
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,20 +41,20 @@ const InsumoPage: React.FC = () => {
 
   const handleDelete = async (uid: string) => {
     const result = await MySwal.fire({
-      title: '¿Eliminar insumo?',
-      text: "Esta acción no se puede revertir",
+      title: '¿Desactivar insumo?',
+      text: "Se marcará como inactivo en el catálogo.",
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#2563eb',
       cancelButtonColor: '#1f2937',
-      confirmButtonText: 'SÍ, ELIMINAR',
+      confirmButtonText: 'SÍ, DESACTIVAR',
       cancelButtonText: 'CANCELAR',
-      background: '#0d121b',
-      color: '#ffffff',
+      background: '#ffffff',
+      color: '#0f172a',
       customClass: {
-        popup: 'border border-white/10 rounded-2xl',
+        popup: 'border border-slate-200 rounded-2xl',
         title: 'text-sm font-bold uppercase tracking-widest',
-        htmlContainer: 'text-xs text-gray-400',
+        htmlContainer: 'text-xs text-slate-500',
         confirmButton: 'rounded-xl px-6 py-3 text-xs font-bold',
         cancelButton: 'rounded-xl px-6 py-3 text-xs font-bold'
       }
@@ -64,13 +64,23 @@ const InsumoPage: React.FC = () => {
       const success = await remove(uid);
       if (success) {
         MySwal.fire({
-          title: 'Eliminado',
+          title: 'Desactivado',
           icon: 'success',
-          background: '#0d121b',
-          color: '#ffffff',
+          background: '#ffffff',
+          color: '#0f172a',
           timer: 1500,
           showConfirmButton: false,
-          customClass: { popup: 'border border-white/10 rounded-2xl' }
+          customClass: { popup: 'border border-slate-200 rounded-2xl' }
+        });
+      } else {
+        MySwal.fire({
+          title: 'No se pudo desactivar',
+          text: 'Ocurrió un error al desactivar el insumo.',
+          icon: 'error',
+          background: '#ffffff',
+          color: '#0f172a',
+          confirmButtonColor: '#2563eb',
+          customClass: { popup: 'border border-slate-200 rounded-2xl' }
         });
       }
     }
@@ -79,8 +89,8 @@ const InsumoPage: React.FC = () => {
   // Filtrado optimizado por búsqueda
   const filteredInsumos = useMemo(() => {
     return insumos.filter(i => 
-      i.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      i.categoria.toLowerCase().includes(searchTerm.toLowerCase())
+      (i.nombre ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (i.categoria ?? '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [searchTerm, insumos]);
 
@@ -92,10 +102,10 @@ const InsumoPage: React.FC = () => {
           <p className="text-[10px] uppercase tracking-[0.4em] text-orange-500 font-bold mb-2">
             GESTIÓN DE INVENTARIO
           </p>
-          <h1 className="text-4xl font-extrabold text-white tracking-tight">
+          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
             Maestro de Insumos
           </h1>
-          <p className="text-gray-400 text-sm mt-1">Configuración técnica de materias primas para procesos.</p>
+          <p className="text-slate-500 text-sm mt-1">Configuración técnica de materias primas para procesos.</p>
         </div>
 
         <button 
@@ -111,10 +121,10 @@ const InsumoPage: React.FC = () => {
       <InsumoStats insumos={insumos} />
 
       {/* Sección Principal de Datos */}
-      <section className="mt-8 bg-[#0d121b] border border-white/5 rounded-3xl ">
-        <div className="p-6 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <section className="mt-8 bg-white border border-slate-200 rounded-3xl ">
+        <div className="p-6 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-white font-bold text-lg">Catálogo de Materiales</h2>
+            <h2 className="text-slate-900 font-bold text-lg">Catálogo de Materiales</h2>
             <p className="text-gray-500 text-xs">Visualización detallada de componentes registrados.</p>
           </div>
           
@@ -122,12 +132,18 @@ const InsumoPage: React.FC = () => {
             <input 
               type="text" 
               placeholder="Buscar por nombre o categoría..." 
-              className="w-full md:w-80 bg-white/[0.03] border border-white/10 rounded-xl py-2.5 px-4 text-sm text-gray-300 focus:border-blue-500/50 outline-none transition-all" 
+              className="w-full md:w-80 bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-sm text-slate-700 focus:border-blue-500/50 outline-none transition-all" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
+
+        {loadError ? (
+          <div className="mx-6 mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {loadError}
+          </div>
+        ) : null}
 
         {/* Tabla de Resultados o Estado de Carga */}
         {isLoading && insumos.length === 0 ? (
@@ -144,6 +160,7 @@ const InsumoPage: React.FC = () => {
             data={filteredInsumos} 
             onEdit={handleOpenModal} 
             onDelete={handleDelete} 
+            emptyMessage={insumos.length === 0 ? 'No hay insumos activos registrados.' : 'No se encontraron insumos para la búsqueda.'}
           />
         )}
       </section>
@@ -152,6 +169,7 @@ const InsumoPage: React.FC = () => {
       {isModalOpen && (
         <InsumoModal 
           insumo={selectedInsumo} 
+          existingInsumos={insumos}
           onClose={handleCloseModal} 
           onSuccess={getAll} // Refresca la lista al guardar con éxito
         />

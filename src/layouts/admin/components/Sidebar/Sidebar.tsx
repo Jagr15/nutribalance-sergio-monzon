@@ -4,15 +4,18 @@ import { ROUTES } from "../../../../app/config/routes"; // Tus constantes de rut
 import {
   FiGrid, FiUsers, FiPackage, FiTruck, FiBarChart2,
    FiLogOut,FiInbox,FiDatabase,
-  FiLayers, FiArchive, FiChevronDown, FiChevronRight, FiGitMerge,
+  FiLayers, FiArchive, FiChevronDown, FiChevronRight, FiGitMerge, FiBell,
 } from "react-icons/fi";
 import type { IconType } from "react-icons";
 import { clearSession, getSessionUser } from "../../../../features/auth/session";
+import { usePermissions } from "../../../../features/auth/usePermissions";
+import type { AppModule } from "../../../../features/auth/permissions";
 
 interface SidebarItem {
   name: string;
   icon: IconType;
   path: string;
+  module: AppModule;
 }
 
 interface SidebarGroup {
@@ -27,30 +30,32 @@ const menuItems: SidebarGroup[] = [
     section: "GENERAL",
     collapsible: false,
     items: [
-      { name: "Dashboard", icon: FiGrid, path: ROUTES.DASHBOARD },
-      { name: "Clientes", icon: FiUsers, path: ROUTES.CLIENTES },
-      { name: "Stock General", icon: FiPackage, path: ROUTES.STOCK },
-      { name: "Proveedores", icon: FiTruck, path: ROUTES.PROVEEDORES },
+      { name: "Dashboard", icon: FiGrid, path: ROUTES.DASHBOARD, module: "dashboard" },
+      { name: "Usuarios", icon: FiUsers, path: ROUTES.USUARIOS, module: "usuarios" },
+      { name: "Clientes", icon: FiUsers, path: ROUTES.CLIENTES, module: "clientes" },
+      { name: "Stock General", icon: FiPackage, path: ROUTES.STOCK, module: "stock_general" },
+      { name: "Alertas", icon: FiBell, path: ROUTES.ALERTAS, module: "alertas" },
+      { name: "Proveedores", icon: FiTruck, path: ROUTES.PROVEEDORES, module: "proveedores" },
     ],
   },
   {
     section: "PRODUCCIÓN",
     collapsible: true,
     items: [
-      { name: "Silos", icon: FiDatabase, path: ROUTES.SILOS },
-      { name: "Insumos", icon: FiArchive, path: ROUTES.INSUMOS },
-      { name: "Fórmulas", icon: FiLayers, path: ROUTES.FORMULAS },
-      { name: "Órdenes", icon: FiLayers, path: ROUTES.ORDENES},
-      { name: "Costos", icon: FiBarChart2, path: ROUTES.COSTOS },
-      { name: "Trazabilidad", icon: FiGitMerge, path: ROUTES.TRAZABILIDAD },
+      { name: "Silos", icon: FiDatabase, path: ROUTES.SILOS, module: "silos" },
+      { name: "Insumos", icon: FiArchive, path: ROUTES.INSUMOS, module: "insumos" },
+      { name: "Fórmulas", icon: FiLayers, path: ROUTES.FORMULAS, module: "formulas" },
+      { name: "Órdenes", icon: FiLayers, path: ROUTES.ORDENES, module: "ordenes"},
+      { name: "Costos", icon: FiBarChart2, path: ROUTES.COSTOS, module: "finanzas" },
+      { name: "Trazabilidad", icon: FiGitMerge, path: ROUTES.TRAZABILIDAD, module: "trazabilidad" },
     ],
   },
   {
     section: "INVENTARIO",
     collapsible: true,
     items: [
-      { name: "Stock Materia Prima", icon: FiInbox, path: ROUTES.STOCKMATERIAPRIMA },
-      { name: "Stock de Productos Terminados", icon: FiPackage, path: ROUTES.PRODUCTOS },
+      { name: "Stock Materia Prima", icon: FiInbox, path: ROUTES.STOCKMATERIAPRIMA, module: "stock_mp" },
+      { name: "Stock de Productos Terminados", icon: FiPackage, path: ROUTES.PRODUCTOS, module: "productos" },
     ],
   },
   // ... resto de secciones (puedes añadir los paths que necesites)
@@ -60,6 +65,7 @@ export const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const currentUser = getSessionUser();
+  const { canAccess } = usePermissions();
   const [openSections, setOpenSections] = useState<string[]>(["PRODUCCIÓN", "INVENTARIO"]);
 
   const toggleSection = (section: string) => {
@@ -75,24 +81,26 @@ export const Sidebar = () => {
 
   return (
     // CAMBIO 1: h-screen y overflow-hidden para fijar el alto total
-    <aside className="w-[230px] h-screen bg-[#0d131d] border-r border-white/5 flex flex-col overflow-hidden sticky top-0">
+    <aside className="w-full lg:w-[230px] lg:h-screen bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col overflow-hidden lg:sticky top-0">
       
       {/* LOGO: Se mantiene fijo arriba */}
-      <div className="px-5 py-5 border-b border-white/5 flex-shrink-0">
+      <div className="px-4 md:px-5 py-4 md:py-5 border-b border-slate-200 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white text-lg font-bold">
             N
           </div>
           <div>
-            <h1 className="text-[15px] font-semibold text-white">Nutribalance</h1>
-            <p className="text-[10px] uppercase tracking-[0.12em] text-gray-500">Producción e Inventario</p>
+            <h1 className="text-[15px] font-semibold text-slate-900">Nutribalance</h1>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Producción e Inventario</p>
           </div>
         </div>
       </div>
 
       {/* CAMBIO 2: Este contenedor ahora es el que scrollea independientemente */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-4 space-y-5">
+      <div className="max-h-[45vh] lg:max-h-none flex-1 overflow-y-auto custom-scrollbar px-3 py-3 lg:py-4 space-y-4 lg:space-y-5">
         {menuItems.map((group) => {
+          const visibleItems = group.items.filter((item) => canAccess(item.module, "view"));
+          if (visibleItems.length === 0) return null;
           const isOpen = openSections.includes(group.section);
           return (
             <div key={group.section}>
@@ -101,11 +109,11 @@ export const Sidebar = () => {
                 aria-label={`Alternar sección ${group.section}`}
                 className="w-full flex items-center justify-between px-3 mb-2"
               >
-                <p className="text-[10px] tracking-[0.25em] uppercase text-gray-600 font-semibold text-left">
+                <p className="text-[10px] tracking-[0.25em] uppercase text-slate-500 font-semibold text-left">
                   {group.section}
                 </p>
                 {group.collapsible && (
-                  <div className="text-gray-500">
+                  <div className="text-slate-500">
                     {isOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
                   </div>
                 )}
@@ -113,7 +121,7 @@ export const Sidebar = () => {
 
               {(!group.collapsible || isOpen) && (
                 <div className="space-y-1">
-                  {group.items.map((item) => {
+                  {visibleItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location.pathname === item.path;
 
@@ -124,13 +132,13 @@ export const Sidebar = () => {
                         className={`
                           w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200
                           ${isActive 
-                              ? "bg-blue-500/10 text-white" 
-                              : "text-gray-400 hover:bg-white/5 hover:text-white"}
+                              ? "bg-blue-50 text-blue-700" 
+                              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}
                         `}
                       >
                         <div className={`
                           w-8 h-8 rounded-lg flex items-center justify-center
-                          ${isActive ? "bg-blue-500 text-white" : "bg-white/5"}
+                          ${isActive ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}
                         `}>
                           <Icon size={15} />
                         </div>
@@ -146,19 +154,19 @@ export const Sidebar = () => {
       </div>
 
       {/* USER PROFILE: Se mantiene fijo abajo */}
-      <div className="p-3 border-t border-white/5 flex-shrink-0">
-        <div className="bg-white/[0.03] rounded-xl p-3">
+      <div className="p-3 border-t border-slate-200 flex-shrink-0">
+        <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500" />
             <div className="flex-1">
               <h4 className="font-medium text-[13px]">{currentUser.name}</h4>
-              <p className="text-[11px] text-gray-500">{currentUser.role}</p>
+              <p className="text-[11px] text-slate-500">{currentUser.roleLabel}</p>
             </div>
             <button
               type="button"
               aria-label="Cerrar sesión"
               onClick={handleLogout}
-              className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center hover:bg-red-500/10 hover:text-red-400 transition"
+              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:text-red-500 transition"
             >
               <FiLogOut size={14} />
             </button>

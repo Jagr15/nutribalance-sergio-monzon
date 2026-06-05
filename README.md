@@ -4,8 +4,25 @@ Aplicación frontend de NutriBalance construida con React + TypeScript + Vite.
 
 ## Requisitos
 
-- Node.js recomendado: **22.x LTS**
+- Node.js requerido: **20+** (recomendado: **20.x LTS**)
 - npm recomendado: **10.x**
+
+## Uso con nvm
+
+Este proyecto incluye `.nvmrc` con Node 20.
+
+```bash
+nvm use
+npm install
+npm run test
+```
+
+Si no tienes instalada esa versión:
+
+```bash
+nvm install 20
+nvm use
+```
 
 ## Instalación
 
@@ -69,7 +86,7 @@ El switch está en `src/infrastructure/api/index.ts`:
   - stock de materia prima
   - silos
 
-En Sprint 1, usuarios/fórmulas/órdenes siguen en mock para no romper flujo actual.
+En Sprint 1 Fase 1, `usuarios` sigue en mock y ya se migró `fórmulas` + `órdenes` a Supabase.
 
 ## Backend Supabase
 

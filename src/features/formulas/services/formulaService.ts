@@ -1,5 +1,7 @@
 import { ApiService } from '../../../infrastructure/api/';
 import type { Formula } from '../types';
+import { assertPermission } from '../../auth/accessControl';
+import { auditAction } from '../../auth/audit';
 
 export const formulaService = {
   /**
@@ -21,7 +23,17 @@ export const formulaService = {
    * Nota: El mock validará que la suma de porcentajes sea 100%.
    */
   create: (data: Omit<Formula, 'uid' | 'ultima_edicion'>): Promise<Formula> => {
-    return ApiService.formulas.create(data);
+    assertPermission('formulas', 'create_formula');
+    return ApiService.formulas.create(data).then(async (result) => {
+      await auditAction({
+        modulo: 'formulas',
+        accion: 'create_formula',
+        entidad: 'formula',
+        entidad_ref: result.uid,
+        payload: { nombre_producto: result.nombre_producto, version: result.version },
+      });
+      return result;
+    });
   },
 
   /**
@@ -29,7 +41,17 @@ export const formulaService = {
    * Útil para corregir nombres o ajustar porcentajes en versiones borradores.
    */
   update: (uid: string, data: Partial<Formula>): Promise<Formula> => {
-    return ApiService.formulas.update(uid, data);
+    assertPermission('formulas', 'edit_formula');
+    return ApiService.formulas.update(uid, data).then(async (result) => {
+      await auditAction({
+        modulo: 'formulas',
+        accion: 'edit_formula',
+        entidad: 'formula',
+        entidad_ref: uid,
+        payload: data as Record<string, unknown>,
+      });
+      return result;
+    });
   },
 
   /**

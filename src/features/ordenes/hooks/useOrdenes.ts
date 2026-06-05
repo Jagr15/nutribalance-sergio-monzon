@@ -32,32 +32,41 @@ export const useOrdenes = () => {
 
   // Iniciar producción (Transición PENDIENTE -> EN PROCESO)
   const handleStartProduction = async (id: string) => {
+    setError(null);
     try {
       const updated = await useOrdenService.startProduction(id);
       setOrdenes(prev => prev.map(o => o.id === id ? updated : o));
+      return updated;
     } catch (err) {
-      console.error("No se pudo iniciar la producción:", err);
+      const message = err instanceof Error ? err.message : "No se pudo iniciar la producción.";
+      setError(message);
+      throw err;
     }
   };
 
   const handleDeleteOrder = async (id: string) => {
+    setError(null);
     try {
       await useOrdenService.delete(id);
       setOrdenes(prev => prev.filter(o => o.id !== id));
     } catch (err) {
-      console.error("No se pudo eliminar la orden:", err);
+      const message = err instanceof Error ? err.message : "No se pudo anular la orden.";
+      setError(message);
       throw err;
     }
   };
 
   // Finalizar producción (Transición EN PROCESO -> FINALIZADA)
   const handleFinishProduction = async (id: string, payload: FinalizarOrdenPayload) => {
+    setError(null);
     try {
       const updated = await useOrdenService.finishProduction(id, payload);
       setOrdenes(prev => prev.map(o => o.id === id ? updated : o));
+      return updated;
     } catch (err) {
-      console.error("Error al finalizar la orden:", err);
-      throw err; // Re-lanzamos para que el modal sepa que falló
+      const message = err instanceof Error ? err.message : "No se pudo finalizar la orden.";
+      setError(message);
+      throw err;
     }
   };
 

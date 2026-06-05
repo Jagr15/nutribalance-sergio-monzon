@@ -1,76 +1,789 @@
 [
   {
     "uid": "for-001",
-    "nombre_producto": "Alimento Lechera",
-    "version": 2,
+    "nombre_producto": "Lechera 13% PB alta energia",
+    "version": 1,
     "esta_activa": true,
-    "ultima_edicion": "2026-05-15T10:00:00Z",
+    "ultima_edicion": "2026-05-29T12:00:00.000Z",
     "id_usuario": "usr-101",
     "author": "Sergio Monzón",
-    "createdAt": "2026-05-10T09:00:00Z",
+    "createdAt": "2026-05-29T12:00:00.000Z",
     "ingredientes": [
       {
-        "id_insumo": "i-1",
-        "nombre_insumo": "Maíz",
-        "porcentaje": 48
-      },
-      {
-        "id_insumo": "i-2",
-        "nombre_insumo": "Soja",
-        "porcentaje": 30
-      },
-      {
-        "id_insumo": "i-5",
-        "nombre_insumo": "Afrechillo",
-        "porcentaje": 15
-      },
-      {
         "id_insumo": "i-3",
-        "nombre_insumo": "Núcleo Vitamínico",
-        "porcentaje": 5
+        "nombre_insumo": "Afrechillo",
+        "porcentaje": 54.15,
+        "aporte_proteina_pct": 8.664,
+        "aporte_proteina_g_kg": 86.64,
+        "costo_unitario_usado": 215,
+        "costo_contribucion_kg": 116.4225,
+        "fuente_costo": "REFERENCIA"
       },
       {
         "id_insumo": "i-4",
         "nombre_insumo": "Sal",
-        "porcentaje": 2
+        "porcentaje": 0.75,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 79,
+        "costo_contribucion_kg": 0.5925,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-5",
+        "nombre_insumo": "Núcleo",
+        "porcentaje": 0.2,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 4393.5,
+        "costo_contribucion_kg": 8.787,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-6",
+        "nombre_insumo": "Maíz",
+        "porcentaje": 40,
+        "aporte_proteina_pct": 3.2,
+        "aporte_proteina_g_kg": 32,
+        "costo_unitario_usado": 272,
+        "costo_contribucion_kg": 108.8,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-7",
+        "nombre_insumo": "Conchilla",
+        "porcentaje": 3,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 118,
+        "costo_contribucion_kg": 3.54,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-8",
+        "nombre_insumo": "Magnesio",
+        "porcentaje": 0.4,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 1060.5,
+        "costo_contribucion_kg": 4.242,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-9",
+        "nombre_insumo": "Urea",
+        "porcentaje": 1.5,
+        "aporte_proteina_pct": 4.215,
+        "aporte_proteina_g_kg": 42.15,
+        "costo_unitario_usado": 804.75,
+        "costo_contribucion_kg": 12.07125,
+        "fuente_costo": "REFERENCIA"
       }
-    ]
+    ],
+    "proteina_calculada_pct": 16.079,
+    "costo_total": 254455.25,
+    "costo_por_kg": 254.45525,
+    "costo_por_tonelada": 254455.25,
+    "advertencias_nutricionales": [
+      "Falta PB en Sal",
+      "Falta PB en Núcleo",
+      "Falta PB en Conchilla",
+      "Falta PB en Magnesio"
+    ],
+    "advertencias_costos": []
   },
   {
     "uid": "for-002",
-    "nombre_producto": "Pellet Cerdo Crecimiento",
+    "nombre_producto": "Lechera 18% PB",
     "version": 1,
     "esta_activa": true,
-    "ultima_edicion": "2026-05-16T15:30:00Z",
+    "ultima_edicion": "2026-05-29T12:00:00.000Z",
     "id_usuario": "usr-101",
     "author": "Sergio Monzón",
-    "createdAt": "2026-05-12T13:30:00Z",
+    "createdAt": "2026-05-29T12:00:00.000Z",
     "ingredientes": [
       {
         "id_insumo": "i-1",
-        "nombre_insumo": "Maíz",
-        "porcentaje": 42
-      },
-      {
-        "id_insumo": "i-2",
-        "nombre_insumo": "Soja",
-        "porcentaje": 34
-      },
-      {
-        "id_insumo": "i-5",
-        "nombre_insumo": "Afrechillo",
-        "porcentaje": 18
-      },
-      {
-        "id_insumo": "i-3",
-        "nombre_insumo": "Núcleo Vitamínico",
-        "porcentaje": 4
+        "nombre_insumo": "Soja Harina HP",
+        "porcentaje": 11.5,
+        "aporte_proteina_pct": 5.635,
+        "aporte_proteina_g_kg": 56.35,
+        "costo_unitario_usado": 423.355,
+        "costo_contribucion_kg": 48.685825,
+        "fuente_costo": "REFERENCIA"
       },
       {
         "id_insumo": "i-4",
         "nombre_insumo": "Sal",
-        "porcentaje": 2
+        "porcentaje": 0.75,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 79,
+        "costo_contribucion_kg": 0.5925,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-5",
+        "nombre_insumo": "Núcleo",
+        "porcentaje": 0.1,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 4393.5,
+        "costo_contribucion_kg": 4.3935,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-6",
+        "nombre_insumo": "Maíz",
+        "porcentaje": 20,
+        "aporte_proteina_pct": 1.6,
+        "aporte_proteina_g_kg": 16,
+        "costo_unitario_usado": 272,
+        "costo_contribucion_kg": 54.4,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-7",
+        "nombre_insumo": "Conchilla",
+        "porcentaje": 3,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 118,
+        "costo_contribucion_kg": 3.54,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-8",
+        "nombre_insumo": "Magnesio",
+        "porcentaje": 0.4,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 1060.5,
+        "costo_contribucion_kg": 4.242,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-9",
+        "nombre_insumo": "Urea",
+        "porcentaje": 1.5,
+        "aporte_proteina_pct": 4.215,
+        "aporte_proteina_g_kg": 42.15,
+        "costo_unitario_usado": 804.75,
+        "costo_contribucion_kg": 12.07125,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-11",
+        "nombre_insumo": "Cáscara de Soja",
+        "porcentaje": 60.75,
+        "aporte_proteina_pct": 6.6825,
+        "aporte_proteina_g_kg": 66.825,
+        "costo_unitario_usado": 0,
+        "costo_contribucion_kg": 0,
+        "fuente_costo": "SIN_COSTO"
+      },
+      {
+        "id_insumo": "i-13",
+        "nombre_insumo": "Bentonita",
+        "porcentaje": 2,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 0,
+        "costo_contribucion_kg": 0,
+        "fuente_costo": "SIN_COSTO"
       }
+    ],
+    "proteina_calculada_pct": 18.1325,
+    "costo_total": 127925.075,
+    "costo_por_kg": 127.925075,
+    "costo_por_tonelada": 127925.075,
+    "advertencias_nutricionales": [
+      "Falta PB en Sal",
+      "Falta PB en Núcleo",
+      "Falta PB en Conchilla",
+      "Falta PB en Magnesio",
+      "Falta PB en Bentonita"
+    ],
+    "advertencias_costos": [
+      "Sin costo disponible para Cáscara de Soja.",
+      "Sin costo disponible para Bentonita."
+    ]
+  },
+  {
+    "uid": "for-003",
+    "nombre_producto": "Recria 16%",
+    "version": 1,
+    "esta_activa": true,
+    "ultima_edicion": "2026-05-29T12:00:00.000Z",
+    "id_usuario": "usr-101",
+    "author": "Sergio Monzón",
+    "createdAt": "2026-05-29T12:00:00.000Z",
+    "ingredientes": [
+      {
+        "id_insumo": "i-1",
+        "nombre_insumo": "Soja Harina HP",
+        "porcentaje": 7.2,
+        "aporte_proteina_pct": 3.528,
+        "aporte_proteina_g_kg": 35.28,
+        "costo_unitario_usado": 423.355,
+        "costo_contribucion_kg": 30.48156,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-3",
+        "nombre_insumo": "Afrechillo",
+        "porcentaje": 50.78,
+        "aporte_proteina_pct": 8.1248,
+        "aporte_proteina_g_kg": 81.248,
+        "costo_unitario_usado": 215,
+        "costo_contribucion_kg": 109.177,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "porcentaje": 1.12,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 79,
+        "costo_contribucion_kg": 0.8848,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-5",
+        "nombre_insumo": "Núcleo",
+        "porcentaje": 0.2,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 4393.5,
+        "costo_contribucion_kg": 8.787,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-6",
+        "nombre_insumo": "Maíz",
+        "porcentaje": 20.23,
+        "aporte_proteina_pct": 1.6184,
+        "aporte_proteina_g_kg": 16.184,
+        "costo_unitario_usado": 272,
+        "costo_contribucion_kg": 55.0256,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-7",
+        "nombre_insumo": "Conchilla",
+        "porcentaje": 1.49,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 118,
+        "costo_contribucion_kg": 1.7582,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-9",
+        "nombre_insumo": "Urea",
+        "porcentaje": 0.69,
+        "aporte_proteina_pct": 1.9389,
+        "aporte_proteina_g_kg": 19.389,
+        "costo_unitario_usado": 804.75,
+        "costo_contribucion_kg": 5.552775,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-11",
+        "nombre_insumo": "Cáscara de Soja",
+        "porcentaje": 16.29,
+        "aporte_proteina_pct": 1.7919,
+        "aporte_proteina_g_kg": 17.919,
+        "costo_unitario_usado": 0,
+        "costo_contribucion_kg": 0,
+        "fuente_costo": "SIN_COSTO"
+      },
+      {
+        "id_insumo": "i-13",
+        "nombre_insumo": "Bentonita",
+        "porcentaje": 2,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 0,
+        "costo_contribucion_kg": 0,
+        "fuente_costo": "SIN_COSTO"
+      }
+    ],
+    "proteina_calculada_pct": 17.002,
+    "costo_total": 211666.935,
+    "costo_por_kg": 211.666935,
+    "costo_por_tonelada": 211666.935,
+    "advertencias_nutricionales": [
+      "Falta PB en Sal",
+      "Falta PB en Núcleo",
+      "Falta PB en Conchilla",
+      "Falta PB en Bentonita"
+    ],
+    "advertencias_costos": [
+      "Sin costo disponible para Cáscara de Soja.",
+      "Sin costo disponible para Bentonita."
+    ]
+  },
+  {
+    "uid": "for-004",
+    "nombre_producto": "Recria Smart",
+    "version": 1,
+    "esta_activa": true,
+    "ultima_edicion": "2026-05-29T12:00:00.000Z",
+    "id_usuario": "usr-101",
+    "author": "Sergio Monzón",
+    "createdAt": "2026-05-29T12:00:00.000Z",
+    "ingredientes": [
+      {
+        "id_insumo": "i-1",
+        "nombre_insumo": "Soja Harina HP",
+        "porcentaje": 6.8,
+        "aporte_proteina_pct": 3.332,
+        "aporte_proteina_g_kg": 33.32,
+        "costo_unitario_usado": 423.355,
+        "costo_contribucion_kg": 28.78814,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-2",
+        "nombre_insumo": "Pellets Smart",
+        "porcentaje": 17.2,
+        "aporte_proteina_pct": 0.688,
+        "aporte_proteina_g_kg": 6.88,
+        "costo_unitario_usado": 362,
+        "costo_contribucion_kg": 62.264,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-3",
+        "nombre_insumo": "Afrechillo",
+        "porcentaje": 36.27,
+        "aporte_proteina_pct": 5.8032,
+        "aporte_proteina_g_kg": 58.032,
+        "costo_unitario_usado": 215,
+        "costo_contribucion_kg": 77.9805,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "porcentaje": 1.12,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 79,
+        "costo_contribucion_kg": 0.8848,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-5",
+        "nombre_insumo": "Núcleo",
+        "porcentaje": 0.2,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 4393.5,
+        "costo_contribucion_kg": 8.787,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-6",
+        "nombre_insumo": "Maíz",
+        "porcentaje": 20.23,
+        "aporte_proteina_pct": 1.6184,
+        "aporte_proteina_g_kg": 16.184,
+        "costo_unitario_usado": 272,
+        "costo_contribucion_kg": 55.0256,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-7",
+        "nombre_insumo": "Conchilla",
+        "porcentaje": 1.49,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 118,
+        "costo_contribucion_kg": 1.7582,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-9",
+        "nombre_insumo": "Urea",
+        "porcentaje": 0.69,
+        "aporte_proteina_pct": 1.9389,
+        "aporte_proteina_g_kg": 19.389,
+        "costo_unitario_usado": 804.75,
+        "costo_contribucion_kg": 5.552775,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-11",
+        "nombre_insumo": "Cáscara de Soja",
+        "porcentaje": 15,
+        "aporte_proteina_pct": 1.65,
+        "aporte_proteina_g_kg": 16.5,
+        "costo_unitario_usado": 0,
+        "costo_contribucion_kg": 0,
+        "fuente_costo": "SIN_COSTO"
+      },
+      {
+        "id_insumo": "i-13",
+        "nombre_insumo": "Bentonita",
+        "porcentaje": 1,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 0,
+        "costo_contribucion_kg": 0,
+        "fuente_costo": "SIN_COSTO"
+      }
+    ],
+    "proteina_calculada_pct": 15.0305,
+    "costo_total": 241041.015,
+    "costo_por_kg": 241.041015,
+    "costo_por_tonelada": 241041.015,
+    "advertencias_nutricionales": [
+      "Falta PB en Sal",
+      "Falta PB en Núcleo",
+      "Falta PB en Conchilla",
+      "Falta PB en Bentonita"
+    ],
+    "advertencias_costos": [
+      "Sin costo disponible para Cáscara de Soja.",
+      "Sin costo disponible para Bentonita."
+    ]
+  },
+  {
+    "uid": "for-005",
+    "nombre_producto": "Engorde Smart",
+    "version": 1,
+    "esta_activa": true,
+    "ultima_edicion": "2026-05-29T12:00:00.000Z",
+    "id_usuario": "usr-101",
+    "author": "Sergio Monzón",
+    "createdAt": "2026-05-29T12:00:00.000Z",
+    "ingredientes": [
+      {
+        "id_insumo": "i-1",
+        "nombre_insumo": "Soja Harina HP",
+        "porcentaje": 2.5,
+        "aporte_proteina_pct": 1.225,
+        "aporte_proteina_g_kg": 12.25,
+        "costo_unitario_usado": 423.355,
+        "costo_contribucion_kg": 10.583875,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-2",
+        "nombre_insumo": "Pellets Smart",
+        "porcentaje": 14,
+        "aporte_proteina_pct": 0.56,
+        "aporte_proteina_g_kg": 5.6,
+        "costo_unitario_usado": 362,
+        "costo_contribucion_kg": 50.68,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-3",
+        "nombre_insumo": "Afrechillo",
+        "porcentaje": 29.2,
+        "aporte_proteina_pct": 4.672,
+        "aporte_proteina_g_kg": 46.72,
+        "costo_unitario_usado": 215,
+        "costo_contribucion_kg": 62.78,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "porcentaje": 0.6,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 79,
+        "costo_contribucion_kg": 0.474,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-5",
+        "nombre_insumo": "Núcleo",
+        "porcentaje": 0.2,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 4393.5,
+        "costo_contribucion_kg": 8.787,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-6",
+        "nombre_insumo": "Maíz",
+        "porcentaje": 51.5,
+        "aporte_proteina_pct": 4.12,
+        "aporte_proteina_g_kg": 41.2,
+        "costo_unitario_usado": 272,
+        "costo_contribucion_kg": 140.08,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-7",
+        "nombre_insumo": "Conchilla",
+        "porcentaje": 1,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 118,
+        "costo_contribucion_kg": 1.18,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-8",
+        "nombre_insumo": "Magnesio",
+        "porcentaje": 0.1,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 1060.5,
+        "costo_contribucion_kg": 1.0605,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-9",
+        "nombre_insumo": "Urea",
+        "porcentaje": 0.9,
+        "aporte_proteina_pct": 2.529,
+        "aporte_proteina_g_kg": 25.29,
+        "costo_unitario_usado": 804.75,
+        "costo_contribucion_kg": 7.24275,
+        "fuente_costo": "REFERENCIA"
+      }
+    ],
+    "proteina_calculada_pct": 13.106,
+    "costo_total": 282868.125,
+    "costo_por_kg": 282.868125,
+    "costo_por_tonelada": 282868.125,
+    "advertencias_nutricionales": [
+      "Falta PB en Sal",
+      "Falta PB en Núcleo",
+      "Falta PB en Conchilla",
+      "Falta PB en Magnesio"
+    ],
+    "advertencias_costos": []
+  },
+  {
+    "uid": "for-006",
+    "nombre_producto": "Adaptación Smart",
+    "version": 1,
+    "esta_activa": true,
+    "ultima_edicion": "2026-05-29T12:00:00.000Z",
+    "id_usuario": "usr-101",
+    "author": "Sergio Monzón",
+    "createdAt": "2026-05-29T12:00:00.000Z",
+    "ingredientes": [
+      {
+        "id_insumo": "i-1",
+        "nombre_insumo": "Soja Harina HP",
+        "porcentaje": 10,
+        "aporte_proteina_pct": 4.9,
+        "aporte_proteina_g_kg": 49,
+        "costo_unitario_usado": 423.355,
+        "costo_contribucion_kg": 42.3355,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-2",
+        "nombre_insumo": "Pellets Smart",
+        "porcentaje": 20,
+        "aporte_proteina_pct": 0.8,
+        "aporte_proteina_g_kg": 8,
+        "costo_unitario_usado": 362,
+        "costo_contribucion_kg": 72.4,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-3",
+        "nombre_insumo": "Afrechillo",
+        "porcentaje": 37.85,
+        "aporte_proteina_pct": 6.056,
+        "aporte_proteina_g_kg": 60.56,
+        "costo_unitario_usado": 215,
+        "costo_contribucion_kg": 81.3775,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "porcentaje": 1.1,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 79,
+        "costo_contribucion_kg": 0.869,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-5",
+        "nombre_insumo": "Núcleo",
+        "porcentaje": 0.2,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 4393.5,
+        "costo_contribucion_kg": 8.787,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-6",
+        "nombre_insumo": "Maíz",
+        "porcentaje": 28.5,
+        "aporte_proteina_pct": 2.28,
+        "aporte_proteina_g_kg": 22.8,
+        "costo_unitario_usado": 272,
+        "costo_contribucion_kg": 77.52,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-7",
+        "nombre_insumo": "Conchilla",
+        "porcentaje": 1.5,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 118,
+        "costo_contribucion_kg": 1.77,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-9",
+        "nombre_insumo": "Urea",
+        "porcentaje": 0.7,
+        "aporte_proteina_pct": 1.967,
+        "aporte_proteina_g_kg": 19.67,
+        "costo_unitario_usado": 804.75,
+        "costo_contribucion_kg": 5.63325,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-10",
+        "nombre_insumo": "Núcleo Crianza",
+        "porcentaje": 0.15,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 0,
+        "costo_contribucion_kg": 0,
+        "fuente_costo": "SIN_COSTO"
+      }
+    ],
+    "proteina_calculada_pct": 16.003,
+    "costo_total": 290692.25,
+    "costo_por_kg": 290.69225,
+    "costo_por_tonelada": 290692.25,
+    "advertencias_nutricionales": [
+      "Falta PB en Sal",
+      "Falta PB en Núcleo",
+      "Falta PB en Conchilla",
+      "Falta PB en Núcleo Crianza"
+    ],
+    "advertencias_costos": [
+      "Sin costo disponible para Núcleo Crianza."
+    ]
+  },
+  {
+    "uid": "for-007",
+    "nombre_producto": "CRIANZA",
+    "version": 1,
+    "esta_activa": true,
+    "ultima_edicion": "2026-05-29T12:00:00.000Z",
+    "id_usuario": "usr-101",
+    "author": "Sergio Monzón",
+    "createdAt": "2026-05-29T12:00:00.000Z",
+    "ingredientes": [
+      {
+        "id_insumo": "i-1",
+        "nombre_insumo": "Soja Harina HP",
+        "porcentaje": 22,
+        "aporte_proteina_pct": 10.78,
+        "aporte_proteina_g_kg": 107.8,
+        "costo_unitario_usado": 423.355,
+        "costo_contribucion_kg": 93.1381,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-3",
+        "nombre_insumo": "Afrechillo",
+        "porcentaje": 18.05,
+        "aporte_proteina_pct": 2.888,
+        "aporte_proteina_g_kg": 28.88,
+        "costo_unitario_usado": 215,
+        "costo_contribucion_kg": 38.8075,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "porcentaje": 1.1,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 79,
+        "costo_contribucion_kg": 0.869,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-5",
+        "nombre_insumo": "Núcleo",
+        "porcentaje": 0.2,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 4393.5,
+        "costo_contribucion_kg": 8.787,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-6",
+        "nombre_insumo": "Maíz",
+        "porcentaje": 27,
+        "aporte_proteina_pct": 2.16,
+        "aporte_proteina_g_kg": 21.6,
+        "costo_unitario_usado": 272,
+        "costo_contribucion_kg": 73.44,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-7",
+        "nombre_insumo": "Conchilla",
+        "porcentaje": 1.5,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 118,
+        "costo_contribucion_kg": 1.77,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-10",
+        "nombre_insumo": "Núcleo Crianza",
+        "porcentaje": 0.15,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 0,
+        "costo_contribucion_kg": 0,
+        "fuente_costo": "SIN_COSTO"
+      },
+      {
+        "id_insumo": "i-14",
+        "nombre_insumo": "Alfa",
+        "porcentaje": 30,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 0,
+        "costo_contribucion_kg": 0,
+        "fuente_costo": "SIN_COSTO"
+      }
+    ],
+    "proteina_calculada_pct": 15.828,
+    "costo_total": 216811.6,
+    "costo_por_kg": 216.8116,
+    "costo_por_tonelada": 216811.6,
+    "advertencias_nutricionales": [
+      "Falta PB en Sal",
+      "Falta PB en Núcleo",
+      "Falta PB en Conchilla",
+      "Falta PB en Núcleo Crianza",
+      "Falta PB en Alfa"
+    ],
+    "advertencias_costos": [
+      "Sin costo disponible para Núcleo Crianza.",
+      "Sin costo disponible para Alfa."
     ]
   }
 ]

@@ -7,15 +7,9 @@ export const KPI = ({
 }: KPIProps) => {
   return (
     <div
-      className="
-        bg-[#141c28]
-        border border-white/10
-        rounded-2xl
-        p-5
-        shadow-xl
-      "
+      className="ui-card p-5"
     >
-      <span className="text-xs uppercase tracking-widest text-gray-400">
+      <span className="text-xs uppercase tracking-widest text-slate-500">
         {title}
       </span>
 
@@ -23,7 +17,7 @@ export const KPI = ({
         {value}
       </h2>
 
-      <p className="text-sm text-gray-400 mt-2">
+      <p className="text-sm text-slate-500 mt-2">
         {hint}
       </p>
     </div>

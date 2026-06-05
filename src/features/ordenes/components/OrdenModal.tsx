@@ -1,13 +1,11 @@
 // src/features/ordenes/components/OrdenModal.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FiX, FiDatabase, FiTarget, FiSearch, FiChevronRight, FiLayers, FiCheck, FiAlertCircle } from "react-icons/fi";
+import { FiX, FiDatabase, FiTarget, FiLayers, FiCheck, FiAlertCircle } from "react-icons/fi";
 import { ApiService } from '../../../infrastructure/api';
 import { EstadoOrden } from '../types/orden';
-import type { DetalleInsumoLote } from '../types/orden';
 import type { Formula } from '../../formulas/types';
 import { useCalculoOrden, type CalculoOrdenResultado } from '../hooks/useCalculoOrden';
-import { useStockMateriaPrima } from '../../insumos/hooks/useStockMateriaPrima'; // NUEVO
 import Swal from 'sweetalert2';
 
 interface Props {
@@ -17,26 +15,30 @@ interface Props {
 
 const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const [nroOrden, setNroOrden] = useState("");
+  const [existingLotes, setExistingLotes] = useState<Set<string>>(new Set());
   const [pesoObjetivo, setPesoObjetivo] = useState<number | "">("");
   const [unidad, setUnidad] = useState<'KG' | 'TON'>('KG');
-  const [searchTerm, setSearchTerm] = useState("");
   const [formulas, setFormulas] = useState<Formula[]>([]);
   const [selectedFormula, setSelectedFormula] = useState<Formula | null>(null);
-  const [showResults, setShowResults] = useState(false);
   
   // Hooks de lógica
   const { calcularInversionLote, isCalculando } = useCalculoOrden();
-  const { agregarStockTransito } = useStockMateriaPrima(); // NUEVO: Hook para comprometer stock
 
   const [datosInversion, setDatosInversion] = useState<CalculoOrdenResultado | null>(null);
   const [stockSuficiente, setStockSuficiente] = useState(true);
   const [insumosFaltantes, setInsumosFaltantes] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     const cargarFormulas = async () => {
       try {
-        const data = await ApiService.formulas.findAll();
+        const [data, ordenes] = await Promise.all([
+          ApiService.formulas.findAll(),
+          ApiService.ordenes.getAll(),
+        ]);
         setFormulas(data);
+        setExistingLotes(new Set(ordenes.map((o) => (o.lote ?? '').trim().toUpperCase())));
       } catch (error) {
         console.error("Error al cargar fórmulas:", error);
       }
@@ -44,12 +46,7 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     cargarFormulas();
   }, []);
 
-  const filteredFormulas = useMemo(() => {
-    if (searchTerm.trim() === "") return [];
-    return formulas.filter((f) =>
-      f.nombre_producto.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [searchTerm, formulas]);
+  const formulaOptions = useMemo(() => formulas.filter((f) => f.esta_activa), [formulas]);
 
   useEffect(() => {
     const realizarCalculo = async () => {
@@ -69,19 +66,37 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     realizarCalculo();
   }, [selectedFormula, pesoObjetivo, unidad, calcularInversionLote]);
 
-  const handleSelectFormula = (formula: Formula) => {
-    setSelectedFormula(formula);
-    setSearchTerm(formula.nombre_producto);
-    setShowResults(false);
-  };
-
   const handleCrearOrden = async () => {
-    if (!nroOrden || !selectedFormula || !datosInversion) return;
+    if (isSubmitting) return;
+    setSubmitError(null);
+
+    const loteNormalizado = nroOrden.trim().toUpperCase();
+    if (!loteNormalizado || /\s/.test(loteNormalizado)) {
+      setSubmitError('El lote es obligatorio y no debe contener espacios.');
+      return;
+    }
+    if (existingLotes.has(loteNormalizado)) {
+      setSubmitError('Ya existe una orden con ese lote.');
+      return;
+    }
+    if (!selectedFormula) {
+      setSubmitError('Seleccioná una fórmula activa.');
+      return;
+    }
+    if (pesoObjetivo === "" || Number(pesoObjetivo) <= 0 || Number.isNaN(Number(pesoObjetivo))) {
+      setSubmitError('La cantidad objetivo debe ser mayor a 0.');
+      return;
+    }
+    if (!datosInversion || !stockSuficiente) {
+      setSubmitError('No se puede crear la orden sin stock suficiente.');
+      return;
+    }
 
     try {
+      setIsSubmitting(true);
       // 1. CREACIÓN DE LA ORDEN
       const payload = {
-        lote: nroOrden,
+        lote: loteNormalizado,
         id_formula: selectedFormula.uid,
         nombre_producto: selectedFormula.nombre_producto,
         version_formula: selectedFormula.version,
@@ -95,67 +110,53 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         fecha_creacion: new Date().toISOString()
       };
 
-      const nuevaOrden = await ApiService.ordenes.create(payload);
-      // 2. NUEVA FUNCIONALIDAD: COMPROMETER STOCK EN TRÁNSITO
-      // Recorremos los lotes que el cálculo FIFO seleccionó para esta orden
-      if (datosInversion.lotesInvolucrados && datosInversion.lotesInvolucrados.length > 0) {
-        const promesasCompromiso = datosInversion.lotesInvolucrados.map((item: DetalleInsumoLote) => {
-          // Importante: item.id_lote_uid debe venir del resultado de tu hook de cálculo
-          return agregarStockTransito(item.id_lote, {
-            id_orden: nuevaOrden.id,
-            nro_operacion: nroOrden,
-            cantidad: item.cantidad_usada
-          });
-        });
-
-        await Promise.all(promesasCompromiso);
-      }
+      await ApiService.ordenes.create(payload);
 
       Swal.fire({
         icon: 'success',
-        title: '¡Orden y Reserva Lista!',
-        text: `La orden ${nroOrden} ha sido creada y el stock quedó comprometido.`,
-        background: '#0d121b',
-        color: '#fff',
+        title: '¡Orden creada!',
+        text: `La orden ${loteNormalizado} fue creada con planificación de consumo FIFO.`,
+        background: '#ffffff',
+        color: '#0f172a',
         confirmButtonColor: '#3b82f6'
       });
 
       if (onSuccess) onSuccess();
       onClose();
-    } catch (error) {
-      console.error(error);
-      Swal.fire({ 
-        icon: 'error', 
-        title: 'Error', 
-        text: 'No se pudo completar la operación de reserva.',
-        background: '#0d121b',
-        color: '#fff'
-      });
+    } catch (error: unknown) {
+      setSubmitError(error instanceof Error ? error.message : 'No se pudo crear la orden de producción.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const isFormValid = nroOrden && selectedFormula && pesoObjetivo && stockSuficiente;
+  const isFormValid = !!nroOrden.trim() && !!selectedFormula && !!pesoObjetivo && stockSuficiente;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-[#0d121b] border border-white/10 w-full max-w-[420px] rounded-[2rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white border border-slate-200 w-full max-w-[420px] rounded-[2rem] overflow-hidden shadow-xl animate-in zoom-in-95 duration-200">
         
-        <header className="px-8 py-6 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
+        <header className="px-8 py-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
               <FiLayers size={20} />
             </div>
             <div>
-              <h3 className="text-xl font-black text-white tracking-tighter italic">NUEVA ORDEN</h3>
+              <h3 className="text-xl font-black text-slate-900 tracking-tighter italic">NUEVA ORDEN</h3>
               <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Planificación de Producción</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 text-gray-500 transition-colors">
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-gray-500 transition-colors">
             <FiX size={20}/>
           </button>
         </header>
 
         <div className="p-8 space-y-6">
+          {submitError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {submitError}
+            </div>
+          ) : null}
           <div className="space-y-2">
             <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Identificador de Lote</label>
             <div className="relative group">
@@ -163,64 +164,77 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
               <input 
                 autoFocus
                 placeholder="Ej: LOTE-2024-001"
-                className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-sm text-white placeholder:text-gray-700 outline-none focus:border-blue-500/50 focus:bg-blue-500/[0.02] transition-all"
+                className="ui-input w-full rounded-2xl py-3.5 pl-12 pr-4 text-sm text-slate-900 placeholder:text-gray-700 outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-100 focus:bg-blue-500/[0.02] transition-all duration-200 ease-out"
                 value={nroOrden} 
-                onChange={(e) => setNroOrden(e.target.value)} 
+                onChange={(e) => setNroOrden(e.target.value)}
               />
             </div>
           </div>
 
           <div className="space-y-2">
             <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 text-blue-500/80">Seleccionar Producto (Fórmula)</label>
-            <div className="relative">
-              <div className="relative group">
-                <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
-                <input 
-                  placeholder="Buscar fórmula..."
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-sm text-white outline-none focus:border-blue-500/50 transition-all"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setShowResults(true);
-                  }}
-                  onFocus={() => setShowResults(true)}
-                />
+            <select
+              className="ui-input w-full rounded-2xl py-3.5 px-4 text-sm text-slate-900 outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-100 transition-all duration-200 ease-out"
+              value={selectedFormula?.uid ?? ""}
+              onChange={(e) => {
+                const found = formulaOptions.find((f) => f.uid === e.target.value) ?? null;
+                setSelectedFormula(found);
+              }}
+            >
+              <option value="">Seleccioná una fórmula activa</option>
+              {formulaOptions.map((f) => (
+                <option key={f.uid} value={f.uid}>
+                  {f.nombre_producto} · v{f.version}
+                </option>
+              ))}
+            </select>
+            {formulaOptions.length === 0 ? <p className="text-xs text-amber-600">No hay fórmulas activas disponibles.</p> : null}
+            {selectedFormula ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
+                <p>Producto: <strong>{selectedFormula.nombre_producto}</strong></p>
+                <p>Versión: <strong>v{selectedFormula.version}</strong></p>
+                <p>
+                  Proteína objetivo: <strong>
+                    {typeof selectedFormula.proteina_calculada_pct === 'number'
+                      ? `${selectedFormula.proteina_calculada_pct.toFixed(2)}%`
+                      : 'Sin dato'}
+                  </strong>
+                </p>
+                <p>
+                  Costo/kg: <strong>
+                    {typeof selectedFormula.costo_por_kg === 'number'
+                      ? `ARS ${selectedFormula.costo_por_kg.toFixed(4)}`
+                      : 'Sin dato'}
+                  </strong>
+                </p>
+                <p>
+                  Costo/ton: <strong>
+                    {typeof selectedFormula.costo_por_tonelada === 'number'
+                      ? `ARS ${selectedFormula.costo_por_tonelada.toFixed(2)}`
+                      : 'Sin dato'}
+                  </strong>
+                </p>
               </div>
-              
-              {showResults && filteredFormulas.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-[#161b26] border border-white/10 rounded-2xl overflow-hidden z-50 shadow-2xl max-h-[200px] overflow-y-auto">
-                  {filteredFormulas.map(f => (
-                    <button 
-                      key={f.uid}
-                      onClick={() => handleSelectFormula(f)}
-                      className="w-full px-5 py-3 text-left hover:bg-white/5 flex items-center justify-between group transition-colors"
-                    >
-                      <span className="text-sm text-gray-300 group-hover:text-white">{f.nombre_producto}</span>
-                      <FiChevronRight className="text-gray-600 opacity-0 group-hover:opacity-100 transition-all" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            ) : null}
           </div>
 
           <div className="space-y-2">
             <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Volumen de Producción</label>
-            <div className="flex bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden focus-within:border-blue-500 transition-all">
+            <div className="flex bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden focus-within:border-blue-500 transition-all duration-200 ease-out">
               <div className="relative flex-1 group">
                 <FiTarget className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
                 <input 
                   type="number" 
                   placeholder="0.00"
-                  className="w-full bg-transparent py-3.5 pl-12 pr-4 text-sm text-white outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  value={pesoObjetivo} 
+                  className="w-full bg-transparent py-3.5 pl-12 pr-4 text-sm text-slate-900 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  value={pesoObjetivo}
                   onChange={(e) => setPesoObjetivo(e.target.value === "" ? "" : Number(e.target.value))} 
                 />
               </div>
               <select 
                 value={unidad} 
                 onChange={(e) => setUnidad(e.target.value as 'KG' | 'TON')} 
-                className="bg-[#161b26] text-[10px] font-black text-blue-400 px-4 outline-none border-l border-white/10 cursor-pointer hover:bg-blue-500/5 transition-colors"
+                className="bg-slate-50 text-[10px] font-black text-blue-400 px-4 outline-none border-l border-slate-200 cursor-pointer hover:bg-blue-500/5 transition-colors"
               >
                 <option value="KG">KG</option>
                 <option value="TON">TON</option>
@@ -240,7 +254,7 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             </div>
           )}
 
-          <div className="p-5 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between">
+          <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest block">Inversión Estimada</span>
               <div className="flex items-baseline gap-1">
@@ -250,7 +264,7 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                 </span>
               </div>
             </div>
-            <div className="text-right border-l border-white/5 pl-4">
+            <div className="text-right border-l border-slate-200 pl-4">
               <span className="text-[8px] font-black text-gray-600 uppercase block">Costo x Kg</span>
               <span className="text-xs font-bold text-emerald-400/80">
                 ARS {datosInversion ? datosInversion.costoPorKg.toFixed(3) : "0.00"}
@@ -259,21 +273,21 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
           </div>
         </div>
 
-        <footer className="px-8 py-6 border-t border-white/5 flex gap-4 bg-white/[0.01]">
+        <footer className="px-8 py-6 border-t border-slate-200 flex gap-4 bg-slate-50">
           <button 
             onClick={onClose} 
             type="button" 
-            className="flex-1 py-3 rounded-xl text-[10px] font-black uppercase text-gray-500 hover:bg-white/5 transition-all"
+            className="flex-1 py-3 rounded-xl text-[10px] font-black uppercase text-gray-500 hover:bg-slate-100 transition-all duration-200 ease-out"
           >
             CANCELAR
           </button>
           <button 
             onClick={handleCrearOrden} 
             type="button" 
-            disabled={!isFormValid || isCalculando} 
-            className="flex-[2] py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800/50 disabled:text-gray-600 text-white rounded-xl text-[10px] font-black uppercase shadow-xl shadow-blue-900/20 transition-all flex items-center justify-center gap-2 active:scale-95"
+            disabled={!isFormValid || isCalculando || isSubmitting}
+            className="flex-[2] py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl text-[10px] font-black uppercase shadow-xl shadow-blue-900/20 transition-all duration-200 ease-out flex items-center justify-center gap-2 active:scale-95"
           >
-            {isCalculando ? (
+            {isCalculando || isSubmitting ? (
               <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             ) : (
               <>

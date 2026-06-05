@@ -1,512 +1,453 @@
-import Swal from "sweetalert2";
-import { Card } from "../../../shared/components/card";
+import { useEffect, useMemo, useState } from 'react';
+import Swal from 'sweetalert2';
+import { Card } from '../../../shared/components/card';
+import { ApiService } from '../../../infrastructure/api';
+import { ControlEstado, type StockProductoTerminado } from '../types';
+import type { Formula } from '../../formulas/types';
 
-type EstadoProducto = "OK" | "Bajo" | "Crítico";
+type EstadoProductoUi = 'OK' | 'Bajo' | 'Crítico';
 
-interface ProductoComercial {
+interface ProductoUi {
   uid: string;
   nombre: string;
   stockKg: number;
   silo: string;
-  costoArsTon: number;
-  ultimaProduccion: string;
-  formula: string;
-  ultimaOrden: string;
+  lote: string;
+  estadoUi: EstadoProductoUi;
+  fechaIngreso: string;
+  orden: string;
+  costoArsTon?: number;
+  proteinaObjetivoPct?: number;
+  detalleInsumos: StockProductoTerminado['detalle_insumos'][];
 }
 
-interface IngredienteComercial {
-  nombre: string;
-  porcentaje: number;
-}
+const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
 
-interface FormulaComercial {
-  nombre: string;
-  version: number;
-  ingredientes: IngredienteComercial[];
-  costoArsTon: number;
-}
-
-interface StockDetalleComercial {
-  capacidadSiloKg: number;
-  notaSalida: string;
-}
-
-const productosComerciales: ProductoComercial[] = [
-  {
-    uid: "pt-001",
-    nombre: "Alimento Lechera",
-    stockKg: 18400,
-    silo: "Silo PT-01",
-    costoArsTon: 196500,
-    ultimaProduccion: "2026-05-18",
-    formula: "Lechera Alta Producción v3",
-    ultimaOrden: "OP-458",
-  },
-  {
-    uid: "pt-002",
-    nombre: "Pellet Cerdo Crecimiento",
-    stockKg: 7900,
-    silo: "Silo PT-02",
-    costoArsTon: 214200,
-    ultimaProduccion: "2026-05-17",
-    formula: "Cerdo Crecimiento 28-70 v2",
-    ultimaOrden: "OP-455",
-  },
-  {
-    uid: "pt-003",
-    nombre: "Recría 18%",
-    stockKg: 3200,
-    silo: "Silo PT-03",
-    costoArsTon: 228900,
-    ultimaProduccion: "2026-05-14",
-    formula: "Recría Engorde 350kg v1",
-    ultimaOrden: "OP-449",
-  },
-  {
-    uid: "pt-004",
-    nombre: "Engorde Intensivo",
-    stockKg: 5600,
-    silo: "Silo PT-04",
-    costoArsTon: 221400,
-    ultimaProduccion: "2026-05-16",
-    formula: "Engorde Intensivo v2",
-    ultimaOrden: "OP-452",
-  },
-];
-
-const formulasComerciales: Record<string, FormulaComercial> = {
-  "pt-001": {
-    nombre: "Lechera Alta Producción",
-    version: 3,
-    costoArsTon: 196500,
-    ingredientes: [
-      { nombre: "Maíz", porcentaje: 30 },
-      { nombre: "Soja", porcentaje: 22 },
-      { nombre: "Afrechillo", porcentaje: 18 },
-      { nombre: "Núcleo vitamínico", porcentaje: 5 },
-      { nombre: "Sal", porcentaje: 1 },
-      { nombre: "Otros", porcentaje: 24 },
-    ],
-  },
-  "pt-002": {
-    nombre: "Cerdo Crecimiento 28-70",
-    version: 2,
-    costoArsTon: 214200,
-    ingredientes: [
-      { nombre: "Maíz", porcentaje: 42 },
-      { nombre: "Soja", porcentaje: 26 },
-      { nombre: "Afrechillo", porcentaje: 18 },
-      { nombre: "Núcleo vitamínico", porcentaje: 4 },
-      { nombre: "Sal", porcentaje: 2 },
-      { nombre: "Otros", porcentaje: 8 },
-    ],
-  },
-  "pt-003": {
-    nombre: "Recría Engorde 18%",
-    version: 1,
-    costoArsTon: 228900,
-    ingredientes: [
-      { nombre: "Maíz", porcentaje: 36 },
-      { nombre: "Soja", porcentaje: 28 },
-      { nombre: "Afrechillo", porcentaje: 14 },
-      { nombre: "Núcleo vitamínico", porcentaje: 6 },
-      { nombre: "Sal", porcentaje: 2 },
-      { nombre: "Otros", porcentaje: 14 },
-    ],
-  },
-  "pt-004": {
-    nombre: "Engorde Intensivo",
-    version: 2,
-    costoArsTon: 221400,
-    ingredientes: [
-      { nombre: "Maíz", porcentaje: 40 },
-      { nombre: "Soja", porcentaje: 24 },
-      { nombre: "Afrechillo", porcentaje: 20 },
-      { nombre: "Núcleo vitamínico", porcentaje: 5 },
-      { nombre: "Sal", porcentaje: 1 },
-      { nombre: "Otros", porcentaje: 10 },
-    ],
-  },
+const formatDate = (value: string) => {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return 'Sin dato';
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const stockDetalleComercial: Record<string, StockDetalleComercial> = {
-  "pt-001": {
-    capacidadSiloKg: 30000,
-    notaSalida: "Sin dato",
-  },
-  "pt-002": {
-    capacidadSiloKg: 22000,
-    notaSalida: "Próxima salida estimada a cliente mayorista en etapa operativa.",
-  },
-  "pt-003": {
-    capacidadSiloKg: 18000,
-    notaSalida: "Sin dato",
-  },
-  "pt-004": {
-    capacidadSiloKg: 25000,
-    notaSalida: "Reserva de despacho proyectada; integración comercial en etapa operativa.",
-  },
+const mapEstado = (estado: StockProductoTerminado['estado']): EstadoProductoUi => {
+  if (estado === ControlEstado.CRITICO) return 'Crítico';
+  if (estado === ControlEstado.BAJO) return 'Bajo';
+  return 'OK';
 };
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(value);
-
-const formatKg = (value: number) => `${value.toLocaleString("es-AR")} kg`;
-
-const formatTon = (value: number) => `${value.toLocaleString("es-AR", { maximumFractionDigits: 2 })} ton`;
-
-const formatDate = (value: string) =>
-  new Date(`${value}T00:00:00`).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
-
-const getStatusByRatio = (stockKg: number, capacidadKg: number): EstadoProducto => {
-  if (capacidadKg <= 0) return "Crítico";
-  const ratio = (stockKg / capacidadKg) * 100;
-  if (ratio <= 20) return "Crítico";
-  if (ratio <= 40) return "Bajo";
-  return "OK";
+const getStatusStyles = (status: EstadoProductoUi) => {
+  if (status === 'Crítico') return 'bg-red-500/20 text-red-300';
+  if (status === 'Bajo') return 'bg-amber-500/20 text-amber-300';
+  return 'bg-emerald-500/20 text-emerald-300';
 };
 
-const getStatusStyles = (status: EstadoProducto) => {
-  if (status === "Crítico") return "bg-red-500/20 text-red-300";
-  if (status === "Bajo") return "bg-amber-500/20 text-amber-300";
-  return "bg-emerald-500/20 text-emerald-300";
+const toArrayDetalle = (detalle: StockProductoTerminado['detalle_insumos']) => {
+  if (!detalle) return [];
+  return Array.isArray(detalle) ? detalle : [detalle];
 };
 
-const getRecomendacionOperativa = (estado: EstadoProducto) => {
-  if (estado === "Crítico") return "Priorizar orden inmediata y reservar capacidad de silo para reposición.";
-  if (estado === "Bajo") return "Programar corrida de producción en el próximo turno operativo.";
-  return "Mantener ritmo actual y monitorear cobertura comercial semanal.";
-};
+const toUi = (item: StockProductoTerminado): ProductoUi => ({
+  uid: item.uid,
+  nombre: item.nombre_producto || 'Sin dato',
+  stockKg: Number(item.cantidad_total ?? 0),
+  silo: item.nombre_silo || 'Sin dato',
+  lote: item.lote || 'Sin dato',
+  estadoUi: mapEstado(item.estado),
+  fechaIngreso: item.fecha_ingreso,
+  orden: item.numero_orden || item.id_orden || 'Sin dato',
+  costoArsTon: undefined,
+  proteinaObjetivoPct: undefined,
+  detalleInsumos: toArrayDetalle(item.detalle_insumos),
+});
 
-const openFormulaDetail = (producto: ProductoComercial) => {
-  const formula = formulasComerciales[producto.uid];
-  const ingredientes = formula?.ingredientes ?? [];
-  const costoTon = formula?.costoArsTon ?? producto.costoArsTon;
+const formatProteina = (value?: number) => (
+  typeof value === 'number' ? `${value.toFixed(2)}%` : 'Sin dato'
+);
 
-  const ingredientesHtml = ingredientes.length
-    ? ingredientes
-        .map((item) => {
-          const kgTon = item.porcentaje * 10;
-          return `<tr>
-            <td style="padding: 8px 0; color: #e5e7eb;">${item.nombre}</td>
-            <td style="padding: 8px 0; color: #93c5fd; text-align: right;">${item.porcentaje}%</td>
-            <td style="padding: 8px 0; color: #cbd5e1; text-align: right;">${kgTon.toLocaleString("es-AR")} kg/ton</td>
-          </tr>`;
-        })
-        .join("")
-    : `<tr><td colspan="3" style="padding: 8px 0; color: #9ca3af;">Sin dato</td></tr>`;
-
+const openFormulaDetail = (producto: ProductoUi) => {
   void Swal.fire({
     title: `Fórmula de ${producto.nombre}`,
     html: `
-      <div style="text-align:left; color:#f8fafc; font-size:14px;">
-        <p style="margin:0 0 6px;"><strong>Fórmula asociada:</strong> ${formula?.nombre ?? "Sin dato"}</p>
-        <p style="margin:0 0 14px;"><strong>Versión:</strong> ${formula ? `v${formula.version}` : "Sin dato"}</p>
-        <table style="width:100%; border-collapse:collapse; border-top:1px solid rgba(255,255,255,0.12); border-bottom:1px solid rgba(255,255,255,0.12); margin: 8px 0 12px;">
-          <thead>
-            <tr>
-              <th style="text-align:left; padding:8px 0; color:#93c5fd;">Ingrediente</th>
-              <th style="text-align:right; padding:8px 0; color:#93c5fd;">%</th>
-              <th style="text-align:right; padding:8px 0; color:#93c5fd;">kg/ton</th>
-            </tr>
-          </thead>
-          <tbody>${ingredientesHtml}</tbody>
-        </table>
-        <p style="margin:0 0 6px;"><strong>Costo estimado por tonelada:</strong> ${formatCurrency(costoTon)}</p>
+      <div style="text-align:left; color:#0f172a; font-size:14px;">
+        <p style="margin:0 0 8px;"><strong>Lote PT:</strong> ${producto.lote}</p>
+        <p style="margin:0 0 8px;"><strong>Orden asociada:</strong> ${producto.orden}</p>
+        <p style="margin:0 0 8px;"><strong>Proteína objetivo:</strong> ${formatProteina(producto.proteinaObjetivoPct)}</p>
+        <p style="margin:0;"><strong>Fórmula:</strong> Información de fórmula disponible en módulo Fórmulas</p>
       </div>
     `,
-    background: "#0d121b",
-    color: "#fff",
-    confirmButtonColor: "#2563eb",
-    confirmButtonText: "Cerrar",
-    width: 760,
+    background: '#ffffff',
+    color: '#0f172a',
+    confirmButtonColor: '#2563eb',
+    confirmButtonText: 'Cerrar',
+    width: 620,
   });
 };
 
-const openStockDetail = (producto: ProductoComercial) => {
-  const detalle = stockDetalleComercial[producto.uid];
-  const formula = formulasComerciales[producto.uid];
-  const capacidad = detalle?.capacidadSiloKg ?? 0;
-  const ocupacion = capacidad > 0 ? Math.min(100, Math.round((producto.stockKg / capacidad) * 100)) : 0;
-  const valorEstimado = (producto.stockKg / 1000) * producto.costoArsTon;
-  const estado = getStatusByRatio(producto.stockKg, capacidad);
-  const ingredientes = formula?.ingredientes.slice(0, 4).map((item) => item.nombre).join(", ") || "Sin dato";
+const openStockDetail = (producto: ProductoUi) => {
+  const ingredientes = producto.detalleInsumos
+    .slice(0, 5)
+    .map((i) => `${i.nombre_insumo || 'Sin dato'} (${Number(i.cantidad ?? 0).toLocaleString('es-AR')} ${i.unidad_medida || 'KG'})`)
+    .join(', ');
 
   void Swal.fire({
     title: `Ficha técnica · ${producto.nombre}`,
     html: `
-      <div style="text-align:left; color:#f8fafc; font-size:14px;">
-        <p style="margin:0 0 8px;"><strong>Fórmula asociada:</strong> ${producto.formula}</p>
-        <p style="margin:0 0 8px;"><strong>Ingredientes principales:</strong> ${ingredientes}</p>
-        <p style="margin:0 0 8px;"><strong>Costo por tonelada:</strong> ${formatCurrency(producto.costoArsTon)}</p>
-        <p style="margin:0 0 8px;"><strong>Silo asociado:</strong> ${producto.silo || "Sin dato"}</p>
+      <div style="text-align:left; color:#0f172a; font-size:14px;">
+        <p style="margin:0 0 8px;"><strong>Lote PT:</strong> ${producto.lote || 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Silo asociado:</strong> ${producto.silo || 'Sin dato'}</p>
         <p style="margin:0 0 8px;"><strong>Stock disponible:</strong> ${formatKg(producto.stockKg)}</p>
-        <p style="margin:0 0 8px;"><strong>Capacidad estimada silo:</strong> ${capacidad ? formatKg(capacidad) : "Sin dato"}</p>
-        <p style="margin:0 0 8px;"><strong>Ocupación:</strong> ${ocupacion}%</p>
-        <p style="margin:0 0 8px;"><strong>Estado operativo:</strong> ${estado}</p>
-        <p style="margin:0 0 8px;"><strong>Última producción:</strong> ${producto.ultimaProduccion ? formatDate(producto.ultimaProduccion) : "Sin dato"}</p>
-        <p style="margin:0 0 8px;"><strong>Valor estimado:</strong> ${formatCurrency(Math.round(valorEstimado))}</p>
-        <p style="margin:0 0 8px;"><strong>Recomendación operativa:</strong> ${getRecomendacionOperativa(estado)}</p>
-        <p style="margin:0; color:#9ca3af;"><strong>Nota salida/venta:</strong> ${detalle?.notaSalida || "Información disponible en etapa operativa"}</p>
+        <p style="margin:0 0 8px;"><strong>Estado operativo:</strong> ${producto.estadoUi}</p>
+        <p style="margin:0 0 8px;"><strong>Último ingreso:</strong> ${formatDate(producto.fechaIngreso)}</p>
+        <p style="margin:0 0 8px;"><strong>Proteína objetivo:</strong> ${formatProteina(producto.proteinaObjetivoPct)}</p>
+        <p style="margin:0 0 8px;"><strong>Detalle insumos:</strong> ${ingredientes || 'Sin dato'}</p>
+        <p style="margin:0; color:#334155;"><strong>Valor estimado:</strong> Valor estimado no disponible</p>
       </div>
     `,
-    background: "#0d121b",
-    color: "#fff",
-    confirmButtonColor: "#2563eb",
-    confirmButtonText: "Cerrar",
+    background: '#ffffff',
+    color: '#0f172a',
+    confirmButtonColor: '#2563eb',
+    confirmButtonText: 'Cerrar',
     width: 640,
   });
 };
 
-const openProgramacionModal = (productoPreseleccionado?: ProductoComercial) => {
-  const options = productosComerciales
-    .map((producto) => `<option value="${producto.uid}" ${productoPreseleccionado?.uid === producto.uid ? "selected" : ""}>${producto.nombre}</option>`)
-    .join("");
+const openProgramacionModal = (productos: ProductoUi[], productoPreseleccionado?: ProductoUi) => {
+  const options = productos
+    .map((producto) => `<option value="${producto.uid}" ${productoPreseleccionado?.uid === producto.uid ? 'selected' : ''}>${producto.nombre} · ${producto.lote}</option>`)
+    .join('');
 
   void Swal.fire({
-    title: "Programar producción",
+    title: 'Programar producción',
     html: `
-      <div style="text-align:left; color:#f8fafc; font-size:14px;">
+      <div style="text-align:left; color:#0f172a; font-size:14px;">
         <label style="display:block; margin: 0 0 6px;">Producto</label>
-        <select id="prod-select" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;">
+        <select id="prod-select" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;">
           <option value="">Seleccionar producto</option>
           ${options}
         </select>
         <label style="display:block; margin: 0 0 6px;">Cantidad a producir</label>
-        <input id="prod-cantidad" type="number" min="1" step="100" placeholder="Ej: 10000" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
+        <input id="prod-cantidad" type="number" min="1" step="100" placeholder="Ej: 10000" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
         <label style="display:block; margin: 0 0 6px;">Unidad</label>
-        <select id="prod-unidad" style="width:100%; margin-bottom:10px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;">
+        <select id="prod-unidad" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;">
           <option value="kg">kg</option>
           <option value="ton">ton</option>
         </select>
         <label style="display:block; margin: 0 0 6px;">Fecha estimada</label>
-        <input id="prod-fecha" type="date" style="width:100%; margin-bottom:12px; background:#111827; color:#fff; border:1px solid #374151; border-radius:8px; padding:8px;" />
-        <p id="prod-formula" style="margin:0 0 6px; color:#cbd5e1;"><strong>Fórmula sugerida:</strong> Sin dato</p>
-        <p id="prod-silo" style="margin:0 0 6px; color:#cbd5e1;"><strong>Silo destino:</strong> Sin dato</p>
-        <p id="prod-mp" style="margin:0; color:#9ca3af;"><strong>Stock materia prima estimado:</strong> Información disponible en etapa operativa</p>
+        <input id="prod-fecha" type="date" style="width:100%; margin-bottom:12px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+        <p id="prod-formula" style="margin:0 0 6px; color:#334155;"><strong>Fórmula sugerida:</strong> Información de fórmula disponible en módulo Fórmulas</p>
+        <p id="prod-silo" style="margin:0 0 6px; color:#334155;"><strong>Silo destino:</strong> Sin dato</p>
+        <p id="prod-mp" style="margin:0; color:#64748b;"><strong>Stock materia prima estimado:</strong> Cobertura de MP disponible en validación operativa</p>
       </div>
     `,
-    background: "#0d121b",
-    color: "#fff",
+    background: '#ffffff',
+    color: '#0f172a',
     showCancelButton: true,
-    confirmButtonColor: "#2563eb",
-    cancelButtonColor: "#334155",
-    confirmButtonText: "Programar",
-    cancelButtonText: "Cerrar",
+    confirmButtonColor: '#2563eb',
+    cancelButtonColor: '#334155',
+    confirmButtonText: 'Programar',
+    cancelButtonText: 'Cerrar',
     width: 680,
     didOpen: () => {
-      const select = document.getElementById("prod-select") as HTMLSelectElement | null;
-      const formulaLine = document.getElementById("prod-formula");
-      const siloLine = document.getElementById("prod-silo");
-      const stockLine = document.getElementById("prod-mp");
-      const fechaInput = document.getElementById("prod-fecha") as HTMLInputElement | null;
+      const select = document.getElementById('prod-select') as HTMLSelectElement | null;
+      const siloLine = document.getElementById('prod-silo');
+      const fechaInput = document.getElementById('prod-fecha') as HTMLInputElement | null;
 
       if (fechaInput) {
         const today = new Date();
-        const isoDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split("T")[0];
+        const isoDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
         fechaInput.value = isoDate;
       }
 
       const refreshPreview = () => {
-        const selected = productosComerciales.find((item) => item.uid === select?.value);
-        const formula = selected ? formulasComerciales[selected.uid] : null;
-        if (formulaLine) {
-          formulaLine.innerHTML = `<strong>Fórmula sugerida:</strong> ${formula ? `${formula.nombre} v${formula.version}` : "Sin dato"}`;
-        }
+        const selected = productos.find((item) => item.uid === select?.value);
         if (siloLine) {
-          siloLine.innerHTML = `<strong>Silo destino:</strong> ${selected?.silo || "Sin dato"}`;
-        }
-        if (stockLine) {
-          stockLine.innerHTML = `<strong>Stock materia prima estimado:</strong> ${selected ? "Cobertura operativa suficiente para 1 lote estándar." : "Información disponible en etapa operativa"}`;
+          siloLine.innerHTML = `<strong>Silo destino:</strong> ${selected?.silo || 'Sin dato'}`;
         }
       };
 
-      select?.addEventListener("change", refreshPreview);
+      select?.addEventListener('change', refreshPreview);
       refreshPreview();
     },
     preConfirm: () => {
-      const selectedUid = (document.getElementById("prod-select") as HTMLSelectElement | null)?.value;
-      const cantidadRaw = (document.getElementById("prod-cantidad") as HTMLInputElement | null)?.value;
-      const unidad = (document.getElementById("prod-unidad") as HTMLSelectElement | null)?.value || "kg";
-      const fecha = (document.getElementById("prod-fecha") as HTMLInputElement | null)?.value;
+      const selectedUid = (document.getElementById('prod-select') as HTMLSelectElement | null)?.value;
+      const cantidadRaw = (document.getElementById('prod-cantidad') as HTMLInputElement | null)?.value;
+      const unidad = (document.getElementById('prod-unidad') as HTMLSelectElement | null)?.value || 'kg';
+      const fecha = (document.getElementById('prod-fecha') as HTMLInputElement | null)?.value;
 
-      const selected = productosComerciales.find((item) => item.uid === selectedUid);
+      const selected = productos.find((item) => item.uid === selectedUid);
       const cantidad = Number(cantidadRaw);
 
       if (!selected) {
-        Swal.showValidationMessage("Seleccioná un producto para programar.");
+        Swal.showValidationMessage('Seleccioná un producto para programar.');
         return;
       }
 
       if (!Number.isFinite(cantidad) || cantidad <= 0) {
-        Swal.showValidationMessage("Ingresá una cantidad válida mayor a 0.");
+        Swal.showValidationMessage('Ingresá una cantidad válida mayor a 0.');
         return;
       }
 
-      return {
-        producto: selected,
-        formula: formulasComerciales[selected.uid],
-        cantidad,
-        unidad,
-        fecha: fecha || "Sin dato",
-      };
+      return { selected, cantidad, unidad, fecha: fecha || 'Sin dato' };
     },
   }).then((result) => {
     if (!result.isConfirmed || !result.value) return;
 
-    const { producto, formula, cantidad, unidad, fecha } = result.value as {
-      producto: ProductoComercial;
-      formula?: FormulaComercial;
+    const { selected, cantidad, unidad, fecha } = result.value as {
+      selected: ProductoUi;
       cantidad: number;
       unidad: string;
       fecha: string;
     };
 
-    const cantidadLabel = unidad === "ton" ? formatTon(cantidad) : formatKg(cantidad);
+    const cantidadLabel = unidad === 'ton'
+      ? `${cantidad.toLocaleString('es-AR', { maximumFractionDigits: 2 })} ton`
+      : formatKg(cantidad);
+
     void Swal.fire({
-      icon: "success",
-      title: "Programación preparada",
+      icon: 'success',
+      title: 'Programación preparada',
       html: `
-        <div style="text-align:left; color:#f8fafc; font-size:14px;">
-          <p style="margin:0 0 8px;">Orden preparada para <strong>${cantidadLabel}</strong> de <strong>${producto.nombre}</strong>, usando fórmula <strong>${formula ? `${formula.nombre} v${formula.version}` : "Sin dato"}</strong>.</p>
-          <p style="margin:0 0 8px;"><strong>Silo destino:</strong> ${producto.silo || "Sin dato"}</p>
-          <p style="margin:0;"><strong>Fecha estimada:</strong> ${fecha === "Sin dato" ? "Sin dato" : formatDate(fecha)}</p>
+        <div style="text-align:left; color:#0f172a; font-size:14px;">
+          <p style="margin:0 0 8px;">Orden preparada para <strong>${cantidadLabel}</strong> de <strong>${selected.nombre}</strong>.</p>
+          <p style="margin:0 0 8px;"><strong>Silo destino:</strong> ${selected.silo || 'Sin dato'}</p>
+          <p style="margin:0;"><strong>Fecha estimada:</strong> ${fecha === 'Sin dato' ? 'Sin dato' : formatDate(fecha)}</p>
         </div>
       `,
-      background: "#0d121b",
-      color: "#fff",
-      confirmButtonColor: "#2563eb",
-      confirmButtonText: "Aceptar",
+      background: '#ffffff',
+      color: '#0f172a',
+      confirmButtonColor: '#2563eb',
+      confirmButtonText: 'Aceptar',
     });
   });
 };
 
 const ProductosPage = () => {
-  const productosConMetricas = productosComerciales.map((item) => {
-    const capacidadKg = stockDetalleComercial[item.uid]?.capacidadSiloKg || 0;
-    const ocupacionPct = capacidadKg > 0 ? Math.min(100, Math.round((item.stockKg / capacidadKg) * 100)) : 0;
-    const estado = getStatusByRatio(item.stockKg, capacidadKg);
-    const valorEstimado = (item.stockKg / 1000) * item.costoArsTon;
+  const [items, setItems] = useState<ProductoUi[]>([]);
+  const [formulas, setFormulas] = useState<Formula[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState<'TODOS' | EstadoProductoUi>('TODOS');
 
-    return {
-      ...item,
-      capacidadKg,
-      ocupacionPct,
-      estado,
-      valorEstimado,
+  useEffect(() => {
+    const load = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const [stock, formulasData] = await Promise.all([
+          ApiService.stockPT.getAll(),
+          ApiService.formulas.findAll().catch(() => [] as Formula[]),
+        ]);
+        setItems(stock.map(toUi));
+        setFormulas(formulasData);
+      } catch (error: unknown) {
+        setItems([]);
+        setLoadError(error instanceof Error ? error.message : 'No se pudo cargar el stock de productos terminados.');
+      } finally {
+        setIsLoading(false);
+      }
     };
-  });
+    void load();
+  }, []);
 
-  const totalStock = productosConMetricas.reduce((acc, item) => acc + item.stockKg, 0);
-  const productosConRiesgo = productosConMetricas.filter((item) => item.estado !== "OK").length;
-  const valorEstimado = productosConMetricas.reduce((acc, item) => acc + item.valorEstimado, 0);
-  const capacidadPromedio = productosConMetricas.length
-    ? Math.round(productosConMetricas.reduce((acc, item) => acc + item.ocupacionPct, 0) / productosConMetricas.length)
-    : 0;
+  const formulaByNombre = useMemo(() => {
+    const activeSorted = [...formulas].sort((a, b) => b.version - a.version);
+    const map = new Map<string, Formula>();
+    activeSorted.forEach((f) => {
+      const key = (f.nombre_producto ?? '').trim().toLowerCase();
+      if (!key || map.has(key)) return;
+      map.set(key, f);
+    });
+    return map;
+  }, [formulas]);
+
+  const itemsWithProteina = useMemo(() => (
+    items.map((item) => {
+      const formula = formulaByNombre.get(item.nombre.trim().toLowerCase());
+      return {
+        ...item,
+        proteinaObjetivoPct: typeof formula?.proteina_calculada_pct === 'number'
+          ? formula.proteina_calculada_pct
+          : undefined,
+      };
+    })
+  ), [items, formulaByNombre]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return itemsWithProteina.filter((item) => {
+      if (estadoFiltro !== 'TODOS' && item.estadoUi !== estadoFiltro) return false;
+      if (!q) return true;
+      return (
+        item.nombre.toLowerCase().includes(q) ||
+        item.lote.toLowerCase().includes(q) ||
+        item.silo.toLowerCase().includes(q)
+      );
+    });
+  }, [itemsWithProteina, query, estadoFiltro]);
+
+  const totalStock = filtered.reduce((acc, item) => acc + item.stockKg, 0);
+  const productosConRiesgo = filtered.filter((item) => item.estadoUi !== 'OK').length;
+  const proteinasDisponibles = filtered
+    .map((item) => item.proteinaObjetivoPct)
+    .filter((value): value is number => typeof value === 'number');
+  const proteinaPromedio = proteinasDisponibles.length > 0
+    ? proteinasDisponibles.reduce((acc, value) => acc + value, 0) / proteinasDisponibles.length
+    : null;
 
   return (
     <div className="space-y-6">
       <section>
         <p className="text-sm uppercase tracking-widest text-blue-400">Inventario</p>
         <h1 className="text-3xl font-bold mt-2">Stock de Productos Terminados</h1>
-        <p className="text-gray-400 mt-2">Control operativo de producto terminado con alertas automáticas, capacidad y valorización en ARS.</p>
+        <p className="text-slate-500 mt-2">Control operativo de producto terminado conectado a stock PT.</p>
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Stock total PT</p>
-          <h2 className="text-3xl font-black mt-2">{totalStock.toLocaleString("es-AR")} kg</h2>
+          <p className="text-xs uppercase tracking-widest text-slate-500">Stock total PT</p>
+          <h2 className="text-3xl font-black mt-2">{totalStock.toLocaleString('es-AR')} kg</h2>
         </Card>
         <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Productos críticos/bajos</p>
+          <p className="text-xs uppercase tracking-widest text-slate-500">Productos críticos/bajos</p>
           <h2 className="text-3xl font-black mt-2 text-amber-300">{productosConRiesgo}</h2>
         </Card>
         <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Valor estimado PT</p>
-          <h2 className="text-2xl font-black mt-2 text-blue-300">{formatCurrency(Math.round(valorEstimado))}</h2>
+          <p className="text-xs uppercase tracking-widest text-slate-500">Valor estimado PT</p>
+          <h2 className="text-2xl font-black mt-2 text-blue-300">Valor estimado no disponible</h2>
         </Card>
         <Card>
-          <p className="text-xs uppercase tracking-widest text-gray-400">Capacidad ocupada promedio</p>
-          <h2 className="text-3xl font-black mt-2 text-cyan-300">{capacidadPromedio}%</h2>
+          <p className="text-xs uppercase tracking-widest text-slate-500">Cobertura promedio</p>
+          <h2 className="text-2xl font-black mt-2 text-cyan-300">Cobertura no disponible</h2>
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-widest text-slate-500">Proteína objetivo PT</p>
+          <h2 className="text-2xl font-black mt-2 text-indigo-300">{proteinaPromedio !== null ? `${proteinaPromedio.toFixed(2)}%` : 'Sin dato'}</h2>
         </Card>
       </section>
 
       <Card>
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-5">
           <h2 className="text-xl font-semibold">Stock de Productos Terminados</h2>
-          <button
-            type="button"
-            onClick={() => openProgramacionModal()}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-medium"
-          >
-            Registrar producción
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar producto, lote o silo"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+            />
+            <select
+              value={estadoFiltro}
+              onChange={(e) => setEstadoFiltro(e.target.value as 'TODOS' | EstadoProductoUi)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+            >
+              <option value="TODOS">Todos</option>
+              <option value="OK">OK</option>
+              <option value="Bajo">Bajo</option>
+              <option value="Crítico">Crítico</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => openProgramacionModal(filtered.length > 0 ? filtered : itemsWithProteina)}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-medium text-white"
+            >
+              Registrar producción
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-auto">
-          <table className="w-full min-w-[1300px]">
-            <thead>
-              <tr className="text-left border-b border-white/10 text-gray-400 text-sm">
-                <th className="pb-3">Producto</th>
-                <th className="pb-3">Fórmula asociada</th>
-                <th className="pb-3">Silo</th>
-                <th className="pb-3">Stock disponible</th>
-                <th className="pb-3">Capacidad</th>
-                <th className="pb-3">Ocupación %</th>
-                <th className="pb-3">Costo estimado ARS/ton</th>
-                <th className="pb-3">Valor estimado ARS</th>
-                <th className="pb-3">Última producción</th>
-                <th className="pb-3">Estado</th>
-                <th className="pb-3">Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {productosConMetricas.map((producto) => (
-                <tr key={producto.uid} className="border-b border-white/5 hover:bg-white/5">
-                  <td className="py-3 font-medium">{producto.nombre}</td>
-                  <td className="py-3">{producto.formula}</td>
-                  <td className="py-3">{producto.silo || "Sin dato"}</td>
-                  <td className="py-3">{formatKg(producto.stockKg)}</td>
-                  <td className="py-3">{producto.capacidadKg > 0 ? formatKg(producto.capacidadKg) : "Sin dato"}</td>
-                  <td className="py-3">{producto.ocupacionPct}%</td>
-                  <td className="py-3">{formatCurrency(producto.costoArsTon)}/ton</td>
-                  <td className="py-3">{formatCurrency(Math.round(producto.valorEstimado))}</td>
-                  <td className="py-3">{formatDate(producto.ultimaProduccion)}</td>
-                  <td className="py-3">
-                    <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${getStatusStyles(producto.estado)}`}>
-                      {producto.estado}
-                    </span>
-                  </td>
-                  <td className="py-3">
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openFormulaDetail(producto)}
-                        className="text-xs px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20"
-                      >
-                        Ver fórmula
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openStockDetail(producto)}
-                        className="text-xs px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20"
-                      >
-                        Ver stock
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openProgramacionModal(producto)}
-                        className="text-xs px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20"
-                      >
-                        Programar producción
-                      </button>
-                    </div>
-                  </td>
+        {loadError ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-4">
+            {loadError}
+          </div>
+        ) : null}
+
+        {isLoading ? (
+          <div className="py-16 text-center">
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
+            <p className="mt-3 text-sm text-slate-500">Cargando stock de productos terminados...</p>
+          </div>
+        ) : null}
+
+        {!isLoading && itemsWithProteina.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            No hay productos terminados cargados.
+          </div>
+        ) : null}
+
+        {!isLoading && itemsWithProteina.length > 0 && filtered.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            No hay resultados para la búsqueda/filtro aplicado.
+          </div>
+        ) : null}
+
+        {!isLoading && filtered.length > 0 ? (
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-auto">
+            <table className="w-full min-w-[1300px] text-left">
+              <thead>
+                <tr className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
+                  <th className="pb-3">Producto</th>
+                  <th className="pb-3">Fórmula asociada</th>
+                  <th className="pb-3">Proteína objetivo</th>
+                  <th className="pb-3">Lote PT</th>
+                  <th className="pb-3">Orden</th>
+                  <th className="pb-3">Silo</th>
+                  <th className="pb-3">Stock disponible</th>
+                  <th className="pb-3">Valor estimado ARS</th>
+                  <th className="pb-3">Último ingreso</th>
+                  <th className="pb-3">Estado</th>
+                  <th className="pb-3">Acción</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filtered.map((producto) => (
+                  <tr key={producto.uid} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 font-medium">{producto.nombre}</td>
+                    <td className="py-3">Información de fórmula disponible en módulo Fórmulas</td>
+                    <td className="py-3">{formatProteina(producto.proteinaObjetivoPct)}</td>
+                    <td className="py-3">{producto.lote || 'Sin dato'}</td>
+                    <td className="py-3">{producto.orden || 'Sin dato'}</td>
+                    <td className="py-3">{producto.silo || 'Sin dato'}</td>
+                    <td className="py-3">{formatKg(producto.stockKg)}</td>
+                    <td className="py-3">Valor estimado no disponible</td>
+                    <td className="py-3">{formatDate(producto.fechaIngreso)}</td>
+                    <td className="py-3">
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${getStatusStyles(producto.estadoUi)}`}>
+                        {producto.estadoUi}
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openFormulaDetail(producto)}
+                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Ver fórmula
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openStockDetail(producto)}
+                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Ver stock
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openProgramacionModal(filtered, producto)}
+                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Programar producción
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </Card>
     </div>
   );

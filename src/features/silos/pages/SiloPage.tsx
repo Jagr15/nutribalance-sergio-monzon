@@ -13,7 +13,7 @@ const MySwal = withReactContent(Swal);
 
 const SiloPage: React.FC = () => {
   // Extraemos lógica y estado del Hook de Silos
-  const { silos, isLoading, getAll, remove } = useSilos();
+  const { silos, isLoading, getAll, remove, loadError } = useSilos();
 
   // Estados locales de la UI
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,20 +38,20 @@ const SiloPage: React.FC = () => {
   // Confirmación de eliminación con el estilo de la plataforma
   const handleDelete = async (uid: string) => {
     const result = await MySwal.fire({
-      title: '¿Eliminar silo?',
-      text: "Esta acción no se puede revertir y afectará la trazabilidad",
+      title: '¿Desactivar silo?',
+      text: "Se marcará como inactivo/no disponible para nuevas operaciones.",
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#2563eb',
       cancelButtonColor: '#1f2937',
-      confirmButtonText: 'SÍ, ELIMINAR',
+      confirmButtonText: 'SÍ, DESACTIVAR',
       cancelButtonText: 'CANCELAR',
-      background: '#0d121b',
-      color: '#ffffff',
+      background: '#ffffff',
+      color: '#0f172a',
       customClass: {
-        popup: 'border border-white/10 rounded-2xl',
+        popup: 'border border-slate-200 rounded-2xl',
         title: 'text-sm font-bold uppercase tracking-widest',
-        htmlContainer: 'text-xs text-gray-400',
+        htmlContainer: 'text-xs text-slate-500',
         confirmButton: 'rounded-xl px-6 py-3 text-xs font-bold',
         cancelButton: 'rounded-xl px-6 py-3 text-xs font-bold'
       }
@@ -61,13 +61,23 @@ const SiloPage: React.FC = () => {
       const success = await remove(uid);
       if (success) {
         MySwal.fire({
-          title: 'Eliminado',
+          title: 'Desactivado',
           icon: 'success',
-          background: '#0d121b',
-          color: '#ffffff',
+          background: '#ffffff',
+          color: '#0f172a',
           timer: 1500,
           showConfirmButton: false,
-          customClass: { popup: 'border border-white/10 rounded-2xl' }
+          customClass: { popup: 'border border-slate-200 rounded-2xl' }
+        });
+      } else {
+        MySwal.fire({
+          title: 'No se pudo desactivar',
+          text: 'Ocurrió un error al desactivar el silo.',
+          icon: 'error',
+          background: '#ffffff',
+          color: '#0f172a',
+          confirmButtonColor: '#2563eb',
+          customClass: { popup: 'border border-slate-200 rounded-2xl' }
         });
       }
     }
@@ -76,8 +86,8 @@ const SiloPage: React.FC = () => {
   // Filtrado optimizado por búsqueda
   const filteredSilos = useMemo(() => {
     return silos.filter(s => 
-      s.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+      (s.nombre ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.descripcion ?? '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [searchTerm, silos]);
 
@@ -89,10 +99,10 @@ const SiloPage: React.FC = () => {
           <p className="text-[10px] uppercase tracking-[0.4em] text-blue-500 font-bold mb-2">
             INFRAESTRUCTURA & ALMACÉN
           </p>
-          <h1 className="text-4xl font-extrabold text-white tracking-tight">
+          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
             Gestión de Silos
           </h1>
-          <p className="text-gray-400 text-sm mt-1">Configuración de puntos de almacenamiento para trazabilidad total.</p>
+          <p className="text-slate-500 text-sm mt-1">Configuración de puntos de almacenamiento para trazabilidad total.</p>
         </div>
 
         <button 
@@ -106,22 +116,22 @@ const SiloPage: React.FC = () => {
 
       {/* Grid de Resumen Rápido */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-[#0d121b] border border-white/5 p-6 rounded-2xl flex items-center gap-4">
+        <div className="bg-white border border-slate-200 p-6 rounded-2xl flex items-center gap-4">
           <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500">
             <FiDatabase size={20} />
           </div>
           <div>
             <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Silos Registrados</p>
-            <h4 className="text-xl font-bold text-white">{silos.length}</h4>
+            <h4 className="text-xl font-bold text-slate-900">{silos.length}</h4>
           </div>
         </div>
       </section>
 
       {/* Sección Principal de Datos */}
-      <section className="bg-[#0d121b] border border-white/5 rounded-3xl overflow-hidden">
-        <div className="p-6 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <section className="bg-white border border-slate-200 rounded-3xl overflow-hidden">
+        <div className="p-6 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-white font-bold text-lg">Catálogo de Ubicaciones</h2>
+            <h2 className="text-slate-900 font-bold text-lg">Catálogo de Ubicaciones</h2>
             <p className="text-gray-500 text-xs">Puntos físicos de recepción de mercadería.</p>
           </div>
           
@@ -130,12 +140,18 @@ const SiloPage: React.FC = () => {
             <input 
               type="text" 
               placeholder="Buscar por nombre o descripción..." 
-              className="w-full md:w-80 bg-white/[0.03] border border-white/10 rounded-xl py-2.5 pl-11 pr-4 text-sm text-gray-300 focus:border-blue-500/50 outline-none transition-all" 
+              className="w-full md:w-80 bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-11 pr-4 text-sm text-slate-700 focus:border-blue-500/50 outline-none transition-all" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
+
+        {loadError ? (
+          <div className="mx-6 mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {loadError}
+          </div>
+        ) : null}
 
         {/* Estado de Carga Idéntico a Insumos */}
         {isLoading && silos.length === 0 ? (
@@ -152,6 +168,7 @@ const SiloPage: React.FC = () => {
             data={filteredSilos} 
             onEdit={handleOpenModal} 
             onDelete={handleDelete} 
+            emptyMessage={silos.length === 0 ? 'No hay silos activos registrados.' : 'No se encontraron silos para la búsqueda.'}
           />
         )}
       </section>
@@ -160,6 +177,7 @@ const SiloPage: React.FC = () => {
       {isModalOpen && (
         <SiloModal 
           silo={selectedSilo} 
+          existingSilos={silos}
           onClose={handleCloseModal} 
           onSuccess={getAll} 
         />

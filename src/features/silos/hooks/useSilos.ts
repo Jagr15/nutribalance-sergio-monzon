@@ -6,14 +6,18 @@ import type { Silo } from '../types/silo';
 export const useSilos = () => {
   const [silos, setSilos] = useState<Silo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const getAll = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const data = await siloService.getAll();
       setSilos(data);
     } catch (error) {
       console.error("Error cargando silos:", error);
+      setLoadError("No se pudo cargar el catálogo de silos.");
+      setSilos([]);
     } finally {
       setIsLoading(false);
     }
@@ -21,10 +25,15 @@ export const useSilos = () => {
 
   const create = async (data: Omit<Silo, 'uid'>) => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const nuevo = await siloService.create(data);
       setSilos((prev) => [...prev, nuevo]);
       return nuevo;
+    } catch (error) {
+      console.error("Error creando silo:", error);
+      setLoadError("No se pudo crear el silo.");
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -32,10 +41,15 @@ export const useSilos = () => {
 
   const update = async (uid: string, data: Partial<Silo>) => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const actualizado = await siloService.update(uid, data);
       setSilos((prev) => prev.map((s) => (s.uid === uid ? actualizado : s)));
       return actualizado;
+    } catch (error) {
+      console.error("Error actualizando silo:", error);
+      setLoadError("No se pudo actualizar el silo.");
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -43,15 +57,17 @@ export const useSilos = () => {
 
 // src/features/silos/hooks/useSilos.ts (o useInsumos.ts)
 const remove = async (uid: string): Promise<boolean> => { // Agrega el tipo de retorno
+    setLoadError(null);
     try {
       await siloService.delete(uid); // Este servicio devuelve void
       setSilos((prev) => prev.filter((item) => item.uid !== uid));
       return true; // <--- DEBES DEVOLVER TRUE
     } catch (error) {
       console.error("Error al eliminar:", error);
+      setLoadError("No se pudo desactivar el silo.");
       return false; // <--- DEBES DEVOLVER FALSE
     }
   };
 
-  return { silos, isLoading, getAll, create, update, remove };
+  return { silos, isLoading, getAll, create, update, remove, loadError };
 };

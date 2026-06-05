@@ -54,4 +54,5 @@ VITE_USE_MOCKS=false
 ## Alcance Sprint 1
 
 - Incluye: roles, usuarios, proveedores, insumos, silos, lotes MP, ledger de movimientos.
-- No incluye aún: auth UI, órdenes complejas, trazabilidad completa, producto terminado, finanzas/cheques.
+- Incluye Fase 1 Core Operativo: fórmulas, ingredientes de fórmula, órdenes de producción, consumo por lotes, stock PT y eventos de trazabilidad.
+- No incluye aún: auth UI y flujo financiero/cheques.
