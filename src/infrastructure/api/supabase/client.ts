@@ -1,13 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false';
-const hasSupabaseConfig = Boolean(supabaseUrl) && Boolean(supabaseAnonKey);
-
-if (!useMocks && !hasSupabaseConfig) {
-  console.warn('[supabase] VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY no configuradas.');
-}
+import { runtimeConfig } from '../runtimeConfig';
 
 const failSafeClient = new Proxy(
   {},
@@ -18,6 +10,6 @@ const failSafeClient = new Proxy(
   }
 );
 
-export const supabaseClient = hasSupabaseConfig
-  ? createClient(supabaseUrl as string, supabaseAnonKey as string)
+export const supabaseClient = runtimeConfig.mode === 'supabase'
+  ? createClient(runtimeConfig.supabaseUrl as string, runtimeConfig.supabaseAnonKey as string)
   : (failSafeClient as ReturnType<typeof createClient>);

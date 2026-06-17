@@ -82,6 +82,7 @@ describe('productionFlow - finalization plan', () => {
       'Producto Test',
       'PT-TEST-001',
       'Silo Lechera',
+      1000,
       980,
       plan.detalle,
       map
@@ -98,7 +99,7 @@ describe('productionFlow - finalization plan', () => {
     const map = new Map<string, string>();
 
     expect(() =>
-      buildFinalizationPlan('OP-TEST-002', 'Producto Test', 'PT-TEST-002', 'Silo Lechera', 980, plan.detalle, map)
+      buildFinalizationPlan('OP-TEST-002', 'Producto Test', 'PT-TEST-002', 'Silo Lechera', 1000, 980, plan.detalle, map)
     ).toThrowError(/No se encontró lote físico/);
   });
 });

@@ -15,6 +15,7 @@ const estadoLabel: Record<EstadoAlerta, string> = {
   pendiente: 'Pendiente',
   'en seguimiento': 'En seguimiento',
   atendida: 'Atendida',
+  descartada: 'Descartada',
 };
 
 const priorityScore: Record<PrioridadAlerta, number> = {
@@ -27,6 +28,7 @@ const statusScore: Record<EstadoAlerta, number> = {
   pendiente: 2,
   'en seguimiento': 1,
   atendida: 0,
+  descartada: 0,
 };
 
 const escapeHtml = (value: unknown) =>
@@ -114,7 +116,7 @@ const AlertasPage = () => {
       cancelButtonColor: '#94a3b8',
     });
     if (!result.isConfirmed) return;
-    updateEstado(alerta.id, 'atendida');
+    await updateEstado(alerta.id, 'atendida');
   };
 
   return (
@@ -137,7 +139,7 @@ const AlertasPage = () => {
             <option value="todas">Todas las prioridades</option><option value="critica">Críticas</option><option value="media">Medias</option><option value="informativa">Informativas</option>
           </select>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'todos' | EstadoAlerta)} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm">
-            <option value="todos">Todos los estados</option><option value="pendiente">Pendiente</option><option value="en seguimiento">En seguimiento</option><option value="atendida">Atendida</option>
+            <option value="todos">Todos los estados</option><option value="pendiente">Pendiente</option><option value="en seguimiento">En seguimiento</option><option value="atendida">Atendida</option><option value="descartada">Descartada</option>
           </select>
         </div>
 
@@ -169,9 +171,9 @@ const AlertasPage = () => {
                 <TableActions className="justify-start">
                   <TableActionButton label="Detalle" tone="secondary" onClick={() => openDetalle(alerta)} />
                   <TableActionButton label="Origen" tone="secondary" onClick={() => openOrigen(alerta)} />
-                  {alerta.estado === 'pendiente' ? <TableActionButton label="Seguimiento" tone="secondary" onClick={() => updateEstado(alerta.id, 'en seguimiento')} /> : null}
-                  {alerta.estado !== 'atendida' ? <TableActionButton label="Finalizar" tone="success" onClick={() => void handleFinalizar(alerta)} /> : null}
-                  {alerta.estado === 'atendida' ? <TableActionButton label="Reabrir" tone="secondary" onClick={() => updateEstado(alerta.id, 'pendiente')} /> : null}
+                  {alerta.estado === 'pendiente' ? <TableActionButton label="Seguimiento" tone="secondary" onClick={() => void updateEstado(alerta.id, 'en seguimiento')} /> : null}
+                  {alerta.estado !== 'atendida' && alerta.estado !== 'descartada' ? <TableActionButton label="Finalizar" tone="success" onClick={() => void handleFinalizar(alerta)} /> : null}
+                  {alerta.estado === 'atendida' ? <TableActionButton label="Reabrir" tone="secondary" onClick={() => void updateEstado(alerta.id, 'pendiente')} /> : null}
                 </TableActions>
               </div>
             </div>

@@ -1,0 +1,91 @@
+import { describe, expect, it } from 'vitest';
+import { buildStockMPResumen } from './stockResumen';
+import type { Insumo, StockMateriaPrima } from '../types/insumo';
+
+const insumos: Insumo[] = [
+  { uid: 'i-1', nombre: 'Maíz', unidad_medida: 'KG', umbral_alerta: 100, categoria: 'Grano' },
+  { uid: 'i-2', nombre: 'Soja', unidad_medida: 'KG', umbral_alerta: 50, categoria: 'Grano' },
+];
+
+const lotes: StockMateriaPrima[] = [
+  {
+    uid: 'stk-1',
+    id_insumo: 'i-1',
+    id_proveedor: 'p-1',
+    lote: 'L-1',
+    cantidad_actual: 120,
+    cantidad_inicial: 120,
+    cantidad_comprometida: 20,
+    costo_unitario: 1,
+    costo_total: 120,
+    fecha_ingreso: new Date('2026-06-01T00:00:00Z'),
+    remito_nro: 'R-1',
+    ubicacion: 'Silo 1',
+    id_usuario: 'usr-1',
+    createdAt: new Date('2026-06-01T00:00:00Z'),
+    updatedAt: new Date('2026-06-01T00:00:00Z'),
+  },
+  {
+    uid: 'stk-2',
+    id_insumo: 'i-1',
+    id_proveedor: 'p-2',
+    lote: 'L-2',
+    cantidad_actual: 60,
+    cantidad_inicial: 60,
+    cantidad_comprometida: 10,
+    costo_unitario: 1,
+    costo_total: 60,
+    fecha_ingreso: new Date('2026-06-02T00:00:00Z'),
+    remito_nro: 'R-2',
+    ubicacion: 'Silo 2',
+    id_usuario: 'usr-1',
+    createdAt: new Date('2026-06-02T00:00:00Z'),
+    updatedAt: new Date('2026-06-02T00:00:00Z'),
+  },
+  {
+    uid: 'stk-3',
+    id_insumo: 'i-2',
+    id_proveedor: 'p-1',
+    lote: 'L-3',
+    cantidad_actual: 70,
+    cantidad_inicial: 70,
+    cantidad_comprometida: 0,
+    costo_unitario: 1,
+    costo_total: 70,
+    fecha_ingreso: new Date('2026-06-03T00:00:00Z'),
+    remito_nro: 'R-3',
+    ubicacion: 'Silo 1',
+    id_usuario: 'usr-1',
+    createdAt: new Date('2026-06-03T00:00:00Z'),
+    updatedAt: new Date('2026-06-03T00:00:00Z'),
+  },
+];
+
+describe('buildStockMPResumen', () => {
+  it('agrupa por insumo y calcula estado con umbral configurable', () => {
+    const resumen = buildStockMPResumen(lotes, insumos);
+
+    expect(resumen).toEqual([
+      {
+        insumo_id: 'i-1',
+        nombre_insumo: 'Maíz',
+        unidad: 'KG',
+        stock_actual: 180,
+        stock_comprometido: 30,
+        stock_disponible: 150,
+        umbral_alerta: 100,
+        estado: 'BAJO',
+      },
+      {
+        insumo_id: 'i-2',
+        nombre_insumo: 'Soja',
+        unidad: 'KG',
+        stock_actual: 70,
+        stock_comprometido: 0,
+        stock_disponible: 70,
+        umbral_alerta: 50,
+        estado: 'BAJO',
+      },
+    ]);
+  });
+});

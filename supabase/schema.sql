@@ -44,6 +44,33 @@ create table if not exists public.proveedores (
   constraint proveedores_email_chk check (position('@' in email) > 1)
 );
 
+create table if not exists public.clientes (
+  id uuid primary key default gen_random_uuid(),
+  legacy_uid text unique,
+  nombre text not null,
+  razon_social text,
+  cuit text,
+  email text,
+  telefono text,
+  direccion text,
+  localidad text,
+  provincia text,
+  segmento text,
+  ubicacion text,
+  contacto text,
+  producto_principal text,
+  condicion_comercial text,
+  estado text not null default 'Activo',
+  observaciones text,
+  ultima_compra date,
+  saldo_pendiente_ars numeric(14,2) not null default 0,
+  esta_activo boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  constraint clientes_saldo_non_negative check (saldo_pendiente_ars >= 0)
+);
+
 create table if not exists public.insumos (
   id uuid primary key default gen_random_uuid(),
   legacy_uid text unique,
@@ -118,6 +145,7 @@ create table if not exists public.stock_movimientos (
 create index if not exists idx_usuarios_role_id on public.usuarios(role_id);
 create index if not exists idx_usuarios_deleted_at on public.usuarios(deleted_at);
 create index if not exists idx_proveedores_deleted_at on public.proveedores(deleted_at);
+create index if not exists idx_clientes_deleted_at on public.clientes(deleted_at);
 create index if not exists idx_insumos_deleted_at on public.insumos(deleted_at);
 create index if not exists idx_silos_deleted_at on public.silos(deleted_at);
 create index if not exists idx_stock_lotes_mp_insumo_id on public.stock_lotes_mp(insumo_id);
@@ -141,6 +169,8 @@ for each row execute function public.set_updated_at();
 create trigger trg_usuarios_updated_at before update on public.usuarios
 for each row execute function public.set_updated_at();
 create trigger trg_proveedores_updated_at before update on public.proveedores
+for each row execute function public.set_updated_at();
+create trigger trg_clientes_updated_at before update on public.clientes
 for each row execute function public.set_updated_at();
 create trigger trg_insumos_updated_at before update on public.insumos
 for each row execute function public.set_updated_at();

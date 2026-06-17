@@ -1,7 +1,8 @@
 import { supabaseClient } from '../../../infrastructure/api/supabase/client';
 import { ApiService } from '../../../infrastructure/api';
-import type { FinanzasKPIs, FinanzasReportes, MovimientoFinanciero } from '../types';
+import type { CostosFormulaVsReal, FinanzasInventarioResumen, FinanzasKPIs, FinanzasReportes, MovimientoFinanciero } from '../types';
 import { normalizeKpis } from '../utils/finanzasCalculations';
+import { buildCostosFormulaVsReal } from '../utils/costosFormulaVsReal';
 import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
 
@@ -28,6 +29,18 @@ type FlujoCajaMovimientoRow = {
   centros_costo?: CentroCostoNested;
   estado: MovimientoFinanciero['estado'];
 };
+type CostosFormulaVsRealRow = {
+  producto_formula_id: string | null;
+  nombre_producto: string;
+  version_formula: number | null;
+  costo_formulado_kg: number | string | null;
+  costo_formulado_ton: number | string | null;
+  costo_real_kg: number | string | null;
+  costo_real_ton: number | string | null;
+  variacion_abs: number | string | null;
+  variacion_pct: number | string | null;
+  ultima_op: string | null;
+};
 
 const emptyReportes: FinanzasReportes = {
   flujo_caja_mensual: [],
@@ -36,6 +49,9 @@ const emptyReportes: FinanzasReportes = {
   rentabilidad_por_formula: [],
   costo_operativo_mensual: [],
 };
+
+const sum = (values: number[]) => values.reduce((acc, value) => acc + value, 0);
+const num = (value: unknown) => Number(value ?? 0);
 
 export const finanzasService = {
   async getKPIs(): Promise<FinanzasKPIs> {
@@ -77,6 +93,43 @@ export const finanzasService = {
       centro_costo: row.centros_costo?.nombre,
       estado: row.estado,
     }));
+  },
+
+  async getCostosComparativos(): Promise<CostosFormulaVsReal[]> {
+    const { data, error } = await supabaseClient
+      .from('vw_costos_formula_vs_real')
+      .select('producto_formula_id,nombre_producto,version_formula,costo_formulado_kg,costo_formulado_ton,costo_real_kg,costo_real_ton,variacion_abs,variacion_pct,ultima_op')
+      .order('nombre_producto', { ascending: true });
+
+    if (error) throw error;
+
+    return ((data ?? []) as CostosFormulaVsRealRow[]).map((row) => ({
+      producto_formula_id: row.producto_formula_id ?? '',
+      nombre_producto: row.nombre_producto,
+      version_formula: row.version_formula === null ? null : Number(row.version_formula),
+      costo_formulado_kg: num(row.costo_formulado_kg),
+      costo_formulado_ton: num(row.costo_formulado_ton),
+      costo_real_kg: num(row.costo_real_kg),
+      costo_real_ton: num(row.costo_real_ton),
+      variacion_abs: num(row.variacion_abs),
+      variacion_pct: num(row.variacion_pct),
+      ultima_op: row.ultima_op,
+    }));
+  },
+
+  async getInventarioResumen(): Promise<FinanzasInventarioResumen> {
+    const [lotesMp, resumenPt] = await Promise.all([
+      ApiService.stockMP.getAllLotes(),
+      ApiService.stockPT.getResumen(),
+    ]);
+
+    const valorStockMp = sum(lotesMp.map((lote) => Number(lote.cantidad_actual ?? 0) * Number(lote.costo_unitario ?? 0)));
+    const valorStockPt = sum(resumenPt.map((item) => Number(item.valor_monetario ?? 0)));
+    return {
+      valor_stock_mp: valorStockMp,
+      valor_stock_pt: valorStockPt,
+      valor_inventario_total: valorStockMp + valorStockPt,
+    };
   },
 
   async createMovimiento(payload: CrearMovimientoPayload): Promise<void> {
@@ -122,18 +175,21 @@ export const finanzasService = {
     });
   },
 
-  async getOperationalFallback(): Promise<{ kpis: FinanzasKPIs; reportes: FinanzasReportes; movimientos: MovimientoFinanciero[] }> {
-    const [ordenes, lotes, formulas] = await Promise.all([
+  async getOperationalFallback(): Promise<{ kpis: FinanzasKPIs; reportes: FinanzasReportes; movimientos: MovimientoFinanciero[]; costosComparativos: CostosFormulaVsReal[]; inventario: FinanzasInventarioResumen }> {
+    const [ordenes, lotes, formulas, resumenPt] = await Promise.all([
       ApiService.ordenes.getAll(),
       ApiService.stockMP.getAllLotes(),
       ApiService.formulas.findAll(),
+      ApiService.stockPT.getResumen(),
     ]);
 
     const costoProduccion = ordenes.reduce((acc, orden) => acc + Number(orden.costo_total_insumos ?? 0), 0);
-    const valorizacionInventario = lotes.reduce(
+    const valorStockMp = lotes.reduce(
       (acc, lote) => acc + Number(lote.cantidad_actual ?? 0) * Number(lote.costo_unitario ?? 0),
       0,
     );
+    const valorStockPt = resumenPt.reduce((acc, item) => acc + Number(item.valor_monetario ?? 0), 0);
+    const valorizacionInventario = valorStockMp + valorStockPt;
 
     const perdidaMerma = ordenes.reduce((acc, orden) => {
       const mermaPct = Number(orden.merma_manual ?? 0);
@@ -201,8 +257,21 @@ export const finanzasService = {
       cuentas_por_pagar: 0,
       cuentas_por_cobrar: 0,
       perdida_merma: perdidaMerma,
+      valor_stock_mp: valorStockMp,
+      valor_stock_pt: valorStockPt,
+      valor_inventario_total: valorizacionInventario,
     };
 
-    return { kpis, reportes, movimientos: [] };
+    return {
+      kpis,
+      reportes,
+      movimientos: [],
+      costosComparativos: buildCostosFormulaVsReal(formulas, ordenes),
+      inventario: {
+        valor_stock_mp: valorStockMp,
+        valor_stock_pt: valorStockPt,
+        valor_inventario_total: valorizacionInventario,
+      },
+    };
   },
 };

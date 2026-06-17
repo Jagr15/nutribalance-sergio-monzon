@@ -30,4 +30,16 @@ describe('finanzasService', () => {
     const r = await finanzasService.getReportes();
     expect(r.flujo_caja_mensual).toHaveLength(1);
   });
+
+  it('obtiene comparativa de costos formulado vs real', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'vw_costos_formula_vs_real') {
+        return { select: () => ({ order: async () => ({ data: [{ producto_formula_id: 'for-1', nombre_producto: 'Balanceado X', version_formula: 2, costo_formulado_kg: 100, costo_formulado_ton: 100000, costo_real_kg: 120, costo_real_ton: 120000, variacion_abs: 20, variacion_pct: 20, ultima_op: 'OP-0001' }], error: null }) }) };
+      }
+      throw new Error('tabla inesperada');
+    });
+
+    const rows = await finanzasService.getCostosComparativos();
+    expect(rows[0].variacion_pct).toBe(20);
+  });
 });

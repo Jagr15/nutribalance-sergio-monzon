@@ -21,5 +21,8 @@ export const normalizeKpis = (kpi: Partial<FinanzasKPIs>): FinanzasKPIs => {
     cuentas_por_pagar: Number(kpi.cuentas_por_pagar ?? 0),
     cuentas_por_cobrar: Number(kpi.cuentas_por_cobrar ?? 0),
     perdida_merma: Number(kpi.perdida_merma ?? 0),
+    valor_stock_mp: Number(kpi.valor_stock_mp ?? 0),
+    valor_stock_pt: Number(kpi.valor_stock_pt ?? 0),
+    valor_inventario_total: Number(kpi.valor_inventario_total ?? kpi.valorizacion_inventario ?? 0),
   };
 };

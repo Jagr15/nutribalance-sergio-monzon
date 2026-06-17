@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   FiX, FiActivity, FiLayers, FiCheck, 
@@ -7,7 +7,6 @@ import {
 import type { OrdenProduccion } from '../types/orden';
 import { ApiService } from '../../../infrastructure/api';
 import type { Silo } from '../../silos/types';
-import { dashboardOperativoService } from '../../dashboard/services/dashboardOperativoService';
 
 interface Props {
   orden: OrdenProduccion;
@@ -22,25 +21,18 @@ interface Props {
 
 const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => {
   const [merma, setMerma] = useState<number>(0);
-  const [loteSalida, setLoteSalida] = useState(`${orden.lote}-PT`);
+  const [cantidadReal, setCantidadReal] = useState<number>(orden.cantidad_real ?? orden.cantidad_objetivo);
   const [destinoSilo, setDestinoSilo] = useState("");
   const [silos, setSilos] = useState<Silo[]>([]);
-  const [lotesPt, setLotesPt] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const cantidadReal = Math.max(orden.cantidad_objetivo - merma, 0);
-  const lotesSugeridos = useMemo(() => lotesPt.slice(0, 20), [lotesPt]);
+  const loteSalida = `${orden.lote}-PT`;
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [silosData, trData] = await Promise.all([
-          ApiService.silos.getAll(),
-          dashboardOperativoService.getTrazabilidad(),
-        ]);
+        const silosData = await ApiService.silos.getAll();
         setSilos(silosData);
-        const uniqueLotes = Array.from(new Set(trData.map((t) => t.lote_pt).filter(Boolean) as string[]));
-        setLotesPt(uniqueLotes);
       } catch (error) {
         console.error('Error cargando selectores de finalización:', error);
       }
@@ -60,16 +52,16 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
       setSubmitError('Debes seleccionar un silo de destino.');
       return;
     }
+    if (Number.isNaN(cantidadReal) || cantidadReal <= 0) {
+      setSubmitError('La cantidad real debe ser mayor a 0.');
+      return;
+    }
     if (Number.isNaN(merma) || merma < 0) {
       setSubmitError('La merma no puede ser negativa.');
       return;
     }
     if (merma > orden.cantidad_objetivo) {
-      setSubmitError('La merma no puede superar la cantidad objetivo.');
-      return;
-    }
-    if (Number.isNaN(cantidadReal) || cantidadReal <= 0) {
-      setSubmitError('La cantidad real debe ser mayor a 0.');
+      setSubmitError('La merma no puede superar la cantidad planificada.');
       return;
     }
     setIsSubmitting(true);
@@ -106,6 +98,14 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
               {submitError}
             </div>
           ) : null}
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1.5 text-sm">
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">Producto / Fórmula</p>
+            <p className="font-semibold text-slate-900">{orden.nombre_producto || 'Sin dato'}</p>
+            <p className="text-slate-600">
+              Versión de fórmula: <strong>{typeof orden.version_formula === 'number' ? `v${orden.version_formula}` : 'Sin dato'}</strong>
+            </p>
+          </div>
           
           {/* LOTE DE SALIDA */}
           <div className="space-y-1.5">
@@ -114,16 +114,11 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
             </label>
             <input 
               type="text"
-              autoFocus
-              placeholder="EJ: PT-2026-001"
+              readOnly
               value={loteSalida}
-              onChange={(e) => setLoteSalida(e.target.value)}
-              className="ui-input w-full rounded-xl py-2.5 px-4 text-[13px] text-slate-900 font-bold outline-none focus:border-blue-500/30 transition-all duration-200 ease-out placeholder:text-gray-800"
-              list="lotes-sugeridos"
+              className="ui-input w-full rounded-xl py-2.5 px-4 text-[13px] text-slate-900 font-bold outline-none bg-slate-50"
             />
-            <datalist id="lotes-sugeridos">
-              {lotesSugeridos.map((lote) => <option key={lote} value={lote} />)}
-            </datalist>
+            <p className="text-[10px] text-slate-500 ml-1">Se deriva automáticamente del número de OP.</p>
           </div>
 
           {/* DESTINO (SILO) - BUSCADOR SLIM */}
@@ -149,10 +144,23 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
             {silos.length === 0 ? <p className="text-xs text-amber-300">No hay silos cargados. Creá uno en el módulo Silos antes de finalizar.</p> : null}
           </div>
 
-          {/* GRID: MERMA Y RESULTADO */}
+          {/* GRID: CANTIDAD REAL Y MERMA */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[9px] font-black text-gray-500 uppercase ml-1 tracking-[0.2em] flex items-center gap-2">
+                <FiActivity size={10} className="text-emerald-500"/> Cantidad Real (KG)
+              </label>
+              <input 
+                type="number"
+                value={cantidadReal}
+                onChange={(e) => setCantidadReal(Number(e.target.value))}
+                onFocus={(e) => e.target.select()}
+                className="w-full bg-emerald-500/[0.02] border border-emerald-500/10 rounded-xl py-2.5 px-4 text-[13px] text-emerald-600 font-mono font-black outline-none focus:border-emerald-500/30 transition-all duration-200 ease-out [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2 ml-1">
                 <FiActivity size={10} className="text-red-500"/> Merma (KG)
               </label>
               <input 
@@ -162,16 +170,6 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
                 onFocus={(e) => e.target.select()}
                 className="w-full bg-red-500/[0.02] border border-red-500/10 rounded-xl py-2.5 px-4 text-[13px] text-red-400 font-mono font-black outline-none focus:border-red-500/30 transition-all duration-200 ease-out [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] block text-right pr-1">Total Neto Real</label>
-              <div className="w-full bg-emerald-500/5 border border-emerald-500/10 rounded-xl py-2 px-4 h-[41px] flex items-center justify-end">
-                <span className="text-sm font-mono font-black text-emerald-500 tracking-tighter">
-                  {cantidadReal.toLocaleString()}
-                  <small className="text-[9px] ml-1 opacity-50 uppercase">kg</small>
-                </span>
-              </div>
             </div>
           </div>
 
@@ -183,7 +181,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
              </div>
              <FiArrowRight className="text-gray-800" size={14}/>
              <div className="flex flex-col text-right">
-               <span className="text-[7px] font-black text-emerald-600 uppercase tracking-widest">A Ingresar</span>
+               <span className="text-[7px] font-black text-emerald-600 uppercase tracking-widest">Cantidad Real</span>
                <span className="text-[11px] font-black text-emerald-500 font-mono">{cantidadReal} kg</span>
              </div>
           </div>

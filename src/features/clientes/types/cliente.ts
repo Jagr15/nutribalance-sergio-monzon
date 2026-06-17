@@ -1,21 +1,34 @@
-export const TipoCliente = {
-  PERSONA: "PERSONA",
-  EMPRESA: "EMPRESA",
+export const EstadoCliente = {
+  ACTIVO: 'Activo',
+  EN_RIESGO: 'En riesgo',
+  SUSPENDIDO: 'Suspendido',
 } as const;
-export type TipoCliente = (typeof TipoCliente)[keyof typeof TipoCliente];
+
+export type EstadoCliente = (typeof EstadoCliente)[keyof typeof EstadoCliente];
 
 export interface Cliente {
   uid: string;
-  nombre_razon_social: string; // Nombre del cliente o nombre de la granja
-  ruc_dni: string; // Documento de identidad (DNI o RUC en Perú)
-  tipo: TipoCliente;
-  direccion: string;
-  telefono: string;
+  nombre: string;
+  razonSocial?: string;
+  cuit?: string;
   email?: string;
-  esta_activo: boolean; // Para borrado lógico
-  fecha_registro: Date;
-  
-  // Opcional: Para el historial rápido del cliente
-  ultima_compra?: Date;
-  saldo_pendiente?: number; // Si Sergio decide dar crédito en el futuro
+  telefono?: string;
+  direccion?: string;
+  localidad?: string;
+  provincia?: string;
+  segmento?: string;
+  ubicacion?: string;
+  contacto?: string;
+  productoPrincipal?: string;
+  condicionComercial?: string;
+  estado: EstadoCliente;
+  observaciones?: string;
+  ultimaCompra?: string;
+  saldoPendienteArs: number;
+  estaActivo: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
+
+export type ClienteCreatePayload = Omit<Cliente, 'uid' | 'createdAt' | 'updatedAt'>;
+export type ClienteUpdatePayload = Partial<Omit<Cliente, 'uid'>>;

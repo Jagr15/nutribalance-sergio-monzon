@@ -39,8 +39,9 @@ export const useAlertas = () => {
 
   const summary = useMemo(() => {
     const pendientes = alertas.filter((a) => a.estado === "pendiente").length;
-    const criticas = alertas.filter((a) => a.prioridad === "critica" && a.estado !== "atendida").length;
+    const criticas = alertas.filter((a) => a.prioridad === "critica" && a.estado !== "atendida" && a.estado !== "descartada").length;
     const seguimiento = alertas.filter((a) => a.estado === "en seguimiento").length;
+    const descartadas = alertas.filter((a) => a.estado === "descartada").length;
     const top = [...alertas]
       .sort((a, b) => {
         const score = (p: PrioridadAlerta) => (p === "critica" ? 3 : p === "media" ? 2 : 1);
@@ -48,12 +49,17 @@ export const useAlertas = () => {
       })
       .slice(0, 3);
 
-    return { pendientes, criticas, seguimiento, top };
+    return { pendientes, criticas, seguimiento, descartadas, top };
   }, [alertas]);
 
-  const updateEstado = (id: string, estado: EstadoAlerta) => {
-    setEstadoAlerta(id, estado);
-    refresh();
+  const updateEstado = async (id: string, estado: EstadoAlerta) => {
+    try {
+      await setEstadoAlerta(id, estado);
+      refresh();
+    } catch (error) {
+      console.error("Error actualizando alerta:", error);
+      setLoadError("No se pudo actualizar el estado de la alerta.");
+    }
   };
 
   return { alertas, summary, refresh, updateEstado, isLoading, loadError };

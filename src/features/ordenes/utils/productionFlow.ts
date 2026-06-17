@@ -91,23 +91,30 @@ export const buildFinalizationPlan = (
   nombreProducto: string,
   loteSalida: string,
   destinoSilo: string,
+  cantidadObjetivoKg: number,
   cantidadReal: number,
   detalle: DetalleInsumoLote[],
   stockLoteIdMap: Map<string, string>
 ): FinalizationPlanResult => {
+  const factor = cantidadObjetivoKg > 0 ? cantidadReal / cantidadObjetivoKg : 1;
   const movimientos = detalle.map((item) => {
     const loteId = stockLoteIdMap.get(item.id_lote);
     if (!loteId) {
       throw new Error(`No se encontró lote físico para ${item.id_lote}.`);
     }
 
+    const cantidadRealMP = Number((item.cantidad_usada * factor).toFixed(3));
+
     return {
       lote_id: loteId,
-      cantidad: item.cantidad_usada,
+      cantidad: cantidadRealMP,
       observaciones: `Consumo de orden ${ordenLegacyUid}`,
       metadata: {
         orden_legacy_uid: ordenLegacyUid,
         insumo_legacy_uid: item.id_insumo,
+        cantidad_planificada: item.cantidad_usada,
+        cantidad_real: cantidadRealMP,
+        factor_aplicado: factor,
       },
     };
   });

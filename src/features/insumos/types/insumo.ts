@@ -38,7 +38,7 @@ export interface Insumo {
 
   }
 
-  export interface StockMateriaPrima {
+export interface StockMateriaPrima {
     uid: string;
     id_insumo: string;
     id_proveedor: string;
@@ -56,4 +56,41 @@ export interface Insumo {
     id_usuario: string;  
     createdAt: Date;     
     updatedAt: Date;    
+}
+
+export type StockMPEstadoResumen = 'CRITICO' | 'BAJO' | 'OK';
+
+export interface StockMateriaPrimaResumen {
+  insumo_id: string;
+  nombre_insumo: string;
+  unidad: string;
+  stock_actual: number;
+  stock_comprometido: number;
+  stock_disponible: number;
+  umbral_alerta: number;
+  estado: StockMPEstadoResumen;
+}
+
+export interface HistorialCompraMP {
+  proveedor: string;
+  id_proveedor: string;
+  insumo: string;
+  id_insumo: string;
+  fecha_compra: string;
+  lote: string;
+  cantidad: number;
+  costo_unitario: number;
+  costo_total: number;
+}
+
+export interface UltimoPrecioPagadoInsumo {
+  insumo: string;
+  id_insumo: string;
+  ultimo_proveedor: string;
+  id_proveedor: string;
+  fecha_ultima_compra: string;
+  ultimo_precio: number;
+  precio_compra_anterior: number | null;
+  variacion_absoluta: number | null;
+  variacion_pct: number | null;
 }

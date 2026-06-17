@@ -7,17 +7,20 @@ interface OrdenRow {
   id: string;
   legacy_uid: string | null;
   lote: string;
+  formula_id: string | null;
   id_formula_legacy: string | null;
   nombre_producto: string;
   version_formula: number;
   cantidad_objetivo: number;
   cantidad_real: number | null;
   merma_manual: number | null;
+  silo_id: string | null;
   id_silo_legacy: string | null;
   destino_silo: string | null;
   estado: string;
   fecha_creacion: string;
   usuario_responsable: string;
+  usuario_id: string | null;
   costo_total_insumos: number;
 }
 
@@ -86,6 +89,56 @@ const toOrden = (row: OrdenRow, detalle: DetalleInsumoLote[]): OrdenProduccion =
   costo_total_insumos: Number(row.costo_total_insumos),
 });
 
+const buildDetalleRows = (
+  detallePlanificado: DetalleInsumoLote[],
+  stockMap: Awaited<ReturnType<typeof getStockMapByLegacyLote>>,
+  insumoMap: Awaited<ReturnType<typeof getInsumoIdMapByLegacy>>
+) => detallePlanificado.map((item) => {
+  const stockId = stockMap.byLegacy.get(item.id_lote) ?? stockMap.byLoteName.get(item.id_lote) ?? null;
+  const insumoId = insumoMap.get(item.id_insumo) ?? null;
+
+  return {
+    lote_id: stockId,
+    id_lote_legacy: item.id_lote,
+    insumo_id: insumoId,
+    id_insumo_legacy: item.id_insumo,
+    nombre_insumo: item.nombre_insumo,
+    cantidad_usada: item.cantidad_usada,
+    tipo_unidad: item.tipo_unidad,
+    costo_unitario: item.costo_unitario,
+    costo_total: item.costo_total,
+  };
+});
+
+const parseInputDetalle = (detalle: DetalleInsumoLote[] | undefined) => {
+  if (detalle === undefined) return undefined;
+  if (detalle.length === 0) {
+    throw new Error('La orden no tiene consumo planificado.');
+  }
+  return detalle;
+};
+
+const getCurrentDetalle = async (ordenId: string) => {
+  const detalleMap = await loadDetalleForOrdenIds([ordenId]);
+  return detalleMap.get(ordenId) ?? [];
+};
+
+const adjustStockForReleasedDetail = (
+  lotes: StockLoteForFlow[],
+  detalleActual: DetalleInsumoLote[]
+) => {
+  const clone = lotes.map((lote) => ({ ...lote }));
+  detalleActual.forEach((item) => {
+    const index = clone.findIndex((lote) => lote.legacy_uid === item.id_lote || lote.lote === item.id_lote);
+    if (index === -1) return;
+    clone[index] = {
+      ...clone[index],
+      cantidad_comprometida: Math.max(0, (clone[index].cantidad_comprometida ?? 0) - item.cantidad_usada),
+    };
+  });
+  return clone;
+};
+
 const getFormulaIdByLegacy = async (legacyUid: string): Promise<string | null> => {
   const { data, error } = await supabaseClient
     .from('formulas')
@@ -96,6 +149,18 @@ const getFormulaIdByLegacy = async (legacyUid: string): Promise<string | null> =
 
   if (error) throw error;
   return data?.id ?? null;
+};
+
+const getFormulaLegacyById = async (formulaId: string): Promise<string | null> => {
+  const { data, error } = await supabaseClient
+    .from('formulas')
+    .select('legacy_uid')
+    .eq('id', formulaId)
+    .is('deleted_at', null)
+    .maybeSingle<{ legacy_uid: string | null }>();
+
+  if (error) throw error;
+  return data?.legacy_uid ?? null;
 };
 
 const getSiloIdByLegacy = async (legacyUid: string | null): Promise<string | null> => {
@@ -213,7 +278,7 @@ const getStockLotesForFlow = async (): Promise<StockLoteForFlow[]> => {
 const getOrdenByLegacy = async (legacyUid: string) => {
   const { data, error } = await supabaseClient
     .from('ordenes_produccion')
-    .select('id,legacy_uid,lote,id_formula_legacy,nombre_producto,version_formula,cantidad_objetivo,cantidad_real,merma_manual,id_silo_legacy,destino_silo,estado,fecha_creacion,usuario_responsable,costo_total_insumos')
+    .select('id,legacy_uid,lote,formula_id,id_formula_legacy,nombre_producto,version_formula,cantidad_objetivo,cantidad_real,merma_manual,silo_id,id_silo_legacy,destino_silo,estado,fecha_creacion,usuario_responsable,usuario_id,costo_total_insumos')
     .eq('legacy_uid', legacyUid)
     .is('deleted_at', null)
     .single<OrdenRow>();
@@ -260,68 +325,47 @@ export const supabaseOrdenService = {
 
     const detallePlanificado = payload.detalle_insumos.length > 0 ? payload.detalle_insumos : fifoPlan.detalle;
 
-    const { data, error } = await supabaseClient
-      .from('ordenes_produccion')
-      .insert({
-        legacy_uid: payload.lote,
-        lote: payload.lote,
-        formula_id: formulaId,
-        id_formula_legacy: payload.id_formula,
-        nombre_producto: payload.nombre_producto,
-        version_formula: payload.version_formula,
-        cantidad_objetivo: payload.cantidad_objetivo,
-        cantidad_real: payload.cantidad_real ?? null,
-        merma_manual: payload.merma_manual ?? null,
-        silo_id: siloId,
-        id_silo_legacy: payload.id_silo,
-        destino_silo: payload.destino_silo,
-        estado: payload.estado,
-        fecha_creacion: payload.fecha_creacion,
-        usuario_responsable: payload.usuario_responsable,
-        usuario_id: usuarioId,
-        costo_total_insumos: payload.costo_total_insumos || fifoPlan.costoTotal,
-      })
-      .select('id,legacy_uid,lote,id_formula_legacy,nombre_producto,version_formula,cantidad_objetivo,cantidad_real,merma_manual,id_silo_legacy,destino_silo,estado,fecha_creacion,usuario_responsable,costo_total_insumos')
-      .single();
-
-    if (error) throw error;
-
     if (detallePlanificado.length === 0) {
       throw new Error('La orden no tiene consumo planificado.');
     }
 
     const [stockMap, insumoMap] = await Promise.all([getStockMapByLegacyLote(), getInsumoIdMapByLegacy()]);
+    const rows = buildDetalleRows(detallePlanificado, stockMap, insumoMap);
 
-    const rows = detallePlanificado.map((item) => {
-      const stockId = stockMap.byLegacy.get(item.id_lote) ?? stockMap.byLoteName.get(item.id_lote) ?? null;
-      const insumoId = insumoMap.get(item.id_insumo) ?? null;
-
-      return {
-        orden_id: data.id,
-        lote_id: stockId,
-        id_lote_legacy: item.id_lote,
-        insumo_id: insumoId,
-        id_insumo_legacy: item.id_insumo,
-        nombre_insumo: item.nombre_insumo,
-        cantidad_usada: item.cantidad_usada,
-        tipo_unidad: item.tipo_unidad,
-        costo_unitario: item.costo_unitario,
-        costo_total: item.costo_total,
-      };
+    const { data, error } = await supabaseClient.rpc('crear_orden_produccion_con_reserva', {
+      p_legacy_uid: '',
+      p_lote: '',
+      p_formula_id: formulaId,
+      p_id_formula_legacy: payload.id_formula,
+      p_nombre_producto: payload.nombre_producto,
+      p_version_formula: payload.version_formula,
+      p_cantidad_objetivo: payload.cantidad_objetivo,
+      p_cantidad_real: payload.cantidad_real ?? null,
+      p_merma_manual: payload.merma_manual ?? null,
+      p_silo_id: siloId,
+      p_id_silo_legacy: payload.id_silo,
+      p_destino_silo: payload.destino_silo,
+      p_estado: payload.estado,
+      p_fecha_creacion: payload.fecha_creacion,
+      p_usuario_responsable: payload.usuario_responsable,
+      p_usuario_id: usuarioId,
+      p_costo_total_insumos: payload.costo_total_insumos || fifoPlan.costoTotal,
+      p_detalle: rows,
     });
 
-    const { error: detalleError } = await supabaseClient.from('orden_consumo_lotes').insert(rows);
-    if (detalleError) throw detalleError;
+    if (error) throw error;
 
-    return toOrden(data as unknown as OrdenRow, detallePlanificado);
+    const created = Array.isArray(data) ? data[0] : data;
+    if (!created) throw new Error('No se pudo recuperar la orden creada.');
+
+    return toOrden(created as unknown as OrdenRow, detallePlanificado);
   },
 
   async update(id: string, payload: Partial<OrdenProduccion>): Promise<OrdenProduccion> {
     const extra = payload as Partial<OrdenProduccion> & { lote_salida?: string; merma?: number };
 
     const current = await getOrdenByLegacy(id);
-    const detalleActualMap = await loadDetalleForOrdenIds([current.id]);
-    const detalleActual = detalleActualMap.get(current.id) ?? [];
+    const detalleActual = await getCurrentDetalle(current.id);
 
     // Inicio real de producción
     if (payload.estado === 'EN PROCESO') {
@@ -381,6 +425,86 @@ export const supabaseOrdenService = {
       const updatedRow = Array.isArray(updated) ? updated[0] : updated;
       if (!updatedRow) throw new Error('No se pudo recuperar la orden finalizada.');
       return toOrden(updatedRow as unknown as OrdenRow, detalleActual);
+    }
+
+    const requiresReservationRebuild =
+      typeof payload.id_formula !== 'undefined' ||
+      typeof payload.cantidad_objetivo !== 'undefined' ||
+      typeof payload.detalle_insumos !== 'undefined';
+
+    if (requiresReservationRebuild) {
+      if (current.estado !== 'PENDIENTE' && current.estado !== 'EN PROCESO') {
+        throw new Error('Solo se puede editar una orden PENDIENTE o EN PROCESO.');
+      }
+
+      const [stockMap, insumoMap] = await Promise.all([getStockMapByLegacyLote(), getInsumoIdMapByLegacy()]);
+
+      const targetFormulaLegacy = payload.id_formula ?? current.id_formula_legacy ?? '';
+      const targetFormulaId = payload.id_formula
+        ? await getFormulaIdByLegacy(payload.id_formula)
+        : current.formula_id;
+      const formulaLegacyFallback = targetFormulaId ? await getFormulaLegacyById(targetFormulaId) : null;
+
+      if (!targetFormulaId) {
+        throw new Error('La fórmula seleccionada no existe.');
+      }
+
+      const targetCantidad = payload.cantidad_objetivo ?? current.cantidad_objetivo;
+      let detallePlanificado: DetalleInsumoLote[];
+
+      if (payload.detalle_insumos !== undefined) {
+        detallePlanificado = parseInputDetalle(payload.detalle_insumos) ?? [];
+      } else {
+        const formulaIngredientes = await getFormulaIngredientes(targetFormulaId);
+        if (formulaIngredientes.length === 0) {
+          throw new Error('La fórmula no tiene ingredientes configurados.');
+        }
+
+        const lotesBase = adjustStockForReleasedDetail(
+          await getStockLotesForFlow(),
+          detalleActual
+        );
+
+        const fifoPlan = planFifoConsumption(targetCantidad, formulaIngredientes, lotesBase);
+        if (!fifoPlan.stockSuficiente) {
+          throw new Error(`Stock insuficiente para: ${fifoPlan.faltantes.join(', ')}`);
+        }
+        detallePlanificado = fifoPlan.detalle;
+      }
+
+      const rows = buildDetalleRows(detallePlanificado, stockMap, insumoMap);
+      const costoTotal = payload.costo_total_insumos ?? detallePlanificado.reduce((acc, item) => acc + item.costo_total, 0);
+
+      const { data: updated, error: updateError } = await supabaseClient.rpc('actualizar_orden_produccion_con_reserva', {
+        p_orden_id: current.id,
+        p_legacy_uid: payload.lote ?? current.legacy_uid ?? current.lote,
+        p_lote: payload.lote ?? current.lote,
+        p_formula_id: targetFormulaId,
+        p_id_formula_legacy: targetFormulaLegacy || formulaLegacyFallback || current.id_formula_legacy || '',
+        p_nombre_producto: payload.nombre_producto ?? current.nombre_producto,
+        p_version_formula: payload.version_formula ?? current.version_formula,
+        p_cantidad_objetivo: targetCantidad,
+        p_cantidad_real: payload.cantidad_real ?? current.cantidad_real ?? null,
+        p_merma_manual: payload.merma_manual ?? current.merma_manual ?? null,
+        p_silo_id: typeof payload.id_silo !== 'undefined'
+          ? await getSiloIdByLegacy(payload.id_silo)
+          : current.silo_id,
+        p_id_silo_legacy: typeof payload.id_silo !== 'undefined' ? payload.id_silo : current.id_silo_legacy,
+        p_destino_silo: payload.destino_silo ?? current.destino_silo,
+        p_fecha_creacion: payload.fecha_creacion ?? current.fecha_creacion,
+        p_usuario_responsable: payload.usuario_responsable ?? current.usuario_responsable,
+        p_usuario_id: payload.usuario_responsable
+          ? await getUsuarioIdByName(payload.usuario_responsable)
+          : current.usuario_id,
+        p_costo_total_insumos: costoTotal,
+        p_detalle: rows,
+      });
+
+      if (updateError) throw updateError;
+
+      const updatedRow = Array.isArray(updated) ? updated[0] : updated;
+      if (!updatedRow) throw new Error('No se pudo recuperar la orden actualizada.');
+      return toOrden(updatedRow as unknown as OrdenRow, detallePlanificado);
     }
 
     // Update genérico (sin workflow)
@@ -462,15 +586,10 @@ export const supabaseOrdenService = {
       throw new Error('No se puede cancelar una orden finalizada.');
     }
 
-    const { error } = await supabaseClient
-      .from('ordenes_produccion')
-      .update({
-        deleted_at: new Date().toISOString(),
-        estado: 'ANULADO',
-      })
-      .eq('legacy_uid', id);
-
-    if (error) throw error;
+    const { error: releaseError } = await supabaseClient.rpc('anular_orden_produccion_con_liberacion', {
+      p_orden_id: current.id,
+    });
+    if (releaseError) throw releaseError;
     return true;
   },
 };

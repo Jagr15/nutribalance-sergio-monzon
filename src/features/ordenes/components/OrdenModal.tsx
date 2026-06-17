@@ -1,7 +1,7 @@
 // src/features/ordenes/components/OrdenModal.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FiX, FiDatabase, FiTarget, FiLayers, FiCheck, FiAlertCircle } from "react-icons/fi";
+import { FiX, FiTarget, FiLayers, FiCheck, FiAlertCircle } from "react-icons/fi";
 import { ApiService } from '../../../infrastructure/api';
 import { EstadoOrden } from '../types/orden';
 import type { Formula } from '../../formulas/types';
@@ -14,8 +14,6 @@ interface Props {
 }
 
 const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
-  const [nroOrden, setNroOrden] = useState("");
-  const [existingLotes, setExistingLotes] = useState<Set<string>>(new Set());
   const [pesoObjetivo, setPesoObjetivo] = useState<number | "">("");
   const [unidad, setUnidad] = useState<'KG' | 'TON'>('KG');
   const [formulas, setFormulas] = useState<Formula[]>([]);
@@ -33,12 +31,8 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   useEffect(() => {
     const cargarFormulas = async () => {
       try {
-        const [data, ordenes] = await Promise.all([
-          ApiService.formulas.findAll(),
-          ApiService.ordenes.getAll(),
-        ]);
+        const data = await ApiService.formulas.findAll();
         setFormulas(data);
-        setExistingLotes(new Set(ordenes.map((o) => (o.lote ?? '').trim().toUpperCase())));
       } catch (error) {
         console.error("Error al cargar fórmulas:", error);
       }
@@ -70,15 +64,6 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     if (isSubmitting) return;
     setSubmitError(null);
 
-    const loteNormalizado = nroOrden.trim().toUpperCase();
-    if (!loteNormalizado || /\s/.test(loteNormalizado)) {
-      setSubmitError('El lote es obligatorio y no debe contener espacios.');
-      return;
-    }
-    if (existingLotes.has(loteNormalizado)) {
-      setSubmitError('Ya existe una orden con ese lote.');
-      return;
-    }
     if (!selectedFormula) {
       setSubmitError('Seleccioná una fórmula activa.');
       return;
@@ -96,7 +81,7 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       setIsSubmitting(true);
       // 1. CREACIÓN DE LA ORDEN
       const payload = {
-        lote: loteNormalizado,
+        lote: '',
         id_formula: selectedFormula.uid,
         nombre_producto: selectedFormula.nombre_producto,
         version_formula: selectedFormula.version,
@@ -115,7 +100,7 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       Swal.fire({
         icon: 'success',
         title: '¡Orden creada!',
-        text: `La orden ${loteNormalizado} fue creada con planificación de consumo FIFO.`,
+        text: `La OP fue creada con numeración correlativa automática y planificación FIFO.`,
         background: '#ffffff',
         color: '#0f172a',
         confirmButtonColor: '#3b82f6'
@@ -130,7 +115,7 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     }
   };
 
-  const isFormValid = !!nroOrden.trim() && !!selectedFormula && !!pesoObjetivo && stockSuficiente;
+  const isFormValid = !!selectedFormula && !!pesoObjetivo && stockSuficiente;
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -158,16 +143,9 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             </div>
           ) : null}
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Identificador de Lote</label>
-            <div className="relative group">
-              <FiDatabase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-blue-500 transition-colors" />
-              <input 
-                autoFocus
-                placeholder="Ej: LOTE-2024-001"
-                className="ui-input w-full rounded-2xl py-3.5 pl-12 pr-4 text-sm text-slate-900 placeholder:text-gray-700 outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-100 focus:bg-blue-500/[0.02] transition-all duration-200 ease-out"
-                value={nroOrden} 
-                onChange={(e) => setNroOrden(e.target.value)}
-              />
+            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Número de OP</label>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              Se asignará automáticamente al guardar.
             </div>
           </div>
 

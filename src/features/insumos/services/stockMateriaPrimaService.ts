@@ -2,6 +2,7 @@ import { ApiService } from '../../../infrastructure/api/';
 import type { StockMateriaPrima } from "../types";
 import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
+import { calcularCostoIngresoMP, type UnidadPrecioMP } from '../utils/costoIngreso';
 
 export interface NewStockEntryData {
   id_insumo: string;
@@ -13,8 +14,10 @@ export interface NewStockEntryData {
   remito_nro: string;
   cantidad: number;
   unidad_entrada: 'KG' | 'TON';
-  costo_total: number;
-  costo_unitario: number;
+  precio_unitario?: number;
+  unidad_precio?: UnidadPrecioMP;
+  costo_total?: number;
+  costo_unitario?: number;
   fecha_ingreso: string;
   cantidad_actual: number;
   cantidad_inicial: number;
@@ -31,7 +34,14 @@ export const stockMateriaPrimaService = {
     if (!data.id_proveedor) throw new Error('El proveedor es obligatorio.');
     if (!data.id_insumo) throw new Error('El insumo es obligatorio.');
     if (data.cantidad <= 0) throw new Error('La cantidad debe ser mayor a 0.');
-    if (data.costo_total <= 0) throw new Error('El costo total debe ser mayor a 0.');
+
+    const costo = calcularCostoIngresoMP({
+      cantidad: data.cantidad,
+      unidad_entrada: data.unidad_entrada,
+      precio_unitario: data.precio_unitario,
+      unidad_precio: data.unidad_precio,
+      costo_total: data.costo_total,
+    });
 
     const lote = data.lote.trim().toUpperCase();
     const remito = data.remito_nro?.trim() ?? '';
@@ -43,7 +53,10 @@ export const stockMateriaPrimaService = {
       remito_nro: remito,
       cantidad: data.cantidad,
       unidad_entrada: data.unidad_entrada,
-      costo_total: data.costo_total,
+      precio_unitario: data.precio_unitario,
+      unidad_precio: data.unidad_precio,
+      costo_total: costo.costo_total,
+      costo_unitario: costo.precio_unitario_kg,
       // TODO: deuda técnica: reemplazar id fijo por sesión autenticada
       id_usuario: 'usr-101',
       fecha_ingreso: new Date(data.fecha_ingreso),
@@ -54,7 +67,13 @@ export const stockMateriaPrimaService = {
       accion: 'modify_stock',
       entidad: 'stock_lote_mp',
       entidad_ref: created.uid,
-      payload: { lote, cantidad: data.cantidad, costo_total: data.costo_total },
+      payload: {
+        lote,
+        cantidad: data.cantidad,
+        precio_unitario: data.precio_unitario,
+        unidad_precio: data.unidad_precio,
+        costo_total: costo.costo_total,
+      },
     });
     return created;
   },

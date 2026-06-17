@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card } from '../../../shared/components/card';
+import { ROUTES } from '../../../app/config/routes';
 import { ApiService } from '../../../infrastructure/api';
-import { ControlEstado, type StockProductoTerminado } from '../types';
+import { getSessionUser } from '../../auth/session';
+import { useOrdenService } from '../../ordenes/services';
+import { EstadoOrden, type DetalleInsumoLote } from '../../ordenes/types';
+import { ControlEstado, type MovimientoStockPT, type StockProductoTerminado, type StockProductoTerminadoResumen } from '../types';
 import type { Formula } from '../../formulas/types';
 
 type EstadoProductoUi = 'OK' | 'Bajo' | 'Crítico';
@@ -11,14 +16,22 @@ interface ProductoUi {
   uid: string;
   nombre: string;
   stockKg: number;
+  valorEstimado: number;
   silo: string;
+  siloLegacyUid: string | null;
   lote: string;
   estadoUi: EstadoProductoUi;
   fechaIngreso: string;
   orden: string;
+  idFormula?: string | null;
+  versionFormula?: number | null;
   costoArsTon?: number;
   proteinaObjetivoPct?: number;
-  detalleInsumos: StockProductoTerminado['detalle_insumos'][];
+  detalleInsumos: Array<{
+    nombre_insumo: string;
+    cantidad: number;
+    unidad_medida: string;
+  }>;
 }
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
@@ -43,18 +56,41 @@ const getStatusStyles = (status: EstadoProductoUi) => {
 
 const toArrayDetalle = (detalle: StockProductoTerminado['detalle_insumos']) => {
   if (!detalle) return [];
-  return Array.isArray(detalle) ? detalle : [detalle];
+  const items = Array.isArray(detalle) ? detalle : [detalle];
+  return items
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .map((item) => {
+      if (Array.isArray(item)) return item[0] ?? null;
+      if ('cantidad_usada' in item) {
+        return {
+          nombre_insumo: item.nombre_insumo,
+          cantidad: Number(item.cantidad_usada ?? 0),
+          unidad_medida: item.tipo_unidad,
+        };
+      }
+
+      return {
+        nombre_insumo: item.nombre_insumo,
+        cantidad: Number(item.cantidad ?? 0),
+        unidad_medida: item.unidad_medida,
+      };
+    })
+    .filter((item): item is { nombre_insumo: string; cantidad: number; unidad_medida: string } => Boolean(item));
 };
 
 const toUi = (item: StockProductoTerminado): ProductoUi => ({
   uid: item.uid,
   nombre: item.nombre_producto || 'Sin dato',
   stockKg: Number(item.cantidad_total ?? 0),
+  valorEstimado: Number(item.cantidad_total ?? 0) * Number(item.costo_unitario_estimado ?? 0),
   silo: item.nombre_silo || 'Sin dato',
+  siloLegacyUid: item.id_silo || null,
   lote: item.lote || 'Sin dato',
   estadoUi: mapEstado(item.estado),
   fechaIngreso: item.fecha_ingreso,
   orden: item.numero_orden || item.id_orden || 'Sin dato',
+  idFormula: item.id_formula ?? null,
+  versionFormula: item.version_formula ?? null,
   costoArsTon: undefined,
   proteinaObjetivoPct: undefined,
   detalleInsumos: toArrayDetalle(item.detalle_insumos),
@@ -71,6 +107,8 @@ const openFormulaDetail = (producto: ProductoUi) => {
       <div style="text-align:left; color:#0f172a; font-size:14px;">
         <p style="margin:0 0 8px;"><strong>Lote PT:</strong> ${producto.lote}</p>
         <p style="margin:0 0 8px;"><strong>Orden asociada:</strong> ${producto.orden}</p>
+        <p style="margin:0 0 8px;"><strong>Fórmula:</strong> ${producto.idFormula ?? 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Versión:</strong> ${producto.versionFormula ?? 'Sin dato'}</p>
         <p style="margin:0 0 8px;"><strong>Proteína objetivo:</strong> ${formatProteina(producto.proteinaObjetivoPct)}</p>
         <p style="margin:0;"><strong>Fórmula:</strong> Información de fórmula disponible en módulo Fórmulas</p>
       </div>
@@ -99,8 +137,8 @@ const openStockDetail = (producto: ProductoUi) => {
         <p style="margin:0 0 8px;"><strong>Estado operativo:</strong> ${producto.estadoUi}</p>
         <p style="margin:0 0 8px;"><strong>Último ingreso:</strong> ${formatDate(producto.fechaIngreso)}</p>
         <p style="margin:0 0 8px;"><strong>Proteína objetivo:</strong> ${formatProteina(producto.proteinaObjetivoPct)}</p>
+        <p style="margin:0 0 8px;"><strong>Valor estimado:</strong> ${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(producto.valorEstimado)}</p>
         <p style="margin:0 0 8px;"><strong>Detalle insumos:</strong> ${ingredientes || 'Sin dato'}</p>
-        <p style="margin:0; color:#334155;"><strong>Valor estimado:</strong> Valor estimado no disponible</p>
       </div>
     `,
     background: '#ffffff',
@@ -111,7 +149,94 @@ const openStockDetail = (producto: ProductoUi) => {
   });
 };
 
-const openProgramacionModal = (productos: ProductoUi[], productoPreseleccionado?: ProductoUi) => {
+const openSalidaModal = async (
+  producto: ProductoUi,
+  lotes: ProductoUi[],
+  onSuccess: () => Promise<void> | void
+) => {
+  const opciones = lotes
+    .map((lote) => `<option value="${lote.uid}">${lote.lote} · ${formatKg(lote.stockKg)} · ${lote.silo}</option>`)
+    .join('');
+
+  const result = await Swal.fire({
+    title: `Registrar salida · ${producto.nombre}`,
+    html: `
+      <div style="text-align:left; color:#0f172a; font-size:14px;">
+        <p style="margin:0 0 8px;"><strong>Saldo consolidado:</strong> ${formatKg(producto.stockKg)}</p>
+        <p style="margin:0 0 8px;"><strong>Valor estimado:</strong> ${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(producto.valorEstimado)}</p>
+        <label style="display:block; margin: 0 0 6px;">Lote / OP</label>
+        <select id="salida-lote" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;">
+          ${opciones}
+        </select>
+        <label style="display:block; margin: 0 0 6px;">Cantidad a salir</label>
+        <input id="salida-cantidad" type="number" min="1" step="0.001" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+        <label style="display:block; margin: 0 0 6px;">Motivo</label>
+        <input id="salida-motivo" type="text" placeholder="Venta / entrega / egreso manual" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+        <label style="display:block; margin: 0 0 6px;">Referencia</label>
+        <input id="salida-ref" type="text" placeholder="Factura, remito o referencia interna" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+      </div>
+    `,
+    background: '#ffffff',
+    color: '#0f172a',
+    showCancelButton: true,
+    confirmButtonColor: '#2563eb',
+    cancelButtonColor: '#334155',
+    confirmButtonText: 'Registrar salida',
+    cancelButtonText: 'Cancelar',
+    width: 680,
+    showLoaderOnConfirm: true,
+    preConfirm: async () => {
+      const loteId = (document.getElementById('salida-lote') as HTMLSelectElement | null)?.value;
+      const cantidad = Number((document.getElementById('salida-cantidad') as HTMLInputElement | null)?.value);
+      const motivo = (document.getElementById('salida-motivo') as HTMLInputElement | null)?.value.trim();
+      const referencia = (document.getElementById('salida-ref') as HTMLInputElement | null)?.value.trim();
+      const selected = lotes.find((lote) => lote.uid === loteId);
+
+      if (!selected) {
+        Swal.showValidationMessage('Seleccioná un lote válido.');
+        return false;
+      }
+      if (!Number.isFinite(cantidad) || cantidad <= 0) {
+        Swal.showValidationMessage('Ingresá una cantidad válida mayor a 0.');
+        return false;
+      }
+      if (cantidad > selected.stockKg) {
+        Swal.showValidationMessage('La cantidad no puede superar el saldo del lote.');
+        return false;
+      }
+      if (!motivo) {
+        Swal.showValidationMessage('Ingresá un motivo de salida.');
+        return false;
+      }
+
+      await ApiService.stockPT.registrarSalida({
+        stock_pt_id: selected.uid,
+        cantidad,
+        motivo,
+        referencia: referencia || undefined,
+      });
+      await onSuccess();
+      return true;
+    },
+  });
+
+  if (result.isConfirmed) {
+    void Swal.fire({
+      icon: 'success',
+      title: 'Salida registrada',
+      text: `Se descontó stock de ${producto.nombre}.`,
+      background: '#ffffff',
+      color: '#0f172a',
+      confirmButtonColor: '#2563eb',
+    });
+  }
+};
+
+const openProgramacionModal = (
+  productos: ProductoUi[],
+  formulaByNombre: Map<string, Formula>,
+  productoPreseleccionado?: ProductoUi
+) => {
   const options = productos
     .map((producto) => `<option value="${producto.uid}" ${productoPreseleccionado?.uid === producto.uid ? 'selected' : ''}>${producto.nombre} · ${producto.lote}</option>`)
     .join('');
@@ -134,9 +259,12 @@ const openProgramacionModal = (productos: ProductoUi[], productoPreseleccionado?
         </select>
         <label style="display:block; margin: 0 0 6px;">Fecha estimada</label>
         <input id="prod-fecha" type="date" style="width:100%; margin-bottom:12px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+        <div style="margin:0 0 10px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc; color:#334155;">
+          <strong>Número de OP:</strong> se asignará automáticamente al guardar.
+        </div>
         <p id="prod-formula" style="margin:0 0 6px; color:#334155;"><strong>Fórmula sugerida:</strong> Información de fórmula disponible en módulo Fórmulas</p>
         <p id="prod-silo" style="margin:0 0 6px; color:#334155;"><strong>Silo destino:</strong> Sin dato</p>
-        <p id="prod-mp" style="margin:0; color:#64748b;"><strong>Stock materia prima estimado:</strong> Cobertura de MP disponible en validación operativa</p>
+        <p id="prod-mp" style="margin:0; color:#64748b;"><strong>Stock materia prima estimado:</strong> Se validará al guardar la OP pendiente</p>
       </div>
     `,
     background: '#ffffff',
@@ -147,6 +275,8 @@ const openProgramacionModal = (productos: ProductoUi[], productoPreseleccionado?
     confirmButtonText: 'Programar',
     cancelButtonText: 'Cerrar',
     width: 680,
+    showLoaderOnConfirm: true,
+    allowOutsideClick: () => !Swal.isLoading(),
     didOpen: () => {
       const select = document.getElementById('prod-select') as HTMLSelectElement | null;
       const siloLine = document.getElementById('prod-silo');
@@ -187,30 +317,55 @@ const openProgramacionModal = (productos: ProductoUi[], productoPreseleccionado?
         return;
       }
 
-      return { selected, cantidad, unidad, fecha: fecha || 'Sin dato' };
+      const selectedFormula = formulaByNombre.get(selected.nombre.trim().toLowerCase());
+      if (!selectedFormula) {
+        Swal.showValidationMessage('No se encontró una fórmula activa para este producto.');
+        return;
+      }
+
+      const fechaProgramada = fecha || new Date().toISOString().slice(0, 10);
+      const cantidadKg = unidad === 'ton' ? cantidad * 1000 : cantidad;
+      const fechaCreacion = new Date(`${fechaProgramada}T00:00:00`).toISOString();
+      const sessionUserName = getSessionUser().name;
+      const usuarioResponsable = ['Edwin', 'Sergio Monzón', 'Usuario Admin'].includes(sessionUserName)
+        ? sessionUserName
+        : 'Edwin';
+
+      return useOrdenService.create({
+        lote: '',
+        id_formula: selectedFormula.uid,
+        nombre_producto: selectedFormula.nombre_producto,
+        version_formula: selectedFormula.version,
+        cantidad_objetivo: cantidadKg,
+        cantidad_real: undefined,
+        merma_manual: undefined,
+        estado: EstadoOrden.PENDIENTE,
+        fecha_creacion: fechaCreacion,
+        usuario_responsable: usuarioResponsable,
+        id_silo: selected.siloLegacyUid,
+        destino_silo: selected.siloLegacyUid ? selected.silo : null,
+        detalle_insumos: [] as DetalleInsumoLote[],
+        costo_total_insumos: 0,
+      }).catch((error: unknown) => {
+        Swal.showValidationMessage(error instanceof Error ? error.message : 'No se pudo crear la orden de producción.');
+        return false as unknown as Awaited<ReturnType<typeof useOrdenService.create>>;
+      });
     },
   }).then((result) => {
     if (!result.isConfirmed || !result.value) return;
 
-    const { selected, cantidad, unidad, fecha } = result.value as {
-      selected: ProductoUi;
-      cantidad: number;
-      unidad: string;
-      fecha: string;
-    };
-
-    const cantidadLabel = unidad === 'ton'
-      ? `${cantidad.toLocaleString('es-AR', { maximumFractionDigits: 2 })} ton`
-      : formatKg(cantidad);
+    const creada = result.value as Awaited<ReturnType<typeof useOrdenService.create>>;
 
     void Swal.fire({
       icon: 'success',
-      title: 'Programación preparada',
+      title: 'OP pendiente creada',
       html: `
         <div style="text-align:left; color:#0f172a; font-size:14px;">
-          <p style="margin:0 0 8px;">Orden preparada para <strong>${cantidadLabel}</strong> de <strong>${selected.nombre}</strong>.</p>
-          <p style="margin:0 0 8px;"><strong>Silo destino:</strong> ${selected.silo || 'Sin dato'}</p>
-          <p style="margin:0;"><strong>Fecha estimada:</strong> ${fecha === 'Sin dato' ? 'Sin dato' : formatDate(fecha)}</p>
+          <p style="margin:0 0 8px;">La orden <strong>${creada.lote}</strong> quedó registrada en estado <strong>${creada.estado}</strong>.</p>
+          <p style="margin:0 0 8px;"><strong>Producto:</strong> ${creada.nombre_producto}</p>
+          <p style="margin:0 0 8px;"><strong>Cantidad programada:</strong> ${formatKg(creada.cantidad_objetivo)}</p>
+          <p style="margin:0 0 8px;"><strong>Fórmula:</strong> ${creada.id_formula}</p>
+          <p style="margin:0;"><strong>Destino:</strong> ${creada.destino_silo || 'Sin dato'}</p>
         </div>
       `,
       background: '#ffffff',
@@ -223,32 +378,47 @@ const openProgramacionModal = (productos: ProductoUi[], productoPreseleccionado?
 
 const ProductosPage = () => {
   const [items, setItems] = useState<ProductoUi[]>([]);
+  const [resumenPT, setResumenPT] = useState<StockProductoTerminadoResumen[]>([]);
+  const [movimientosPT, setMovimientosPT] = useState<MovimientoStockPT[]>([]);
   const [formulas, setFormulas] = useState<Formula[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isResumenLoading, setIsResumenLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState<'TODOS' | EstadoProductoUi>('TODOS');
+  const navigate = useNavigate();
+
+  const refreshData = useCallback(async () => {
+    setIsLoading(true);
+    setIsResumenLoading(true);
+    setLoadError(null);
+    try {
+      const [stock, resumen, movimientos, formulasData] = await Promise.all([
+        ApiService.stockPT.getAll(),
+        ApiService.stockPT.getResumen().catch(() => [] as StockProductoTerminadoResumen[]),
+        ApiService.stockPT.getMovimientos().catch(() => [] as MovimientoStockPT[]),
+        ApiService.formulas.findAll().catch(() => [] as Formula[]),
+      ]);
+      setItems(stock.map(toUi));
+      setResumenPT(resumen);
+      setMovimientosPT(movimientos);
+      setFormulas(formulasData);
+    } catch (error: unknown) {
+      setItems([]);
+      setLoadError(error instanceof Error ? error.message : 'No se pudo cargar el stock de productos terminados.');
+    } finally {
+      setIsLoading(false);
+      setIsResumenLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const load = async () => {
-      setIsLoading(true);
-      setLoadError(null);
-      try {
-        const [stock, formulasData] = await Promise.all([
-          ApiService.stockPT.getAll(),
-          ApiService.formulas.findAll().catch(() => [] as Formula[]),
-        ]);
-        setItems(stock.map(toUi));
-        setFormulas(formulasData);
-      } catch (error: unknown) {
-        setItems([]);
-        setLoadError(error instanceof Error ? error.message : 'No se pudo cargar el stock de productos terminados.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    void load();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void refreshData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [refreshData]);
 
   const formulaByNombre = useMemo(() => {
     const activeSorted = [...formulas].sort((a, b) => b.version - a.version);
@@ -273,6 +443,17 @@ const ProductosPage = () => {
     })
   ), [items, formulaByNombre]);
 
+  const resumenRows = useMemo(() => resumenPT.map((item) => ({
+    ...item,
+    estadoUi: mapEstado(item.estado),
+    valorMonetario: Number(item.valor_monetario ?? 0),
+  })), [resumenPT]);
+
+  const totalStockResumen = resumenRows.reduce((acc, item) => acc + item.stock_actual, 0);
+  const totalValorResumen = resumenRows.reduce((acc, item) => acc + item.valorMonetario, 0);
+  const productosConRiesgoResumen = resumenRows.filter((item) => item.estado !== 'OK').length;
+  const useResumen = resumenRows.length > 0;
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return itemsWithProteina.filter((item) => {
@@ -286,8 +467,9 @@ const ProductosPage = () => {
     });
   }, [itemsWithProteina, query, estadoFiltro]);
 
-  const totalStock = filtered.reduce((acc, item) => acc + item.stockKg, 0);
-  const productosConRiesgo = filtered.filter((item) => item.estadoUi !== 'OK').length;
+  const totalStock = useResumen ? totalStockResumen : filtered.reduce((acc, item) => acc + item.stockKg, 0);
+  const productosConRiesgo = useResumen ? productosConRiesgoResumen : filtered.filter((item) => item.estadoUi !== 'OK').length;
+  const valorInventarioPT = useResumen ? totalValorResumen : filtered.reduce((acc, item) => acc + item.valorEstimado, 0);
   const proteinasDisponibles = filtered
     .map((item) => item.proteinaObjetivoPct)
     .filter((value): value is number => typeof value === 'number');
@@ -314,17 +496,105 @@ const ProductosPage = () => {
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-widest text-slate-500">Valor estimado PT</p>
-          <h2 className="text-2xl font-black mt-2 text-blue-300">Valor estimado no disponible</h2>
+          <h2 className="text-2xl font-black mt-2 text-blue-300">{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(valorInventarioPT)}</h2>
         </Card>
         <Card>
-          <p className="text-xs uppercase tracking-widest text-slate-500">Cobertura promedio</p>
-          <h2 className="text-2xl font-black mt-2 text-cyan-300">Cobertura no disponible</h2>
+          <p className="text-xs uppercase tracking-widest text-slate-500">Lotes activos</p>
+          <h2 className="text-2xl font-black mt-2 text-cyan-300">{useResumen ? resumenRows.reduce((acc, item) => acc + item.cantidad_lotes, 0) : itemsWithProteina.length}</h2>
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-widest text-slate-500">Proteína objetivo PT</p>
           <h2 className="text-2xl font-black mt-2 text-indigo-300">{proteinaPromedio !== null ? `${proteinaPromedio.toFixed(2)}%` : 'Sin dato'}</h2>
         </Card>
       </section>
+
+      <Card>
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 className="text-xl font-semibold">Resumen consolidado de Producto Terminado</h2>
+            <p className="text-sm text-slate-500">Saldo por producto, valor monetario y estado operativo.</p>
+          </div>
+          <p className="text-xs text-slate-500">{movimientosPT.length} movimientos registrados</p>
+        </div>
+
+        {isResumenLoading && resumenRows.length === 0 ? (
+          <div className="py-10 text-center text-slate-500">Cargando resumen de PT...</div>
+        ) : null}
+
+        {!isResumenLoading && resumenRows.length === 0 ? (
+          <div className="py-10 text-center text-slate-500">No hay stock de PT consolidado para mostrar.</div>
+        ) : null}
+
+        {resumenRows.length > 0 ? (
+          <div className="overflow-auto rounded-2xl border border-slate-200 bg-white">
+            <table className="w-full min-w-[1200px] text-left">
+              <thead>
+                <tr className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
+                  <th className="px-4 py-3">Producto</th>
+                  <th className="px-4 py-3">Fórmula / versión</th>
+                  <th className="px-4 py-3">Saldo</th>
+                  <th className="px-4 py-3">Valor</th>
+                  <th className="px-4 py-3">Lotes</th>
+                  <th className="px-4 py-3">Última actualización</th>
+                  <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumenRows.map((row) => {
+                  const lotesDelProducto = itemsWithProteina.filter((item) => item.nombre.trim().toLowerCase() === row.nombre_producto.trim().toLowerCase());
+                  const formulaLabel = row.id_formula || row.version_formula
+                    ? `${row.id_formula ?? 'Sin fórmula'} ${row.version_formula ? `v${row.version_formula}` : ''}`
+                    : 'Derivada desde OP';
+
+                  return (
+                    <tr key={row.nombre_producto} className="border-t border-slate-100 hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium">{row.nombre_producto}</td>
+                      <td className="px-4 py-3 text-slate-700">{formulaLabel}</td>
+                      <td className="px-4 py-3">{formatKg(row.stock_actual)}</td>
+                      <td className="px-4 py-3">{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(row.valorMonetario)}</td>
+                      <td className="px-4 py-3">{row.cantidad_lotes}</td>
+                      <td className="px-4 py-3">{formatDate(row.ultima_actualizacion)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${getStatusStyles(row.estadoUi)}`}>
+                          {row.estadoUi}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => openSalidaModal(
+                            {
+                              uid: row.producto_id ?? row.nombre_producto,
+                              nombre: row.nombre_producto,
+                              stockKg: row.stock_actual,
+                              valorEstimado: row.valorMonetario,
+                              silo: 'Consolidado',
+                              siloLegacyUid: null,
+                              lote: 'CONSOLIDADO',
+                              estadoUi: row.estadoUi,
+                              fechaIngreso: row.ultima_actualizacion,
+                              orden: row.numero_orden || 'Sin dato',
+                              idFormula: row.id_formula,
+                              versionFormula: row.version_formula,
+                              detalleInsumos: [],
+                            },
+                            lotesDelProducto,
+                            async () => { await refreshData(); }
+                          )}
+                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Registrar salida
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </Card>
 
       <Card>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-5">
@@ -349,7 +619,7 @@ const ProductosPage = () => {
             </select>
             <button
               type="button"
-              onClick={() => openProgramacionModal(filtered.length > 0 ? filtered : itemsWithProteina)}
+            onClick={() => openProgramacionModal(filtered.length > 0 ? filtered : itemsWithProteina, formulaByNombre)}
               className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-medium text-white"
             >
               Registrar producción
@@ -388,7 +658,7 @@ const ProductosPage = () => {
               <thead>
                 <tr className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
                   <th className="pb-3">Producto</th>
-                  <th className="pb-3">Fórmula asociada</th>
+                  <th className="pb-3">Fórmula / versión</th>
                   <th className="pb-3">Proteína objetivo</th>
                   <th className="pb-3">Lote PT</th>
                   <th className="pb-3">Orden</th>
@@ -404,13 +674,17 @@ const ProductosPage = () => {
                 {filtered.map((producto) => (
                   <tr key={producto.uid} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 font-medium">{producto.nombre}</td>
-                    <td className="py-3">Información de fórmula disponible en módulo Fórmulas</td>
+                    <td className="py-3">
+                      {producto.idFormula || producto.versionFormula
+                        ? `${producto.idFormula ?? 'Sin fórmula'} ${producto.versionFormula ? `v${producto.versionFormula}` : ''}`
+                        : 'Derivada desde OP'}
+                    </td>
                     <td className="py-3">{formatProteina(producto.proteinaObjetivoPct)}</td>
                     <td className="py-3">{producto.lote || 'Sin dato'}</td>
                     <td className="py-3">{producto.orden || 'Sin dato'}</td>
                     <td className="py-3">{producto.silo || 'Sin dato'}</td>
                     <td className="py-3">{formatKg(producto.stockKg)}</td>
-                    <td className="py-3">Valor estimado no disponible</td>
+                    <td className="py-3">{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(producto.valorEstimado)}</td>
                     <td className="py-3">{formatDate(producto.fechaIngreso)}</td>
                     <td className="py-3">
                       <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${getStatusStyles(producto.estadoUi)}`}>
@@ -435,10 +709,24 @@ const ProductosPage = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => openProgramacionModal(filtered, producto)}
+                          onClick={() => openSalidaModal(producto, itemsWithProteina.filter((item) => item.nombre.trim().toLowerCase() === producto.nombre.trim().toLowerCase()), refreshData)}
+                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Registrar salida
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openProgramacionModal(filtered, formulaByNombre, producto)}
                           className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                         >
                           Programar producción
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(ROUTES.TRAZABILIDAD)}
+                          className="h-8 px-3 rounded-lg border border-blue-200 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        >
+                          Trazabilidad
                         </button>
                       </div>
                     </td>

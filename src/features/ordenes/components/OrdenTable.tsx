@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FiChevronDown, FiChevronLeft, FiChevronRight, FiZap } from 'react-icons/fi';
+import { ROUTES } from '../../../app/config/routes';
 import { EstadoOrden, type OrdenProduccion } from '../types/orden';
 import type { Formula } from '../../formulas/types';
 import { ApiService } from '../../../infrastructure/api';
@@ -28,6 +30,7 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [formulas, setFormulas] = useState<Formula[]>([]);
+  const navigate = useNavigate();
   const itemsPerPage = 6;
 
   useEffect(() => {
@@ -102,6 +105,7 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
                       {orden.estado === EstadoOrden.EN_PROCESO && onFinalizar ? (
                         <TableActionButton label={actionOrderId === orden.id ? "Procesando..." : "Finalizar"} tone="success" disabled={actionOrderId === orden.id} onClick={() => onFinalizar(orden)} />
                       ) : null}
+                      <TableActionButton label="Trazabilidad" tone="secondary" onClick={() => navigate(ROUTES.TRAZABILIDAD)} />
                       <TableActionButton label="Detalle" tone="secondary" onClick={() => setExpandedId(isExpanded ? null : orden.id)} />
                     </TableActions>
                   </TableCell>

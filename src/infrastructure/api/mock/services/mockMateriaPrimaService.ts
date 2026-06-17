@@ -1,6 +1,17 @@
-import type { StockMateriaPrima } from "../../../../features/insumos/types";
+import type {
+  HistorialCompraMP,
+  StockMateriaPrima,
+  StockMateriaPrimaResumen,
+  UltimoPrecioPagadoInsumo,
+} from '../../../../features/insumos/types';
+import { buildHistorialCompras, buildUltimosPrecios } from '../../../../features/insumos/utils/compras';
+import { buildStockMPResumen } from '../../../../features/insumos/utils/stockResumen';
+import { calcularCostoIngresoMP } from '../../../../features/insumos/utils/costoIngreso';
+import type { DetalleInsumoLote } from '../../../../features/ordenes/types';
 import { type Movimiento, TipoMovimiento, OrigenMovimiento } from "../../../../features/movimientos/types";
 import { TipoUnidad } from "../../../../shared/types/global.interface";
+import insumosData from '../data/insumos.json';
+import proveedoresData from '../data/proveedores.json';
 import initialDataRaw from "../data/stockMateriaPrima.json";
 
 type StockMateriaPrimaRaw = Omit<StockMateriaPrima, 'fecha_ingreso' | 'createdAt' | 'updatedAt' | 'operaciones'> & {
@@ -28,13 +39,146 @@ const initialData: StockMateriaPrima[] = (initialDataRaw as unknown as StockMate
 })) as StockMateriaPrima[];
 
 let stockDB: StockMateriaPrima[] = [...initialData];
+const mockInsumos = insumosData as unknown as Array<{ uid: string; nombre?: string; unidad_medida?: string; umbral_alerta?: number | null }>;
+const mockProveedores = proveedoresData as unknown as Array<{ uid: string; nombre_empresa?: string }>;
 const movimientosDB: Movimiento[] = [];
+
+export const getMockStockSnapshot = () => ({
+  stockDB: structuredClone(stockDB),
+  movimientosDB: structuredClone(movimientosDB),
+});
+
+export const resetMockMateriaPrimaService = () => {
+  stockDB = [...initialData];
+  movimientosDB.length = 0;
+};
+
+export const restoreMockStockSnapshot = (snapshot: {
+  stockDB: StockMateriaPrima[];
+  movimientosDB: Movimiento[];
+}) => {
+  stockDB = structuredClone(snapshot.stockDB);
+  movimientosDB.length = 0;
+  movimientosDB.push(...structuredClone(snapshot.movimientosDB));
+};
+
+const findLoteIndexByReference = (reference: string) => {
+  const normalized = reference.trim().toUpperCase();
+  return stockDB.findIndex((lote) => lote.uid === reference || lote.lote.toUpperCase() === normalized);
+};
+
+const applyDetalleToStock = (
+  detalle: DetalleInsumoLote[],
+  mode: 'reserve' | 'release' | 'consume',
+  ordenId?: string,
+  factor = 1
+) => {
+  const planned = detalle.map((item) => {
+    const loteIndex = findLoteIndexByReference(item.id_lote);
+    if (loteIndex === -1) {
+      throw new Error(`Lote no encontrado para ${item.nombre_insumo || item.id_insumo}.`);
+    }
+
+    const lote = stockDB[loteIndex];
+    const cantidad = Number(item.cantidad_usada);
+    if (!Number.isFinite(cantidad) || cantidad <= 0) {
+      throw new Error(`Cantidad inválida para ${item.nombre_insumo || item.id_insumo}.`);
+    }
+
+    const comprometidoActual = Number(lote.cantidad_comprometida || 0);
+    const disponible = Number(lote.cantidad_actual) - comprometidoActual;
+
+    if (mode === 'reserve' && disponible + 0.0001 < cantidad) {
+      throw new Error(`Stock insuficiente para ${item.nombre_insumo || item.id_insumo}.`);
+    }
+
+    const consumo = mode === 'consume' ? Number((cantidad * factor).toFixed(3)) : cantidad;
+
+    if (mode === 'consume' && Number(lote.cantidad_actual) + 0.0001 < consumo) {
+      throw new Error(`Stock insuficiente para consumir ${item.nombre_insumo || item.id_insumo}.`);
+    }
+
+    return { loteIndex, cantidad, consumo };
+  });
+
+  planned.forEach(({ loteIndex, cantidad, consumo }) => {
+    const lote = stockDB[loteIndex];
+    const committed = Number(lote.cantidad_comprometida || 0);
+
+    if (mode === 'reserve') {
+      stockDB[loteIndex] = {
+        ...lote,
+        cantidad_comprometida: committed + cantidad,
+        updatedAt: new Date(),
+      };
+      return;
+    }
+
+    if (mode === 'release') {
+      stockDB[loteIndex] = {
+        ...lote,
+        cantidad_comprometida: Math.max(0, committed - cantidad),
+        updatedAt: new Date(),
+      };
+      return;
+    }
+
+    stockDB[loteIndex] = {
+      ...lote,
+      cantidad_actual: Math.max(0, Number(lote.cantidad_actual) - consumo),
+      cantidad_comprometida: Math.max(0, committed - cantidad),
+      updatedAt: new Date(),
+    };
+
+    movimientosDB.push({
+      uid: `mov-sal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      fecha: new Date(),
+      id_usuario: lote.id_usuario,
+      tipo: TipoMovimiento.SALIDA,
+      origen: OrigenMovimiento.PRODUCCION,
+      id_entidad: ordenId ?? lote.id_insumo,
+      nombre_entidad: `Consumo OP ${ordenId ?? 'MODO DEMO'}`,
+      cantidad: consumo,
+      lote_afectado: lote.lote,
+    });
+  });
+};
+
+export const reserveStockForDetalle = (detalle: DetalleInsumoLote[], ordenId?: string) => {
+  applyDetalleToStock(detalle, 'reserve', ordenId);
+};
+
+export const releaseStockForDetalle = (detalle: DetalleInsumoLote[], ordenId?: string) => {
+  applyDetalleToStock(detalle, 'release', ordenId);
+};
+
+export const consumeStockForDetalle = (detalle: DetalleInsumoLote[], ordenId?: string, factor = 1) => {
+  applyDetalleToStock(detalle, 'consume', ordenId, factor);
+};
 
 export const mockMateriaPrimaService = {
   
   async getAllLotes(): Promise<StockMateriaPrima[]> {
     return new Promise((resolve) => {
       setTimeout(() => resolve([...stockDB]), 500);
+    });
+  },
+
+  async getResumen(): Promise<StockMateriaPrimaResumen[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(buildStockMPResumen(stockDB, mockInsumos)), 300);
+    });
+  },
+
+  async getHistorialCompras(): Promise<HistorialCompraMP[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(buildHistorialCompras(stockDB, mockInsumos, mockProveedores)), 250);
+    });
+  },
+
+  async getUltimosPrecios(): Promise<UltimoPrecioPagadoInsumo[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(buildUltimosPrecios(stockDB, mockInsumos, mockProveedores)), 250);
     });
   },
 
@@ -45,21 +189,22 @@ export const mockMateriaPrimaService = {
     remito_nro: string;
     cantidad: number;
     unidad_entrada: TipoUnidad;
-    costo_total: number;
+    precio_unitario?: number;
+    unidad_precio?: 'KG' | 'TON';
+    costo_total?: number;
     id_usuario: string;
     fecha_ingreso: Date;
     ubicacion: string; 
   }): Promise<StockMateriaPrima> {
     
-    return new Promise((resolve, reject) => {
-      const loteExiste = stockDB.some(l => 
-        l.lote.toUpperCase() === data.lote.toUpperCase()
-      );
-      if (loteExiste) return reject(new Error("El número de lote ya existe."));
-
-      const factor = data.unidad_entrada === TipoUnidad.TON ? 1000 : 1;
-      const cantidadEnKg = data.cantidad * factor;
-      const costoUnitarioCalculado = data.costo_total / cantidadEnKg;
+    return new Promise((resolve) => {
+      const costo = calcularCostoIngresoMP({
+        cantidad: data.cantidad,
+        unidad_entrada: data.unidad_entrada,
+        precio_unitario: data.precio_unitario,
+        unidad_precio: data.unidad_precio,
+        costo_total: data.costo_total,
+      });
       const ahora = new Date();
 
       // Creamos el lote limpio: sin operaciones de consumo iniciales
@@ -68,11 +213,11 @@ export const mockMateriaPrimaService = {
         id_insumo: data.id_insumo,
         id_proveedor: data.id_proveedor,
         lote: data.lote.toUpperCase(),
-        cantidad_inicial: cantidadEnKg,
-        cantidad_actual: cantidadEnKg,
+        cantidad_inicial: costo.cantidad_kg,
+        cantidad_actual: costo.cantidad_kg,
         cantidad_comprometida: 0,
-        costo_unitario: costoUnitarioCalculado,
-        costo_total: data.costo_total,
+        costo_unitario: costo.precio_unitario_kg,
+        costo_total: costo.costo_total,
         fecha_ingreso: data.fecha_ingreso,
         remito_nro: data.remito_nro,
         ubicacion: data.ubicacion,
@@ -92,7 +237,7 @@ export const mockMateriaPrimaService = {
         origen: OrigenMovimiento.COMPRA,
         id_entidad: data.id_insumo,
         nombre_entidad: "Registro de Ingreso",
-        cantidad: cantidadEnKg,
+        cantidad: costo.cantidad_kg,
         lote_afectado: nuevoLote.lote,
       };
 

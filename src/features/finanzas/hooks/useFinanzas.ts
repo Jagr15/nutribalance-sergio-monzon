@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { finanzasService } from '../services/finanzasService';
-import type { FinanzasKPIs, FinanzasReportes, MovimientoFinanciero } from '../types';
+import type { CostosFormulaVsReal, FinanzasInventarioResumen, FinanzasKPIs, FinanzasReportes, MovimientoFinanciero } from '../types';
 
 const EMPTY_KPIS: FinanzasKPIs = {
   saldo_actual: 0,
@@ -13,6 +13,9 @@ const EMPTY_KPIS: FinanzasKPIs = {
   cuentas_por_pagar: 0,
   cuentas_por_cobrar: 0,
   perdida_merma: 0,
+  valor_stock_mp: 0,
+  valor_stock_pt: 0,
+  valor_inventario_total: 0,
 };
 
 const EMPTY_REPORTES: FinanzasReportes = {
@@ -27,6 +30,12 @@ export const useFinanzas = () => {
   const [kpis, setKpis] = useState<FinanzasKPIs>(EMPTY_KPIS);
   const [reportes, setReportes] = useState<FinanzasReportes>(EMPTY_REPORTES);
   const [movimientos, setMovimientos] = useState<MovimientoFinanciero[]>([]);
+  const [costosComparativos, setCostosComparativos] = useState<CostosFormulaVsReal[]>([]);
+  const [inventario, setInventario] = useState<FinanzasInventarioResumen>({
+    valor_stock_mp: 0,
+    valor_stock_pt: 0,
+    valor_inventario_total: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -36,10 +45,12 @@ export const useFinanzas = () => {
     setLoadError(null);
     setInfoMessage(null);
     const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false';
-    const [kpisResult, reportesResult, movimientosResult] = await Promise.allSettled([
+    const [kpisResult, reportesResult, movimientosResult, costosResult, inventarioResult] = await Promise.allSettled([
       finanzasService.getKPIs(),
       finanzasService.getReportes(),
       finanzasService.getMovimientos(),
+      finanzasService.getCostosComparativos(),
+      finanzasService.getInventarioResumen(),
     ]);
 
     if (kpisResult.status === 'fulfilled') setKpis(kpisResult.value);
@@ -51,13 +62,21 @@ export const useFinanzas = () => {
     if (movimientosResult.status === 'fulfilled') setMovimientos(movimientosResult.value);
     else setMovimientos([]);
 
-    const failed = [kpisResult, reportesResult, movimientosResult].filter((r) => r.status === 'rejected');
+    if (costosResult.status === 'fulfilled') setCostosComparativos(costosResult.value);
+    else setCostosComparativos([]);
+
+    if (inventarioResult.status === 'fulfilled') setInventario(inventarioResult.value);
+    else setInventario({ valor_stock_mp: 0, valor_stock_pt: 0, valor_inventario_total: 0 });
+
+    const failed = [kpisResult, reportesResult, movimientosResult, costosResult, inventarioResult].filter((r) => r.status === 'rejected');
     let fallbackApplied = false;
     if (useMocks || failed.length > 0) {
       try {
         const fallback = await finanzasService.getOperationalFallback();
         setKpis(fallback.kpis);
         setReportes(fallback.reportes);
+        setCostosComparativos(fallback.costosComparativos);
+        setInventario(fallback.inventario);
         if (movimientosResult.status !== 'fulfilled') {
           setMovimientos(fallback.movimientos);
         }
@@ -82,5 +101,5 @@ export const useFinanzas = () => {
     return () => clearTimeout(timer);
   }, [refresh]);
 
-  return { kpis, reportes, movimientos, loading, loadError, infoMessage, refresh, createMovimiento: finanzasService.createMovimiento };
+  return { kpis, reportes, movimientos, costosComparativos, inventario, loading, loadError, infoMessage, refresh, createMovimiento: finanzasService.createMovimiento };
 };

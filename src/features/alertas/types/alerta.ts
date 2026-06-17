@@ -1,6 +1,6 @@
 export type PrioridadAlerta = "critica" | "media" | "informativa";
 export type AreaAlerta = "stock" | "produccion" | "clientes" | "costos" | "productos";
-export type EstadoAlerta = "pendiente" | "en seguimiento" | "atendida";
+export type EstadoAlerta = "pendiente" | "en seguimiento" | "atendida" | "descartada";
 
 export interface DatoAsociadoAlerta {
   lote?: string;

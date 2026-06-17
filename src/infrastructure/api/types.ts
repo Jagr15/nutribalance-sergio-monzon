@@ -1,7 +1,23 @@
 import type { Formula } from '../../features/formulas/types';
-import type { Insumo, StockMateriaPrima } from '../../features/insumos/types';
+import type { Cliente } from '../../features/clientes/types/cliente';
+import type {
+  HistorialCompraMP,
+  Insumo,
+  StockMateriaPrima,
+  StockMateriaPrimaResumen,
+  UltimoPrecioPagadoInsumo,
+} from '../../features/insumos/types';
 import type { OrdenProduccion } from '../../features/ordenes/types';
-import type { StockProductoTerminado } from '../../features/productos/types';
+import type {
+  MovimientoStockPT,
+  RegistrarSalidaStockPTData,
+  StockProductoTerminado,
+  StockProductoTerminadoResumen,
+} from '../../features/productos/types';
+import type {
+  MovimientoMPAuditoria,
+  TrazabilidadPorOP,
+} from '../../features/trazabilidad/types';
 import type { Proveedor } from '../../features/proveedores/types';
 import type { Silo } from '../../features/silos/types';
 import type { Usuario } from '../../features/usuarios/types';
@@ -12,6 +28,14 @@ export interface UsuariosService {
   getById: (uid: string) => Promise<Usuario | undefined>;
   create: (data: Omit<Usuario, 'uid'>) => Promise<Usuario>;
   update: (uid: string, data: Partial<Usuario>) => Promise<Usuario>;
+  delete: (uid: string) => Promise<boolean>;
+}
+
+export interface ClientesService {
+  getAll: () => Promise<Cliente[]>;
+  getById: (uid: string) => Promise<Cliente | undefined>;
+  create: (data: Omit<Cliente, 'uid' | 'createdAt' | 'updatedAt'>) => Promise<Cliente>;
+  update: (uid: string, data: Partial<Omit<Cliente, 'uid'>>) => Promise<Cliente>;
   delete: (uid: string) => Promise<boolean>;
 }
 
@@ -49,7 +73,10 @@ export interface StockMPCreateData {
   remito_nro: string;
   cantidad: number;
   unidad_entrada: TipoUnidad;
-  costo_total: number;
+  precio_unitario?: number;
+  unidad_precio?: 'KG' | 'TON';
+  costo_total?: number;
+  costo_unitario?: number;
   id_usuario: string;
   fecha_ingreso: Date;
   ubicacion: string;
@@ -57,6 +84,9 @@ export interface StockMPCreateData {
 
 export interface StockMPService {
   getAllLotes: () => Promise<StockMateriaPrima[]>;
+  getResumen: () => Promise<StockMateriaPrimaResumen[]>;
+  getHistorialCompras: () => Promise<HistorialCompraMP[]>;
+  getUltimosPrecios: () => Promise<UltimoPrecioPagadoInsumo[]>;
   create: (data: StockMPCreateData) => Promise<StockMateriaPrima>;
   update: (uid: string, data: Partial<StockMateriaPrima>) => Promise<StockMateriaPrima>;
   delete: (uid: string) => Promise<void>;
@@ -79,15 +109,25 @@ export interface OrdenesService {
 
 export interface StockPTService {
   getAll: () => Promise<StockProductoTerminado[]>;
+  getResumen: () => Promise<StockProductoTerminadoResumen[]>;
+  getMovimientos: () => Promise<MovimientoStockPT[]>;
+  registrarSalida: (data: RegistrarSalidaStockPTData) => Promise<StockProductoTerminado>;
+}
+
+export interface TrazabilidadService {
+  getMovimientosMPAuditoria: () => Promise<MovimientoMPAuditoria[]>;
+  getTrazabilidadPorOP: () => Promise<TrazabilidadPorOP[]>;
 }
 
 export interface ApiServices {
   usuarios: UsuariosService;
+  clientes: ClientesService;
   proveedores: ProveedoresService;
   insumos: InsumosService;
   formulas: FormulasService;
   stockMP: StockMPService;
   stockPT: StockPTService;
+  trazabilidad: TrazabilidadService;
   silos: SilosService;
   ordenes: OrdenesService;
 }

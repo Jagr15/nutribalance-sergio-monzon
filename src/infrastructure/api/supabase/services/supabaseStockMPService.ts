@@ -1,5 +1,11 @@
-import type { StockMateriaPrima } from '../../../../features/insumos/types';
-import { TipoUnidad } from '../../../../shared/types/global.interface';
+import type {
+  HistorialCompraMP,
+  StockMateriaPrima,
+  StockMateriaPrimaResumen,
+  StockMPEstadoResumen,
+  UltimoPrecioPagadoInsumo,
+} from '../../../../features/insumos/types';
+import { calcularCostoIngresoMP } from '../../../../features/insumos/utils/costoIngreso';
 import type { StockMPCreateData } from '../../types';
 import { supabaseClient } from '../client';
 
@@ -19,6 +25,41 @@ interface StockLoteRow {
   insumos: { legacy_uid: string | null } | null;
   proveedores: { legacy_uid: string | null } | null;
   usuarios: { legacy_uid: string | null } | null;
+}
+
+interface StockResumenRow {
+  insumo_id: string;
+  nombre_insumo: string;
+  unidad: string;
+  stock_actual: number;
+  stock_comprometido: number;
+  stock_disponible: number;
+  umbral_alerta: number;
+  estado: StockMPEstadoResumen;
+}
+
+interface HistorialCompraRow {
+  proveedor: string;
+  id_proveedor: string;
+  insumo: string;
+  id_insumo: string;
+  fecha_compra: string;
+  lote: string;
+  cantidad: number;
+  costo_unitario: number;
+  costo_total: number;
+}
+
+interface UltimoPrecioRow {
+  insumo: string;
+  id_insumo: string;
+  ultimo_proveedor: string;
+  id_proveedor: string;
+  fecha_ultima_compra: string;
+  ultimo_precio: number;
+  precio_compra_anterior: number | null;
+  variacion_absoluta: number | null;
+  variacion_pct: number | null;
 }
 
 const mapStock = (row: StockLoteRow): StockMateriaPrima => ({
@@ -53,11 +94,87 @@ export const supabaseStockMPService = {
     return (data ?? []).map((row) => mapStock(row as unknown as StockLoteRow));
   },
 
+  async getResumen(): Promise<StockMateriaPrimaResumen[]> {
+    const { data, error } = await supabaseClient
+      .from('stock_mp_resumen')
+      .select('insumo_id,nombre_insumo,unidad,stock_actual,stock_comprometido,stock_disponible,umbral_alerta,estado')
+      .order('nombre_insumo', { ascending: true });
+
+    if (error) throw error;
+
+    return (data ?? []).map((row) => {
+      const resumen = row as unknown as StockResumenRow;
+      return {
+        insumo_id: resumen.insumo_id,
+        nombre_insumo: resumen.nombre_insumo,
+        unidad: resumen.unidad,
+        stock_actual: Number(resumen.stock_actual),
+        stock_comprometido: Number(resumen.stock_comprometido),
+        stock_disponible: Number(resumen.stock_disponible),
+        umbral_alerta: Number(resumen.umbral_alerta),
+        estado: resumen.estado,
+      };
+    });
+  },
+
+  async getHistorialCompras(): Promise<HistorialCompraMP[]> {
+    const { data, error } = await supabaseClient
+      .from('historial_compras_mp')
+      .select('proveedor,id_proveedor,insumo,id_insumo,fecha_compra,lote,cantidad,costo_unitario,costo_total')
+      .order('fecha_compra', { ascending: false })
+      .order('lote', { ascending: false });
+
+    if (error) throw error;
+
+    return (data ?? []).map((row) => {
+      const compra = row as unknown as HistorialCompraRow;
+      return {
+        proveedor: compra.proveedor,
+        id_proveedor: compra.id_proveedor,
+        insumo: compra.insumo,
+        id_insumo: compra.id_insumo,
+        fecha_compra: compra.fecha_compra,
+        lote: compra.lote,
+        cantidad: Number(compra.cantidad),
+        costo_unitario: Number(compra.costo_unitario),
+        costo_total: Number(compra.costo_total),
+      };
+    });
+  },
+
+  async getUltimosPrecios(): Promise<UltimoPrecioPagadoInsumo[]> {
+    const { data, error } = await supabaseClient
+      .from('ultimo_precio_pagado_insumo')
+      .select('insumo,id_insumo,ultimo_proveedor,id_proveedor,fecha_ultima_compra,ultimo_precio,precio_compra_anterior,variacion_absoluta,variacion_pct')
+      .order('fecha_ultima_compra', { ascending: false })
+      .order('insumo', { ascending: true });
+
+    if (error) throw error;
+
+    return (data ?? []).map((row) => {
+      const precio = row as unknown as UltimoPrecioRow;
+      return {
+        insumo: precio.insumo,
+        id_insumo: precio.id_insumo,
+        ultimo_proveedor: precio.ultimo_proveedor,
+        id_proveedor: precio.id_proveedor,
+        fecha_ultima_compra: precio.fecha_ultima_compra,
+        ultimo_precio: Number(precio.ultimo_precio),
+        precio_compra_anterior: precio.precio_compra_anterior === null ? null : Number(precio.precio_compra_anterior),
+        variacion_absoluta: precio.variacion_absoluta === null ? null : Number(precio.variacion_absoluta),
+        variacion_pct: precio.variacion_pct === null ? null : Number(precio.variacion_pct),
+      };
+    });
+  },
+
   async create(payload: StockMPCreateData): Promise<StockMateriaPrima> {
-    const unidad = payload.unidad_entrada;
-    const factor = unidad === TipoUnidad.TON ? 1000 : 1;
-    const cantidadKg = payload.cantidad * factor;
-    const costoUnitario = payload.costo_total / cantidadKg;
+    const costo = calcularCostoIngresoMP({
+      cantidad: payload.cantidad,
+      unidad_entrada: payload.unidad_entrada,
+      precio_unitario: payload.precio_unitario,
+      unidad_precio: payload.unidad_precio,
+      costo_total: payload.costo_total,
+    });
 
     const { data: insumo, error: insumoError } = await supabaseClient
       .from('insumos')
@@ -89,11 +206,11 @@ export const supabaseStockMPService = {
         lote: payload.lote.toUpperCase(),
         remito_nro: payload.remito_nro,
         ubicacion: payload.ubicacion,
-        cantidad_inicial: cantidadKg,
-        cantidad_actual: cantidadKg,
+        cantidad_inicial: costo.cantidad_kg,
+        cantidad_actual: costo.cantidad_kg,
         cantidad_comprometida: 0,
-        costo_unitario: costoUnitario,
-        costo_total: payload.costo_total,
+        costo_unitario: costo.precio_unitario_kg,
+        costo_total: costo.costo_total,
         fecha_ingreso: payload.fecha_ingreso.toISOString(),
         id_usuario: usuario?.id ?? null,
       })

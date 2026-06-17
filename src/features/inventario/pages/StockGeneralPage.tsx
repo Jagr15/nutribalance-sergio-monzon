@@ -5,7 +5,7 @@ import { DataTable, StatusBadge, TableBody, TableCell, TableHeader, TableRow } f
 import { ApiService } from "../../../infrastructure/api";
 import { ROUTES } from "../../../app/config/routes";
 import type { Insumo, StockMateriaPrima } from "../../insumos/types";
-import { ControlEstado, type StockProductoTerminado } from "../../productos/types";
+import { ControlEstado, type StockProductoTerminadoResumen } from "../../productos/types";
 
 type EstadoInventario = "OK" | "Bajo" | "Crítico";
 
@@ -21,7 +21,7 @@ const getEstado = (ratio: number): EstadoInventario => {
 const StockGeneralPage = () => {
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [lotesMP, setLotesMP] = useState<StockMateriaPrima[]>([]);
-  const [stockPT, setStockPT] = useState<StockProductoTerminado[]>([]);
+  const [stockPTResumen, setStockPTResumen] = useState<StockProductoTerminadoResumen[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,14 +29,14 @@ const StockGeneralPage = () => {
     const load = async () => {
       try {
         setIsLoading(true);
-        const [insumosData, lotesData, stockPTData] = await Promise.all([
+        const [insumosData, lotesData, stockPTResumenData] = await Promise.all([
           ApiService.insumos.getAllInsumos(),
           ApiService.stockMP.getAllLotes(),
-          ApiService.stockPT.getAll(),
+          ApiService.stockPT.getResumen(),
         ]);
         setInsumos(insumosData);
         setLotesMP(lotesData);
-        setStockPT(stockPTData);
+        setStockPTResumen(stockPTResumenData);
         setError(null);
       } catch (error) {
         console.error("Error cargando stock general:", error);
@@ -79,20 +79,14 @@ const StockGeneralPage = () => {
       mpOk += 1;
     });
 
-    const totalPT = stockPT.reduce((acc, item) => acc + (item.cantidad_total || 0), 0);
-
-    let ptCritico = 0;
-    let ptBajo = 0;
-    let ptOk = 0;
-
-    stockPT.forEach((item) => {
-      if (item.estado === ControlEstado.CRITICO) ptCritico += 1;
-      else if (item.estado === ControlEstado.BAJO) ptBajo += 1;
-      else ptOk += 1;
-    });
+    const totalPT = stockPTResumen.reduce((acc, item) => acc + (item.stock_actual || 0), 0);
+    const valorPT = stockPTResumen.reduce((acc, item) => acc + (item.valor_monetario || 0), 0);
+    const ptCritico = stockPTResumen.filter((item) => item.estado === ControlEstado.CRITICO).length;
+    const ptBajo = stockPTResumen.filter((item) => item.estado === ControlEstado.BAJO).length;
+    const ptOk = stockPTResumen.filter((item) => item.estado === ControlEstado.OK).length;
 
     const totalAlertasCriticas = mpCritico + ptCritico;
-    const totalValor = valorMP;
+    const totalValor = valorMP + valorPT;
 
     const mpRatio = totalCapMP > 0 ? (totalMP / totalCapMP) * 100 : 0;
     const ptEstado: EstadoInventario = ptCritico > 0 ? "Crítico" : ptBajo > 0 ? "Bajo" : "OK";
@@ -112,16 +106,16 @@ const StockGeneralPage = () => {
         ratio: mpRatio,
       },
       pt: {
-        elementos: stockPT.length,
-        lotes: stockPT.length,
-        valor: null,
+        elementos: stockPTResumen.length,
+        lotes: stockPTResumen.length,
+        valor: valorPT,
         ok: ptOk,
         bajo: ptBajo,
         critico: ptCritico,
         estado: ptEstado,
       },
     };
-  }, [insumos, lotesMP, stockPT]);
+  }, [insumos, lotesMP, stockPTResumen]);
 
   const summaryRows = [
     {
@@ -176,7 +170,7 @@ const StockGeneralPage = () => {
         <Card>
           <p className="text-xs uppercase tracking-widest text-slate-500">Valor Total Inventario ARS</p>
           <h2 className="text-2xl font-black mt-2 text-emerald-300">{formatCurrency(Math.round(metrics.totalValor))}</h2>
-          <p className="text-xs text-slate-500 mt-2">Valor PT no disponible sin costo asociado.</p>
+          <p className="text-xs text-slate-500 mt-2">Incluye valor consolidado de MP y PT.</p>
         </Card>
       </section> : null}
 
@@ -193,7 +187,7 @@ const StockGeneralPage = () => {
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-slate-700 font-semibold">Producto Terminado</p>
               <p className="text-slate-500 mt-1">{metrics.pt.elementos} productos</p>
-              <p className="text-slate-700 mt-2">Valor: No disponible sin costo asociado</p>
+              <p className="text-slate-700 mt-2">Valor: {formatCurrency(Math.round(metrics.pt.valor ?? 0))}</p>
               <p className="text-slate-500 mt-1">Alertas: OK {metrics.pt.ok} · Bajo {metrics.pt.bajo} · Crítico {metrics.pt.critico}</p>
             </div>
           </div>

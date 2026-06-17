@@ -1,5 +1,10 @@
+import type { StockMateriaPrimaResumen } from '../../insumos/types';
+import type { StockProductoTerminadoResumen } from '../../productos/types';
+
 export interface DashboardOperativoKPIs {
   stock_total_mp: number;
+  stock_comprometido_mp: number;
+  stock_disponible_mp: number;
   stock_critico: number;
   ordenes_pendientes: number;
   ordenes_en_proceso: number;
@@ -8,8 +13,14 @@ export interface DashboardOperativoKPIs {
   costo_promedio_produccion: number;
   merma_total: number;
   valor_inventario_mp: number;
+  stock_total_pt: number;
   valor_inventario_pt: number;
   proteina_promedio_formula: number;
+}
+
+export interface DashboardStockResumenes {
+  stockMateriaPrima: StockMateriaPrimaResumen[];
+  stockProductoTerminado: StockProductoTerminadoResumen[];
 }
 
 export interface FormulaComposicion {

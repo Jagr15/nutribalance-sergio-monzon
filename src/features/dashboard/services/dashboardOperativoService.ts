@@ -1,10 +1,13 @@
 import { supabaseClient } from '../../../infrastructure/api/supabase/client';
 import { ApiService } from '../../../infrastructure/api';
 import { EstadoOrden } from '../../ordenes/types';
+import { buildStockMPResumen } from '../../insumos/utils/stockResumen';
+import { buildStockPTResumen } from '../../productos/utils/stockPtResumen';
 import type {
   AlertaOperativaRaw,
   ConsumoMensualInsumo,
   DashboardOperativoKPIs,
+  DashboardStockResumenes,
   FormulaComposicion,
   TrazabilidadVisualRow,
 } from '../types/operativo';
@@ -14,7 +17,12 @@ type DashboardStockResumenRow = {
   stock_total_mp: unknown;
   stock_critico: unknown;
   valor_inventario_mp: unknown;
+  stock_total_pt: unknown;
   valor_inventario_pt: unknown;
+};
+type DashboardStockLotesRow = {
+  cantidad_actual: unknown;
+  cantidad_comprometida: unknown;
 };
 type DashboardProduccionResumenRow = {
   ordenes_pendientes: unknown;
@@ -36,9 +44,13 @@ const monthKey = (isoLike: string | Date) => {
   return `${d.getFullYear()}-${m}`;
 };
 
+const settledValue = <T>(result: PromiseSettledResult<T>, fallback: T): T =>
+  result.status === 'fulfilled' ? result.value : fallback;
+
 const buildFallbackDashboard = async () => {
-  const [stockLotes, insumos, ordenes, formulas] = await Promise.all([
+  const [stockLotes, stockPT, insumos, ordenes, formulas] = await Promise.all([
     ApiService.stockMP.getAllLotes(),
+    ApiService.stockPT.getResumen(),
     ApiService.insumos.getAllInsumos(),
     ApiService.ordenes.getAll(),
     ApiService.formulas.findAll(),
@@ -46,11 +58,15 @@ const buildFallbackDashboard = async () => {
 
   const insumoById = new Map(insumos.map((i) => [i.uid, i]));
   const stockTotalMp = stockLotes.reduce((acc, lote) => acc + num(lote.cantidad_actual), 0);
+  const stockComprometidoMp = stockLotes.reduce((acc, lote) => acc + num(lote.cantidad_comprometida), 0);
+  const stockDisponibleMp = Math.max(0, stockTotalMp - stockComprometidoMp);
   const stockCritico = stockLotes.filter((lote) => {
     const umbral = num(insumoById.get(lote.id_insumo)?.umbral_alerta);
-    return umbral > 0 && num(lote.cantidad_actual) <= umbral;
+    const disponible = num(lote.cantidad_actual) - num(lote.cantidad_comprometida);
+    return umbral > 0 && disponible <= umbral;
   }).length;
   const valorInventarioMp = stockLotes.reduce((acc, lote) => acc + num(lote.cantidad_actual) * num(lote.costo_unitario), 0);
+  const stockTotalPt = stockPT.reduce((acc, lote) => acc + num((lote as { stock_actual?: unknown }).stock_actual), 0);
 
   const ordenesPendientes = ordenes.filter((o) => o.estado === EstadoOrden.PENDIENTE).length;
   const ordenesEnProceso = ordenes.filter((o) => o.estado === EstadoOrden.EN_PROCESO).length;
@@ -62,9 +78,7 @@ const buildFallbackDashboard = async () => {
   const costoPromedio = ordenes.length > 0
     ? ordenes.reduce((acc, o) => acc + num(o.costo_total_insumos), 0) / ordenes.length
     : 0;
-  const valorInventarioPt = ordenes
-    .filter((o) => o.estado === EstadoOrden.FINALIZADO)
-    .reduce((acc, o) => acc + num(o.cantidad_real ?? o.cantidad_objetivo) * (num(o.costo_total_insumos) / Math.max(1, num(o.cantidad_objetivo))), 0);
+  const valorInventarioPt = stockPT.reduce((acc, lote) => acc + num((lote as { valor_monetario?: unknown }).valor_monetario), 0);
 
   const formulaComposicion: FormulaComposicion[] = formulas
     .filter((f) => f.esta_activa)
@@ -92,6 +106,8 @@ const buildFallbackDashboard = async () => {
   return {
     kpis: {
       stock_total_mp: stockTotalMp,
+      stock_comprometido_mp: stockComprometidoMp,
+      stock_disponible_mp: stockDisponibleMp,
       stock_critico: stockCritico,
       ordenes_pendientes: ordenesPendientes,
       ordenes_en_proceso: ordenesEnProceso,
@@ -100,6 +116,7 @@ const buildFallbackDashboard = async () => {
       costo_promedio_produccion: costoPromedio,
       merma_total: mermaTotal,
       valor_inventario_mp: valorInventarioMp,
+      stock_total_pt: stockTotalPt,
       valor_inventario_pt: valorInventarioPt,
       proteina_promedio_formula: proteinaPromedio,
     } satisfies DashboardOperativoKPIs,
@@ -108,7 +125,42 @@ const buildFallbackDashboard = async () => {
   };
 };
 
+const buildFallbackStockResumenes = async (): Promise<DashboardStockResumenes> => {
+  const [stockLotes, stockPT, insumos, movimientosPT] = await Promise.allSettled([
+    ApiService.stockMP.getAllLotes(),
+    ApiService.stockPT.getAll(),
+    ApiService.insumos.getAllInsumos(),
+    ApiService.stockPT.getMovimientos(),
+  ]);
+
+  const lotes = settledValue(stockLotes, []);
+  const pt = settledValue(stockPT, []);
+  const insumosList = settledValue(insumos, []);
+  const movimientosList = settledValue(movimientosPT, []);
+
+  return {
+    stockMateriaPrima: buildStockMPResumen(lotes, insumosList),
+    stockProductoTerminado: buildStockPTResumen(pt, movimientosList),
+  };
+};
+
 export const dashboardOperativoService = {
+  async getStockResumenes(): Promise<DashboardStockResumenes> {
+    try {
+      const [stockMateriaPrima, stockProductoTerminado] = await Promise.all([
+        ApiService.stockMP.getResumen(),
+        ApiService.stockPT.getResumen(),
+      ]);
+
+      return {
+        stockMateriaPrima,
+        stockProductoTerminado,
+      };
+    } catch {
+      return buildFallbackStockResumenes();
+    }
+  },
+
   async getKPIs(): Promise<DashboardOperativoKPIs> {
     try {
       const [stockR, prodR, costR] = await Promise.all([
@@ -117,14 +169,28 @@ export const dashboardOperativoService = {
         supabaseClient.from('vw_dashboard_costos_resumen').select('proteina_promedio_formula').single<DashboardCostosProteinaRow>(),
       ]);
 
+      const stockLotsQuery = await supabaseClient
+        .from('stock_lotes_mp')
+        .select('cantidad_actual,cantidad_comprometida')
+        .is('deleted_at', null);
+
       if (stockR.error) throw stockR.error;
       if (prodR.error) throw prodR.error;
       if (costR.error) throw costR.error;
+      if (stockLotsQuery.error) throw stockLotsQuery.error;
+
+      const stockLots = (stockLotsQuery.data ?? []) as DashboardStockLotesRow[];
+      const stockComprometidoMp = stockLots.reduce((acc, lote) => acc + num(lote.cantidad_comprometida), 0);
+      const stockTotalMp = stockLots.reduce((acc, lote) => acc + num(lote.cantidad_actual), 0);
+      const stockDisponibleMp = Math.max(0, stockTotalMp - stockComprometidoMp);
 
       return {
-        stock_total_mp: num(stockR.data.stock_total_mp),
+        stock_total_mp: stockTotalMp,
+        stock_comprometido_mp: stockComprometidoMp,
+        stock_disponible_mp: stockDisponibleMp,
         stock_critico: num(stockR.data.stock_critico),
         valor_inventario_mp: num(stockR.data.valor_inventario_mp),
+        stock_total_pt: num(stockR.data.stock_total_pt),
         valor_inventario_pt: num(stockR.data.valor_inventario_pt),
         ordenes_pendientes: num(prodR.data.ordenes_pendientes),
         ordenes_en_proceso: num(prodR.data.ordenes_en_proceso),
