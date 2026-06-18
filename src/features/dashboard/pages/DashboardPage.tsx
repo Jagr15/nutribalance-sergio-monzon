@@ -17,6 +17,7 @@ import {
   isWithinDashboardPeriodo,
   type DashboardPeriodo,
 } from '../utils/dashboardExecutiveInsights';
+import { buildDashboardTemporalInsights, filterAlertasByPeriodo } from '../utils/dashboardTemporalInsights';
 
 const fmtARS = (v: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v);
 
@@ -31,6 +32,7 @@ export const DashboardPage = () => {
   const [periodo, setPeriodo] = useState<DashboardPeriodo>('MES');
   const [isExpedicionOpen, setIsExpedicionOpen] = useState(false);
   const navigate = useNavigate();
+  const dashboardNow = useMemo(() => new Date(), []);
 
   useEffect(() => {
     void Promise.allSettled([
@@ -113,18 +115,22 @@ export const DashboardPage = () => {
   }, [stockPtResumen]);
 
   const executiveMovimientos = useMemo(() => {
-    const now = new Date();
-    return movimientosPT.filter((mov) => isWithinDashboardPeriodo(mov.created_at, periodo, now));
-  }, [movimientosPT, periodo]);
+    return movimientosPT.filter((mov) => isWithinDashboardPeriodo(mov.created_at, periodo, dashboardNow));
+  }, [dashboardNow, movimientosPT, periodo]);
 
   const executiveInsights = useMemo(
-    () => buildDashboardExecutiveInsights(executiveMovimientos, clientes, periodo),
-    [clientes, executiveMovimientos, periodo],
+    () => buildDashboardExecutiveInsights(executiveMovimientos, clientes, periodo, dashboardNow),
+    [clientes, dashboardNow, executiveMovimientos, periodo],
+  );
+
+  const temporalInsights = useMemo(
+    () => buildDashboardTemporalInsights(ordenes, movimientosPT, alertas, periodo, dashboardNow),
+    [alertas, dashboardNow, movimientosPT, ordenes, periodo],
   );
 
   const ordenesRecientes = useMemo(
-    () => ordenes.filter((orden) => isWithinDashboardPeriodo(orden.fecha_creacion, periodo, new Date())),
-    [ordenes, periodo],
+    () => ordenes.filter((orden) => isWithinDashboardPeriodo(orden.fecha_creacion, periodo, dashboardNow)),
+    [dashboardNow, ordenes, periodo],
   );
 
   const recientes = useMemo(
@@ -171,7 +177,7 @@ export const DashboardPage = () => {
     const priorityScore = (priority: string) => (priority === 'critica' ? 3 : priority === 'media' ? 2 : 1);
     const stateScore = (state: string) => (state === 'pendiente' ? 3 : state === 'en seguimiento' ? 2 : state === 'atendida' ? 1 : 0);
 
-    return [...alertas]
+    return filterAlertasByPeriodo([...alertas], periodo, dashboardNow)
       .filter((a) => a.estado !== 'atendida' && a.estado !== 'descartada')
       .sort((a, b) => {
         const priorityDelta = priorityScore(b.prioridad) - priorityScore(a.prioridad);
@@ -179,7 +185,7 @@ export const DashboardPage = () => {
         return stateScore(b.estado) - stateScore(a.estado);
       })
       .slice(0, 3);
-  }, [alertas]);
+  }, [alertas, dashboardNow, periodo]);
 
   const formatDatoAsociado = (dato: Record<string, unknown>) => {
     const parts: string[] = [];
@@ -356,6 +362,30 @@ export const DashboardPage = () => {
                 })}
               </div>
             )}
+          </Card>
+        </div>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Costos</p>
+            <p className="mt-2 text-3xl font-black text-orange-500">{fmtARS(temporalInsights.costos)}</p>
+            <p className="mt-2 text-xs text-slate-500">Costos de órdenes finalizadas en {getDashboardPeriodoLabel(periodo).toLowerCase()}.</p>
+          </Card>
+          <Card>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Ingresos</p>
+            <p className="mt-2 text-3xl font-black text-emerald-500">{fmtARS(temporalInsights.ingresos)}</p>
+            <p className="mt-2 text-xs text-slate-500">Ventas PT con cliente en {getDashboardPeriodoLabel(periodo).toLowerCase()}.</p>
+          </Card>
+          <Card>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Flujo de caja</p>
+            <p className={`mt-2 text-3xl font-black ${temporalInsights.flujoCaja >= 0 ? 'text-cyan-600' : 'text-red-600'}`}>
+              {fmtARS(temporalInsights.flujoCaja)}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">Ingresos menos costos operativos del período.</p>
+          </Card>
+          <Card>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Alertas</p>
+            <p className="mt-2 text-3xl font-black text-fuchsia-600">{temporalInsights.alertas.length}</p>
+            <p className="mt-2 text-xs text-slate-500">Alertas operativas dentro de {getDashboardPeriodoLabel(periodo).toLowerCase()}.</p>
           </Card>
         </div>
       </section>

@@ -22,6 +22,7 @@ export interface AlertaOperativa {
   prioridad: PrioridadAlerta;
   area: AreaAlerta;
   estado: EstadoAlerta;
+  fechaEvento: string;
   fechaRelativa: string;
   datoAsociado: DatoAsociadoAlerta;
   accionRecomendada: string;

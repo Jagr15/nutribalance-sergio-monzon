@@ -95,6 +95,12 @@ type StockPTMovimientoVentaRow = {
   cliente_id: string | null;
   created_at: string;
   tipo: string;
+  stock_pt_id?: string | null;
+  nombre_producto?: string | null;
+  cantidad?: number | string | null;
+  costo_unitario?: number | string | null;
+  valor_total?: number | string | null;
+  cliente_nombre?: string | null;
 };
 
 const emptyReportes: FinanzasReportes = {
@@ -318,6 +324,87 @@ export const finanzasService = {
       ApiService.clientes.getAll(),
     ]);
 
+    const ventasPt = movimientosPt.filter((movimiento) => movimiento.tipo === 'SALIDA' && Boolean(movimiento.cliente_id));
+    const ventasFinancieras = ventasPt
+      .map((movimiento) => {
+        const monto = Number(movimiento.valor_total ?? 0) > 0
+          ? Number(movimiento.valor_total ?? 0)
+          : Number(movimiento.cantidad ?? 0) * Number(movimiento.costo_unitario ?? 0);
+        if (monto <= 0) return null;
+        return {
+          fecha: movimiento.created_at,
+          tipo: 'INGRESO' as const,
+          origen_operativo: 'VENTA_PT',
+          descripcion: `Venta ${movimiento.nombre_producto}`,
+          monto,
+          categoria: 'Ventas PT',
+          centro_costo: 'Planta',
+          stock_pt_id: movimiento.stock_pt_id ?? null,
+        };
+      })
+      .filter((row): row is {
+        fecha: string;
+        tipo: 'INGRESO';
+        origen_operativo: string;
+        descripcion: string;
+        monto: number;
+        categoria: string;
+        centro_costo: string;
+        stock_pt_id: string | null;
+      } => row !== null);
+
+    const movimientosFinancieros: FlujoCajaRubroDbRow[] = [
+      ...ordenes.map((orden) => ({
+        fecha: orden.fecha_creacion,
+        tipo: 'EGRESO' as const,
+        origen_operativo: 'PRODUCCION',
+        descripcion: `Producción ${orden.nombre_producto}`,
+        monto: Number(orden.costo_total_insumos ?? 0),
+        categoria: 'Producción',
+        centro_costo: 'Planta',
+      })),
+      ...ventasFinancieras.map((movimiento) => ({
+        fecha: movimiento.fecha,
+        tipo: movimiento.tipo,
+        origen_operativo: movimiento.origen_operativo,
+        descripcion: movimiento.descripcion,
+        monto: movimiento.monto,
+        categoria: movimiento.categoria,
+        centro_costo: movimiento.centro_costo,
+      })),
+    ];
+
+    const comprobantesVentas: ComprobanteCarteraDbRow[] = ventasPt.flatMap((movimiento) => {
+        const monto = Number(movimiento.valor_total ?? 0) > 0
+          ? Number(movimiento.valor_total ?? 0)
+          : Number(movimiento.cantidad ?? 0) * Number(movimiento.costo_unitario ?? 0);
+        if (monto <= 0) return [];
+        return [{
+          cliente_id: movimiento.cliente_id ?? null,
+          tercero: movimiento.cliente_nombre ?? clientes.find((cliente) => cliente.uid === movimiento.cliente_id)?.nombre ?? 'Sin cliente asociado',
+          fecha_emision: movimiento.created_at,
+          fecha_vencimiento: new Date(new Date(movimiento.created_at).getTime() + 30 * 86400000).toISOString(),
+          estado: 'PENDIENTE',
+          saldo: monto,
+          tipo: 'FACTURA_VENTA',
+        }];
+      });
+
+    const clientesConVenta = new Set(ventasPt.map((movimiento) => movimiento.cliente_id).filter((value): value is string => Boolean(value)));
+    const comprobantesLegacy: ComprobanteCarteraDbRow[] = clientes
+      .filter((cliente) => cliente.saldoPendienteArs > 0 && !clientesConVenta.has(cliente.uid))
+      .map((cliente, index) => ({
+        cliente_id: cliente.uid,
+        tercero: cliente.nombre,
+        fecha_emision: cliente.ultimaCompra ?? new Date().toISOString(),
+        fecha_vencimiento: new Date((cliente.ultimaCompra ? new Date(cliente.ultimaCompra).getTime() : Date.now()) + (index + 1) * 86400000 * 7).toISOString(),
+        estado: 'PENDIENTE',
+        saldo: cliente.saldoPendienteArs,
+        tipo: 'FACTURA_VENTA',
+      }));
+
+    const comprobantes = [...comprobantesVentas, ...comprobantesLegacy];
+
     const costoProduccion = ordenes.reduce((acc, orden) => acc + Number(orden.costo_total_insumos ?? 0), 0);
     const valorStockMp = lotes.reduce(
       (acc, lote) => acc + Number(lote.cantidad_actual ?? 0) * Number(lote.costo_unitario ?? 0),
@@ -346,13 +433,6 @@ export const finanzasService = {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([mes, monto]) => ({ mes, monto }));
 
-    const flujoCajaMensual = costoOperativoMensual.map(({ mes, monto }) => ({
-      mes,
-      ingresos: 0,
-      egresos: monto,
-      neto: -monto,
-    }));
-
     const formulasCostMap = new Map(
       formulas.map((f) => [f.uid, Number(f.costo_por_kg ?? 0)]),
     );
@@ -369,6 +449,23 @@ export const finanzasService = {
       };
     }).filter((row) => row.costo_total > 0 || row.kg_total > 0 || formulasCostMap.get(row.id_formula));
 
+    const flujoPorMes = new Map<string, { ingresos: number; egresos: number }>();
+    movimientosFinancieros.forEach((movimiento) => {
+      const mes = `${new Date(movimiento.fecha).getFullYear()}-${String(new Date(movimiento.fecha).getMonth() + 1).padStart(2, '0')}`;
+      const current = flujoPorMes.get(mes) ?? { ingresos: 0, egresos: 0 };
+      if (movimiento.tipo === 'INGRESO') current.ingresos += Number(movimiento.monto ?? 0);
+      if (movimiento.tipo === 'EGRESO') current.egresos += Number(movimiento.monto ?? 0);
+      flujoPorMes.set(mes, current);
+    });
+    const flujoCajaMensual = [...flujoPorMes.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mes, value]) => ({
+        mes,
+        ingresos: Number(value.ingresos.toFixed(2)),
+        egresos: Number(value.egresos.toFixed(2)),
+        neto: Number((value.ingresos - value.egresos).toFixed(2)),
+      }));
+
     const reportes: FinanzasReportes = {
       ...emptyReportes,
       flujo_caja_mensual: flujoCajaMensual,
@@ -377,10 +474,31 @@ export const finanzasService = {
         { categoria: 'Merma', monto: perdidaMerma },
       ].filter((row) => row.monto > 0),
       ingresos_por_categoria: [],
-      ingresos_pt_por_producto: buildIngresosPtPorProducto(movimientosPt),
+      ingresos_pt_por_producto: buildIngresosPtPorProducto(
+        movimientosPt,
+        ventasFinancieras.map((movimiento) => ({
+          stock_pt_id: movimiento.stock_pt_id,
+          monto: movimiento.monto,
+          fecha: movimiento.fecha,
+        })),
+      ),
       rentabilidad_por_formula: rentabilidadPorFormula,
       costo_operativo_mensual: costoOperativoMensual,
     };
+
+    const movimientosFinancierosUi: MovimientoFinanciero[] = movimientosFinancieros
+      .map((movimiento, index) => ({
+        uid: `fml-${index}-${movimiento.tipo.toLowerCase()}-${movimiento.fecha}-${movimiento.descripcion}`.replace(/[^a-zA-Z0-9-]/g, '-'),
+        fecha: movimiento.fecha,
+        tipo: movimiento.tipo,
+        origen_operativo: movimiento.origen_operativo ?? undefined,
+        descripcion: movimiento.descripcion,
+        monto: Number(movimiento.monto ?? 0),
+        categoria: movimiento.categoria ?? undefined,
+        centro_costo: movimiento.centro_costo ?? undefined,
+        estado: 'CONFIRMADO' as const,
+      }))
+      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
     const tesoreria = buildTesoreriaInsights(
       [
@@ -392,25 +510,9 @@ export const finanzasService = {
           centro_costo: 'Planta',
         },
       ],
-      ordenes.map((orden) => ({
-        fecha: orden.fecha_creacion,
-        tipo: 'EGRESO' as const,
-        origen_operativo: 'PRODUCCION',
-        descripcion: `Producción ${orden.nombre_producto}`,
-        monto: orden.costo_total_insumos ?? 0,
-        categoria: 'Producción',
-        centro_costo: 'Planta',
-      })),
+      movimientosFinancieros,
       clientes,
-      clientes.map((cliente, index) => ({
-        cliente_id: cliente.uid,
-        tercero: cliente.nombre,
-        fecha_emision: cliente.ultimaCompra ?? new Date().toISOString(),
-        fecha_vencimiento: new Date(Date.now() + (index + 1) * 86400000 * 7).toISOString(),
-        estado: cliente.saldoPendienteArs > 0 ? 'PENDIENTE' : 'COBRADO',
-        saldo: cliente.saldoPendienteArs,
-        tipo: 'FACTURA_VENTA',
-      })),
+      comprobantes,
       movimientosPt as unknown as MovimientoStockPT[],
       [
         {
@@ -441,16 +543,20 @@ export const finanzasService = {
       0,
     );
 
+    const ingresoMes = flujoCajaMensual.length > 0 ? flujoCajaMensual[flujoCajaMensual.length - 1].ingresos : 0;
+    const egresoMes = flujoCajaMensual.length > 0 ? flujoCajaMensual[flujoCajaMensual.length - 1].egresos : 0;
+    const cuentasPorCobrar = tesoreria.carteraClientes.reduce((acc, row) => acc + row.saldo_pendiente, 0);
+
     const kpis: FinanzasKPIs = {
       saldo_actual: 0,
-      ingresos_mes: 0,
-      egresos_mes: flujoCajaMensual.length > 0 ? flujoCajaMensual[flujoCajaMensual.length - 1].egresos : 0,
-      flujo_neto: flujoCajaMensual.length > 0 ? flujoCajaMensual[flujoCajaMensual.length - 1].neto : 0,
-      margen_operativo: 0,
+      ingresos_mes: ingresoMes,
+      egresos_mes: egresoMes,
+      flujo_neto: ingresoMes - egresoMes,
+      margen_operativo: ingresoMes > 0 ? ((ingresoMes - egresoMes) / ingresoMes) * 100 : 0,
       costo_produccion: costoProduccion,
       valorizacion_inventario: valorizacionInventario,
       cuentas_por_pagar: 0,
-      cuentas_por_cobrar: 0,
+      cuentas_por_cobrar: cuentasPorCobrar,
       perdida_merma: perdidaMerma,
       valor_stock_mp: valorStockMp,
       valor_stock_pt: valorStockPt,
@@ -461,7 +567,7 @@ export const finanzasService = {
       kpis,
       reportes,
       tesoreria,
-      movimientos: [],
+      movimientos: movimientosFinancierosUi,
       costosComparativos: buildCostosFormulaVsReal(formulas, ordenes),
       inventario: {
         valor_stock_mp: valorStockMp,
