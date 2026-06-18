@@ -5,7 +5,10 @@ const failSafeClient = new Proxy(
   {},
   {
     get() {
-      throw new Error('[supabase] Cliente no disponible. Activa mocks o configura variables de Supabase.');
+      const message = runtimeConfig.status === 'invalid'
+        ? `[supabase] Configuración inválida: ${runtimeConfig.errors.join(' ')}`
+        : '[supabase] Cliente no disponible. Activa mocks o configura variables de Supabase.';
+      throw new Error(message);
     },
   }
 );

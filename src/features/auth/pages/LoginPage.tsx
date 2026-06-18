@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FiCheckCircle, FiLoader, FiLock, FiShield, FiTrendingUp, FiUser, FiXCircle } from "react-icons/fi";
+import { runtimeConfig } from "../../../infrastructure/api/runtimeConfig";
 import { authenticateDemoUser, saveSession } from "../session";
 
 type LoginStatus = "idle" | "loading" | "success" | "error";
@@ -27,7 +28,7 @@ const LoginPage = () => {
   const [error, setError] = useState("");
   const [status, setStatus] = useState<LoginStatus>("idle");
   const [isLeaving, setIsLeaving] = useState(false);
-  const isDemoMode = import.meta.env.VITE_USE_MOCKS !== "false";
+  const isDemoMode = runtimeConfig.mode === "mock";
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

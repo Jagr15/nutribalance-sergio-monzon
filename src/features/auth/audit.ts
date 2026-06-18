@@ -1,4 +1,5 @@
 import { supabaseClient } from '../../infrastructure/api/supabase/client';
+import { runtimeConfig } from '../../infrastructure/api/runtimeConfig';
 import { getSessionUser } from './session';
 import type { AppModule } from './permissions';
 
@@ -9,9 +10,7 @@ export const auditAction = async (params: {
   entidad_ref?: string;
   payload?: Record<string, unknown>;
 }) => {
-  const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false';
-  const hasSupabaseConfig = Boolean(import.meta.env.VITE_SUPABASE_URL) && Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY);
-  if (useMocks || !hasSupabaseConfig) return;
+  if (runtimeConfig.mode !== 'supabase') return;
 
   try {
     const user = getSessionUser();

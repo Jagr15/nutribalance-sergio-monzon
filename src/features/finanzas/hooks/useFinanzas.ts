@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 import { finanzasService } from '../services/finanzasService';
 import type { CostosFormulaVsReal, FinanzasInventarioResumen, FinanzasKPIs, FinanzasReportes, MovimientoFinanciero } from '../types';
 
@@ -44,7 +45,7 @@ export const useFinanzas = () => {
     setLoading(true);
     setLoadError(null);
     setInfoMessage(null);
-    const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false';
+    const useMocks = runtimeConfig.mode === 'mock';
     const [kpisResult, reportesResult, movimientosResult, costosResult, inventarioResult] = await Promise.allSettled([
       finanzasService.getKPIs(),
       finanzasService.getReportes(),

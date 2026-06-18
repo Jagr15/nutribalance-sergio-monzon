@@ -34,10 +34,16 @@ npm install
 
 Crear `.env` desde `.env.example`.
 
-Variables clave:
+Modos disponibles:
 
-- `VITE_USE_MOCKS=true` para usar mocks locales.
-- `VITE_USE_MOCKS=false` para usar Supabase (Sprint 1).
+- Modo mock local: `VITE_USE_MOCKS=true`.
+- Modo Supabase: `VITE_USE_MOCKS=false` + `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`.
+
+En producción no se permite arrancar con `VITE_USE_MOCKS=true`. Si falta configuración, la app muestra una pantalla de error con las variables requeridas.
+
+Variables requeridas en Supabase:
+
+- `VITE_USE_MOCKS`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
@@ -87,6 +93,16 @@ El switch está en `src/infrastructure/api/index.ts`:
   - silos
 
 En Sprint 1 Fase 1, `usuarios` sigue en mock y ya se migró `fórmulas` + `órdenes` a Supabase.
+
+## Despliegue en Vercel
+
+Configurar estas variables en el proyecto de Vercel:
+
+- `VITE_USE_MOCKS=false`
+- `VITE_SUPABASE_URL=https://<project-ref>.supabase.co`
+- `VITE_SUPABASE_ANON_KEY=<anon-key-publica>`
+
+Si alguna falta, el bootstrap detiene la app con un mensaje claro en vez de mostrar pantalla en blanco.
 
 ## Backend Supabase
 

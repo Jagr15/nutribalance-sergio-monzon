@@ -32,10 +32,12 @@ VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_ANON_KEY=<anon-key-local-o-cloud>
 ```
 
-Para usar backend real:
+Para usar backend real en local o apuntar a Supabase Cloud:
 
 ```bash
 VITE_USE_MOCKS=false
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-key>
 ```
 
 ## Conectar Supabase Cloud
@@ -50,6 +52,14 @@ VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon-key>
 VITE_USE_MOCKS=false
 ```
+
+## Produccion en Vercel
+
+No dejes `VITE_USE_MOCKS=true` en producción. Configura las mismas tres variables en el panel de Vercel y vuelve a desplegar:
+
+- `VITE_USE_MOCKS=false`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
 ## Alcance Sprint 1
 
