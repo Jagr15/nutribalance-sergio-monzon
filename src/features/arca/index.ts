@@ -16,6 +16,7 @@ export type { IdGeneratorPort } from './application/ports/IdGeneratorPort';
 export type { ArcaFiscalAuditPort } from './application/ports/ArcaFiscalAuditPort';
 export type { ArcaFiscalEventRepositoryPort, ArcaEventoFiscalInput, ArcaEventoFiscalPersistido } from './application/ports/ArcaFiscalEventRepositoryPort';
 export type { ArcaFiscalPersistencePort, ArcaFacturaPersistida, ArcaComprobantePersistido } from './application/ports/ArcaFiscalPersistencePort';
+export type { ClienteFiscalMappingResult, MapClienteFiscalOptions } from './infrastructure/mappers/clienteFiscalMapper';
 export { emitirFactura } from './application/use-cases/EmitirFactura';
 export { simularFactura } from './application/use-cases/SimularFactura';
 export { validarFactura } from './application/use-cases/ValidarFactura';
@@ -28,3 +29,4 @@ export { createArcaProvider } from './infrastructure/providers/ArcaProviderFacto
 export { ArcaFiscalAuditAdapter } from './infrastructure/audit/ArcaFiscalAuditAdapter';
 export { SupabaseArcaFiscalRepository } from './infrastructure/repositories/SupabaseArcaFiscalRepository';
 export { SupabaseArcaEventoFiscalRepository } from './infrastructure/repositories/SupabaseArcaEventoFiscalRepository';
+export { inferirCondicionIvaCliente, inferirTipoDocumentoFiscal, mapClienteToClienteFiscal } from './infrastructure/mappers/clienteFiscalMapper';
