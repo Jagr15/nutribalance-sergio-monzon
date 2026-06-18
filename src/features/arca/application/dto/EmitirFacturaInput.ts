@@ -1,11 +1,11 @@
 import type { ClienteFiscal } from '../../domain/entities/ClienteFiscal';
-import type { FacturaItem } from '../../domain/entities/Factura';
+import type { FacturaItemInput } from '../../domain/entities/Factura';
 import type { TipoFactura } from '../../domain/value-objects/TipoFactura';
 
 export interface EmitirFacturaInput {
   modalidad: TipoFactura;
   cliente: ClienteFiscal;
-  items: FacturaItem[];
+  items: FacturaItemInput[];
   moneda?: 'ARS';
   observaciones?: string;
   source?: {

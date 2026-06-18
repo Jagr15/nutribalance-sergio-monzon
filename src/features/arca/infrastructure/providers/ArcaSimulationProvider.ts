@@ -28,6 +28,7 @@ export class ArcaSimulationProvider implements ArcaProvider {
   private readonly config: ArcaConfig;
   private readonly clock: ClockPort;
   private readonly idGenerator: IdGeneratorPort;
+  private comprobanteSequence = 0;
 
   constructor(
     config: ArcaConfig = ARCA_CONFIG,
@@ -59,7 +60,8 @@ export class ArcaSimulationProvider implements ArcaProvider {
       };
     }
 
-    const factura = simularFactura(input, this.config, this.clock, this.idGenerator);
+    this.comprobanteSequence += 1;
+    const factura = simularFactura(input, this.config, this.clock, this.idGenerator, this.comprobanteSequence);
 
     return {
       ok: true,

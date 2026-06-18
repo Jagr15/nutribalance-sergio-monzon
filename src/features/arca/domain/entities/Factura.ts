@@ -3,13 +3,18 @@ import type { Comprobante } from './Comprobante';
 import type { EstadoFiscal } from '../value-objects/EstadoFiscal';
 import type { TipoFactura } from '../value-objects/TipoFactura';
 
-export interface FacturaItem {
+export interface FacturaItemInput {
   concepto: string;
   cantidad: number;
   unidadMedida: string;
   precioUnitario: number;
   alicuotaIva?: number;
+}
+
+export interface FacturaItem extends FacturaItemInput {
   subtotal: number;
+  iva: number;
+  total: number;
 }
 
 export interface FacturaTotales {

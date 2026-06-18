@@ -1,6 +1,6 @@
 export type { ClienteFiscal, TipoDocumentoFiscal } from './domain/entities/ClienteFiscal';
 export type { Comprobante } from './domain/entities/Comprobante';
-export type { Factura, FacturaItem, FacturaTotales } from './domain/entities/Factura';
+export type { Factura, FacturaItem, FacturaItemInput, FacturaTotales } from './domain/entities/Factura';
 export type { ResultadoEmision } from './domain/entities/ResultadoEmision';
 export { ArcaError } from './domain/errors/ArcaError';
 export { CredencialesFaltantesError } from './domain/errors/CredencialesFaltantesError';
@@ -16,6 +16,7 @@ export type { IdGeneratorPort } from './application/ports/IdGeneratorPort';
 export { emitirFactura } from './application/use-cases/EmitirFactura';
 export { simularFactura } from './application/use-cases/SimularFactura';
 export { validarFactura } from './application/use-cases/ValidarFactura';
+export { calcularFacturaBSimulada, formatSimulatedComprobanteNumero, roundMoney } from './application/utils/facturaB';
 export { ARCA_CONFIG } from './infrastructure/config/arcaConfig';
 export type { ArcaConfig, ArcaMode } from './infrastructure/config/arcaConfig';
 export { ArcaSimulationProvider } from './infrastructure/providers/ArcaSimulationProvider';

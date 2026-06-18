@@ -1,6 +1,7 @@
 import type { CondicionIva } from '../value-objects/CondicionIva';
 
 export type TipoDocumentoFiscal = 'CUIT' | 'CUIL' | 'DNI' | 'OTRO';
+export const TIPOS_DOCUMENTO_FISCAL: readonly TipoDocumentoFiscal[] = ['CUIT', 'CUIL', 'DNI', 'OTRO'];
 
 export interface ClienteFiscal {
   id: string;
