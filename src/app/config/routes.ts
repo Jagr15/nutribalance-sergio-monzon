@@ -6,6 +6,7 @@ export const ROUTES = {
   CLIENTES: '/clientes',
   PRODUCTOS: '/productos',
   COSTOS: '/costos',
+  TESORERIA: '/tesoreria',
   INSUMOS: '/insumos',
   FORMULAS: '/formulas',
   PRODUCCION: '/produccion',

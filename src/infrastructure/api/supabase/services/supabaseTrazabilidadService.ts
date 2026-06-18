@@ -164,6 +164,10 @@ export const supabaseTrazabilidadService = {
           motivo: item.motivo === undefined || item.motivo === null ? null : String(item.motivo),
           referencia: item.referencia === undefined || item.referencia === null ? null : String(item.referencia),
           fecha: String(item.fecha ?? ''),
+          cliente_id: item.cliente_id === undefined || item.cliente_id === null ? null : String(item.cliente_id),
+          cliente_nombre: item.cliente_nombre === undefined || item.cliente_nombre === null ? null : String(item.cliente_nombre),
+          stock_pt_id: item.stock_pt_id === undefined || item.stock_pt_id === null ? null : String(item.stock_pt_id),
+          lote_pt: item.lote_pt === undefined || item.lote_pt === null ? null : String(item.lote_pt),
         })),
         eventos: (op.eventos ?? []).map((item) => ({
           tipo: String(item.tipo ?? 'AJUSTE'),

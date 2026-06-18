@@ -146,6 +146,10 @@ const buildTrazabilidadPorOP = async (): Promise<TrazabilidadPorOP[]> => {
         motivo: mov.motivo ?? null,
         referencia: mov.referencia ?? null,
         fecha: mov.created_at,
+        cliente_id: mov.cliente_id ?? null,
+        cliente_nombre: mov.cliente_nombre ?? null,
+        stock_pt_id: mov.stock_pt_id ?? null,
+        lote_pt: mov.lote ?? null,
       }));
 
     const eventos: TrazabilidadPorOP['eventos'] = [];

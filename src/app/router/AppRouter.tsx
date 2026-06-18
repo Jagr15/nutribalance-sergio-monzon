@@ -17,6 +17,7 @@ import OrdenPage from '../../features/ordenes/pages/OrdenPage';
 import ClientesPage from '../../features/clientes/pages/ClientesPage';
 import ProductosPage from '../../features/productos/pages/ProductosPage';
 import CostosPage from '../../features/costos/pages/CostosPage';
+import TesoreriaPage from '../../features/tesoreria/pages/TesoreriaPage';
 import StockGeneralPage from '../../features/inventario/pages/StockGeneralPage';
 import TrazabilidadPage from '../../features/trazabilidad/pages/TrazabilidadPage';
 import AlertasPage from '../../features/alertas/pages/AlertasPage';
@@ -83,6 +84,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.TRAZABILIDAD} element={<ModuleRoute module="trazabilidad"><TrazabilidadPage /></ModuleRoute>} />
           <Route path={ROUTES.PRODUCTOS} element={<ModuleRoute module="productos"><ProductosPage /></ModuleRoute>} />
           <Route path={ROUTES.COSTOS} element={<ModuleRoute module="finanzas"><CostosPage /></ModuleRoute>} />
+          <Route path={ROUTES.TESORERIA} element={<ModuleRoute module="tesoreria"><TesoreriaPage /></ModuleRoute>} />
           <Route path={ROUTES.USUARIOS} element={<ModuleRoute module="usuarios"><UsuariosPage /></ModuleRoute>} />
         </Route>
 

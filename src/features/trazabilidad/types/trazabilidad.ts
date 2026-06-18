@@ -58,6 +58,18 @@ export interface TrazabilidadEventoItem {
   payload: Record<string, unknown>;
 }
 
+export interface TrazabilidadSalidaPTItem {
+  tipo: string;
+  cantidad: number;
+  motivo: string | null;
+  referencia: string | null;
+  fecha: string;
+  cliente_id: string | null;
+  cliente_nombre: string | null;
+  stock_pt_id: string | null;
+  lote_pt: string | null;
+}
+
 export interface TrazabilidadPorOP {
   op_id: string;
   orden_legacy_uid: string | null;
@@ -77,12 +89,21 @@ export interface TrazabilidadPorOP {
   lotes_mp_usados: string[];
   mp_movimientos: MovimientoMPAuditoria[];
   pt_generado: TrazabilidadPTItem[];
-  salidas_pt: Array<{
-    tipo: string;
-    cantidad: number;
-    motivo: string | null;
-    referencia: string | null;
-    fecha: string;
-  }>;
+  salidas_pt: TrazabilidadSalidaPTItem[];
   eventos: TrazabilidadEventoItem[];
+}
+
+export interface TrazabilidadCadenaCompletaRow {
+  cliente_id: string | null;
+  cliente_nombre: string;
+  producto: string;
+  lote_pt: string;
+  op: string;
+  formula: string;
+  version_formula: number | null;
+  lotes_mp: string[];
+  insumos: string[];
+  kg: number;
+  fecha: string;
+  referencia: string | null;
 }

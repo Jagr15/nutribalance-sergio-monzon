@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 import { finanzasService } from '../services/finanzasService';
-import type { CostosFormulaVsReal, FinanzasInventarioResumen, FinanzasKPIs, FinanzasReportes, MovimientoFinanciero } from '../types';
+import type { CostosFormulaVsReal, FinanzasInventarioResumen, FinanzasKPIs, FinanzasReportes, FinanzasTesoreriaInsights, MovimientoFinanciero } from '../types';
 
 const EMPTY_KPIS: FinanzasKPIs = {
   saldo_actual: 0,
@@ -28,9 +28,21 @@ const EMPTY_REPORTES: FinanzasReportes = {
   costo_operativo_mensual: [],
 };
 
+const EMPTY_TESORERIA: FinanzasTesoreriaInsights = {
+  presupuestoVsReal: [],
+  gastosPorRubro: [],
+  variacionesPorRubro: [],
+  carteraClientes: [],
+  chequesEmitidos: [],
+  chequesRecibidos: [],
+  proyeccionFlujo: [],
+  alertasTesoreria: [],
+};
+
 export const useFinanzas = () => {
   const [kpis, setKpis] = useState<FinanzasKPIs>(EMPTY_KPIS);
   const [reportes, setReportes] = useState<FinanzasReportes>(EMPTY_REPORTES);
+  const [tesoreria, setTesoreria] = useState<FinanzasTesoreriaInsights>(EMPTY_TESORERIA);
   const [movimientos, setMovimientos] = useState<MovimientoFinanciero[]>([]);
   const [costosComparativos, setCostosComparativos] = useState<CostosFormulaVsReal[]>([]);
   const [inventario, setInventario] = useState<FinanzasInventarioResumen>({
@@ -47,9 +59,10 @@ export const useFinanzas = () => {
     setLoadError(null);
     setInfoMessage(null);
     const useMocks = runtimeConfig.mode === 'mock';
-    const [kpisResult, reportesResult, movimientosResult, costosResult, inventarioResult] = await Promise.allSettled([
+    const [kpisResult, reportesResult, tesoreriaResult, movimientosResult, costosResult, inventarioResult] = await Promise.allSettled([
       finanzasService.getKPIs(),
       finanzasService.getReportes(),
+      finanzasService.getTreasuryInsights(),
       finanzasService.getMovimientos(),
       finanzasService.getCostosComparativos(),
       finanzasService.getInventarioResumen(),
@@ -61,6 +74,9 @@ export const useFinanzas = () => {
     if (reportesResult.status === 'fulfilled') setReportes(reportesResult.value);
     else setReportes(EMPTY_REPORTES);
 
+    if (tesoreriaResult.status === 'fulfilled') setTesoreria(tesoreriaResult.value);
+    else setTesoreria(EMPTY_TESORERIA);
+
     if (movimientosResult.status === 'fulfilled') setMovimientos(movimientosResult.value);
     else setMovimientos([]);
 
@@ -70,13 +86,14 @@ export const useFinanzas = () => {
     if (inventarioResult.status === 'fulfilled') setInventario(inventarioResult.value);
     else setInventario({ valor_stock_mp: 0, valor_stock_pt: 0, valor_inventario_total: 0 });
 
-    const failed = [kpisResult, reportesResult, movimientosResult, costosResult, inventarioResult].filter((r) => r.status === 'rejected');
+    const failed = [kpisResult, reportesResult, tesoreriaResult, movimientosResult, costosResult, inventarioResult].filter((r) => r.status === 'rejected');
     let fallbackApplied = false;
     if (useMocks || failed.length > 0) {
       try {
         const fallback = await finanzasService.getOperationalFallback();
         setKpis(fallback.kpis);
         setReportes(fallback.reportes);
+        setTesoreria(fallback.tesoreria);
         setCostosComparativos(fallback.costosComparativos);
         setInventario(fallback.inventario);
         if (movimientosResult.status !== 'fulfilled') {
@@ -103,5 +120,5 @@ export const useFinanzas = () => {
     return () => clearTimeout(timer);
   }, [refresh]);
 
-  return { kpis, reportes, movimientos, costosComparativos, inventario, loading, loadError, infoMessage, refresh, createMovimiento: finanzasService.createMovimiento };
+  return { kpis, reportes, tesoreria, movimientos, costosComparativos, inventario, loading, loadError, infoMessage, refresh, createMovimiento: finanzasService.createMovimiento };
 };

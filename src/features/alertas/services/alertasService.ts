@@ -1,6 +1,7 @@
 import { dashboardOperativoService } from '../../dashboard/services/dashboardOperativoService';
 import { supabaseClient } from '../../../infrastructure/api/supabase/client';
 import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
+import { finanzasService } from '../../finanzas/services/finanzasService';
 import type { AlertaOperativa, EstadoAlerta } from '../types/alerta';
 
 type PersistedAlertState = 'PENDIENTE' | 'EN_SEGUIMIENTO' | 'ATENDIDA' | 'DESCARTADA';
@@ -109,9 +110,16 @@ const persistSupabaseState = async (
 };
 
 export const getAlertasOperativas = async (): Promise<AlertaOperativa[]> => {
-  const rows = await dashboardOperativoService.getAlertasOperativas();
+  const [rows, treasury] = await Promise.all([
+    dashboardOperativoService.getAlertasOperativas(),
+    finanzasService.getTreasuryInsights().catch(() => ({ alertasTesoreria: [] })),
+  ]);
+  const mergedRows = [
+    ...rows,
+    ...treasury.alertasTesoreria,
+  ];
 
-  rows.forEach((row) => {
+  mergedRows.forEach((row) => {
     latestAlertMeta.set(row.alerta_id, {
       prioridad: row.prioridad,
       origen: row.area,
@@ -120,7 +128,7 @@ export const getAlertasOperativas = async (): Promise<AlertaOperativa[]> => {
 
   if (runtimeConfig.mode === 'mock') {
     const overrides = readMockStatusMap();
-    return rows.map((row) => ({
+    return mergedRows.map((row) => ({
       id: row.alerta_id,
       titulo: row.titulo,
       descripcion: row.tipo,
@@ -141,7 +149,7 @@ export const getAlertasOperativas = async (): Promise<AlertaOperativa[]> => {
     console.warn('[alertas] No se pudo leer alertas_estado; se usarán estados pendientes.', error);
   }
 
-  return rows.map((row) => {
+  return mergedRows.map((row) => {
     const persisted = persistedStates.get(row.alerta_id);
     const estado = toUiState(persisted?.estado);
     if (persisted?.prioridad && !latestAlertMeta.has(row.alerta_id)) {

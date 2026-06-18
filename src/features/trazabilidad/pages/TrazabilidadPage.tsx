@@ -5,10 +5,13 @@ import { StatusBadge } from '../../../shared/components/table';
 import { dashboardOperativoService } from '../../dashboard/services/dashboardOperativoService';
 import type { TrazabilidadVisualRow } from '../../dashboard/types/operativo';
 import { ApiService } from '../../../infrastructure/api';
+import type { Cliente } from '../../clientes/types/cliente';
 import { EstadoOrden } from '../../ordenes/types';
 import type { OrdenProduccion } from '../../ordenes/types';
 import type { Formula } from '../../formulas/types';
+import type { MovimientoStockPT } from '../../productos/types';
 import type { MovimientoMPAuditoria, TrazabilidadPorOP } from '../types';
+import { buildTrazabilidadCompleta } from '../utils/trazabilidadCompleta';
 
 const fmtDate = (iso: string) => {
   const d = new Date(iso);
@@ -130,8 +133,10 @@ const readProteinFromPayload = (payload: Record<string, unknown>): number | null
 const TrazabilidadPage = () => {
   const [events, setEvents] = useState<TrazabilidadVisualRow[]>([]);
   const [formulas, setFormulas] = useState<Formula[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [movimientosMP, setMovimientosMP] = useState<MovimientoMPAuditoria[]>([]);
+  const [movimientosPT, setMovimientosPT] = useState<MovimientoStockPT[]>([]);
   const [trazabilidadOP, setTrazabilidadOP] = useState<TrazabilidadPorOP[]>([]);
   const [expandedOp, setExpandedOp] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -149,9 +154,15 @@ const TrazabilidadPage = () => {
           ApiService.trazabilidad.getMovimientosMPAuditoria().catch(() => [] as MovimientoMPAuditoria[]),
           ApiService.trazabilidad.getTrazabilidadPorOP().catch(() => [] as TrazabilidadPorOP[]),
         ]);
+        const [ptMovs, clientesData] = await Promise.all([
+          ApiService.stockPT.getMovimientos().catch(() => [] as MovimientoStockPT[]),
+          ApiService.clientes.getAll().catch(() => [] as Cliente[]),
+        ]);
         setFormulas(formulasData);
         setMovimientosMP(movimientosData);
         setTrazabilidadOP(opData);
+        setMovimientosPT(ptMovs);
+        setClientes(clientesData);
         setInfoMessage(null);
         if (data.length > 0) {
           setEvents(data);
@@ -169,15 +180,23 @@ const TrazabilidadPage = () => {
             ApiService.ordenes.getAll(),
             ApiService.formulas.findAll().catch(() => [] as Formula[]),
           ]);
+          const [ptMovs, clientesData] = await Promise.all([
+            ApiService.stockPT.getMovimientos().catch(() => [] as MovimientoStockPT[]),
+            ApiService.clientes.getAll().catch(() => [] as Cliente[]),
+          ]);
           setOrdenes(ordenes);
           setFormulas(formulasData);
+          setMovimientosPT(ptMovs);
+          setClientes(clientesData);
           setEvents(toVisualFallback(ordenes));
           setError(null);
           setInfoMessage('Trazabilidad reconstruida desde órdenes locales');
         } catch {
           setEvents([]);
           setMovimientosMP([]);
+          setMovimientosPT([]);
           setTrazabilidadOP([]);
+          setClientes([]);
           setInfoMessage(null);
           setError('No pudimos cargar la trazabilidad en este momento.');
         }
@@ -307,6 +326,11 @@ const TrazabilidadPage = () => {
         .includes(q)
     );
   }, [query, trazabilidadOP]);
+
+  const trazabilidadCompleta = useMemo(
+    () => buildTrazabilidadCompleta(movimientosPT, trazabilidadOP, formulas, clientes),
+    [clientes, formulas, movimientosPT, trazabilidadOP],
+  );
 
   return (
     <div className="space-y-6">
@@ -473,7 +497,12 @@ const TrazabilidadPage = () => {
                           <ul className="space-y-2 text-sm text-slate-700">
                             {op.salidas_pt.map((item, idx) => (
                               <li key={`${item.fecha}-${idx}`} className="flex justify-between gap-3 border-b border-slate-200 pb-2 last:border-0 last:pb-0">
-                                <span>{item.motivo ?? item.tipo}</span>
+                                <span>
+                                  {item.motivo ?? item.tipo}
+                                  <span className="block text-xs text-slate-500">
+                                    {item.cliente_nombre ?? 'Sin cliente asociado'} · {item.lote_pt ?? 'Sin lote'}
+                                  </span>
+                                </span>
                                 <span>{item.cantidad.toLocaleString('es-AR')}</span>
                               </li>
                             ))}
@@ -506,6 +535,80 @@ const TrazabilidadPage = () => {
           ) : null}
         </div>
       </Card>
+
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold">Cadena completa de trazabilidad</h2>
+            <p className="text-sm text-slate-500">Cliente → salida PT → lote PT → OP → fórmula → lotes MP involucrados.</p>
+          </div>
+          {trazabilidadCompleta.length === 0 ? (
+            <p className="text-sm text-slate-500">No hay salidas de PT con cliente para mostrar.</p>
+          ) : (
+            <div className="overflow-auto rounded-2xl border border-slate-200 bg-white">
+              <table className="w-full min-w-[1100px] text-left">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
+                    <th className="px-4 py-3">Cliente</th>
+                    <th className="px-4 py-3">Producto</th>
+                    <th className="px-4 py-3">Lote PT</th>
+                    <th className="px-4 py-3">OP</th>
+                    <th className="px-4 py-3">Fórmula</th>
+                    <th className="px-4 py-3">Lotes MP</th>
+                    <th className="px-4 py-3">Kg</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trazabilidadCompleta.map((row) => (
+                    <tr key={`${row.cliente_nombre}-${row.lote_pt}-${row.fecha}`} className="border-t border-slate-100">
+                      <td className="px-4 py-3 text-sm text-slate-900">
+                        <p className="font-semibold">{row.cliente_nombre}</p>
+                        <p className="text-xs text-slate-500">{row.referencia ?? 'Sin referencia'}</p>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.producto}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.lote_pt}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.op}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        <p>{row.formula}</p>
+                        <p className="text-xs text-slate-500">{row.version_formula ? `v${row.version_formula}` : 'Sin versión'}</p>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {row.lotes_mp.length > 0 ? row.lotes_mp.join(' · ') : 'Sin dato'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-900 font-semibold">{row.kg.toLocaleString('es-AR')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold">Vista inversa</h2>
+            <p className="text-sm text-slate-500">Lectura desde cliente hacia insumos y fórmula.</p>
+          </div>
+          {trazabilidadCompleta.length === 0 ? (
+            <p className="text-sm text-slate-500">Sin trazabilidad inversa disponible todavía.</p>
+          ) : (
+            <div className="space-y-3">
+              {trazabilidadCompleta.slice(0, 6).map((row) => (
+                <div key={`${row.cliente_nombre}-${row.fecha}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs uppercase tracking-widest text-slate-500">Cliente → Salida PT → Lote PT → OP → Fórmula → Insumos</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{row.cliente_nombre}</p>
+                  <p className="text-sm text-slate-700 mt-1">
+                    {row.producto} · {row.kg.toLocaleString('es-AR')} kg · Lote PT {row.lote_pt} · OP {row.op}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Fórmula: {row.formula} {row.version_formula ? `v${row.version_formula}` : ''} · MP: {row.insumos.length > 0 ? row.insumos.join(' · ') : 'Sin dato'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-4 gap-5">
         <Card className="xl:col-span-3">

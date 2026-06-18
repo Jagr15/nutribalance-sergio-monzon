@@ -43,6 +43,83 @@ export interface FinanzasReportes {
   costo_operativo_mensual: Array<{ mes: string; monto: number }>;
 }
 
+export type RubroFinanciero =
+  | 'Compras MP'
+  | 'Producción'
+  | 'Logística'
+  | 'Nómina'
+  | 'Servicios'
+  | 'Marketing'
+  | 'Otros';
+
+export interface PresupuestoVsRealRubro {
+  rubro: RubroFinanciero;
+  presupuesto: number;
+  real: number;
+  variacion_abs: number;
+  variacion_pct: number;
+  generado: boolean;
+}
+
+export interface GastoPorRubro {
+  rubro: RubroFinanciero;
+  monto: number;
+  porcentaje: number;
+}
+
+export interface ClienteCarteraRow {
+  cliente_id: string | null;
+  cliente_nombre: string;
+  saldo_pendiente: number;
+  ultima_compra: string | null;
+  dias_atraso: number | null;
+  proximo_vencimiento: string | null;
+}
+
+export type TipoChequeTesoreria = 'EMITIDO' | 'RECIBIDO';
+export type EstadoChequeTesoreria = 'PENDIENTE' | 'DEPOSITADO' | 'COBRADO' | 'RECHAZADO' | 'VENCIDO';
+
+export interface ChequeTesoreriaRow {
+  id: string;
+  numero: string;
+  tipo: TipoChequeTesoreria;
+  tercero: string;
+  importe: number;
+  fecha_emision: string;
+  fecha_vencimiento: string;
+  estado: EstadoChequeTesoreria;
+  cliente_id: string | null;
+  cliente_nombre: string | null;
+}
+
+export interface ProyeccionFlujoRow {
+  horizonte: 'Hoy' | '7 días' | '15 días' | '30 días';
+  saldo_estimado: number;
+  ingresos_estimados: number;
+  egresos_estimados: number;
+}
+
+export interface AlertaTesoreriaRaw {
+  alerta_id: string;
+  tipo: string;
+  prioridad: 'critica' | 'media' | 'informativa';
+  area: 'tesoreria';
+  titulo: string;
+  dato_asociado: Record<string, unknown>;
+  fecha_evento: string;
+}
+
+export interface FinanzasTesoreriaInsights {
+  presupuestoVsReal: PresupuestoVsRealRubro[];
+  gastosPorRubro: GastoPorRubro[];
+  variacionesPorRubro: PresupuestoVsRealRubro[];
+  carteraClientes: ClienteCarteraRow[];
+  chequesEmitidos: ChequeTesoreriaRow[];
+  chequesRecibidos: ChequeTesoreriaRow[];
+  proyeccionFlujo: ProyeccionFlujoRow[];
+  alertasTesoreria: AlertaTesoreriaRaw[];
+}
+
 export interface CostosFormulaVsReal {
   producto_formula_id: string;
   nombre_producto: string;

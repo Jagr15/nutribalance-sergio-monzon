@@ -6,21 +6,44 @@ import { ROUTES } from '../../../app/config/routes';
 import { useAlertas } from '../../alertas/hooks/useAlertas';
 import { useDashboardOperativo } from '../hooks/useDashboardOperativo';
 import { ApiService } from '../../../infrastructure/api';
+import type { Cliente } from '../../clientes/types/cliente';
+import type { MovimientoStockPT } from '../../productos/types';
 import type { OrdenProduccion } from '../../ordenes/types';
 import OrdenExpedicionModal from '../../ordenes/components/OrdenExpedicionModal';
 import { DataTable, EmptyState, StatusBadge, TableBody, TableCell, TableHeader, TableRow } from '../../../shared/components/table';
+import {
+  buildDashboardExecutiveInsights,
+  getDashboardPeriodoLabel,
+  isWithinDashboardPeriodo,
+  type DashboardPeriodo,
+} from '../utils/dashboardExecutiveInsights';
 
 const fmtARS = (v: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v);
+
+const PERIODOS: DashboardPeriodo[] = ['HOY', 'SEMANA', 'MES'];
 
 export const DashboardPage = () => {
   const { summary, alertas } = useAlertas();
   const { kpis, consumoMensual, stockResumenes, ptInsights, expedicionInsights, loading, reload } = useDashboardOperativo();
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [movimientosPT, setMovimientosPT] = useState<MovimientoStockPT[]>([]);
+  const [periodo, setPeriodo] = useState<DashboardPeriodo>('MES');
   const [isExpedicionOpen, setIsExpedicionOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    void ApiService.ordenes.getAll().then(setOrdenes).catch((e) => console.error('Error órdenes:', e));
+    void Promise.allSettled([
+      ApiService.ordenes.getAll(),
+      ApiService.clientes.getAll(),
+      ApiService.stockPT.getMovimientos(),
+    ])
+      .then(([ordenesResult, clientesResult, movimientosResult]) => {
+        if (ordenesResult.status === 'fulfilled') setOrdenes(ordenesResult.value);
+        if (clientesResult.status === 'fulfilled') setClientes(clientesResult.value);
+        if (movimientosResult.status === 'fulfilled') setMovimientosPT(movimientosResult.value);
+      })
+      .catch((e) => console.error('Error cargando datos ejecutivos:', e));
   }, []);
 
   useEffect(() => {
@@ -89,6 +112,61 @@ export const DashboardPage = () => {
       .slice(0, 10);
   }, [stockPtResumen]);
 
+  const executiveMovimientos = useMemo(() => {
+    const now = new Date();
+    return movimientosPT.filter((mov) => isWithinDashboardPeriodo(mov.created_at, periodo, now));
+  }, [movimientosPT, periodo]);
+
+  const executiveInsights = useMemo(
+    () => buildDashboardExecutiveInsights(executiveMovimientos, clientes, periodo),
+    [clientes, executiveMovimientos, periodo],
+  );
+
+  const ordenesRecientes = useMemo(
+    () => ordenes.filter((orden) => isWithinDashboardPeriodo(orden.fecha_creacion, periodo, new Date())),
+    [ordenes, periodo],
+  );
+
+  const recientes = useMemo(
+    () => ordenesRecientes
+      .slice()
+      .sort((a, b) => +new Date(b.fecha_creacion) - +new Date(a.fecha_creacion))
+      .slice(0, 5),
+    [ordenesRecientes],
+  );
+
+  const handleExportPdf = () => {
+    const lines = [
+      `Dashboard ejecutivo - ${getDashboardPeriodoLabel(periodo)}`,
+      `Ventas por producto terminado: ${executiveInsights.ventasPorProducto.map((item) => `${item.producto_nombre} (${item.kg.toLocaleString('es-AR')} kg / ${fmtARS(item.importe)})`).join(' | ') || 'Sin datos'}`,
+      `Kg despachados por producto: ${executiveInsights.kgDespachadosPorProducto.map((item) => `${item.producto_nombre} (${item.kg.toLocaleString('es-AR')} kg)`).join(' | ') || 'Sin datos'}`,
+      `Clientes atendidos: ${executiveInsights.clientesAtendidos}`,
+      `Top clientes: ${executiveInsights.topClientesPorVolumen.map((item) => `${item.cliente_nombre} (${item.kg.toLocaleString('es-AR')} kg)`).join(' | ') || 'Sin datos'}`,
+    ];
+    const popup = window.open('', '_blank', 'width=1200,height=900');
+    if (!popup) return;
+    popup.document.write(`
+      <html>
+        <head>
+          <title>Dashboard ejecutivo</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+            h1 { margin: 0 0 12px; }
+            p { margin: 0 0 8px; line-height: 1.5; }
+            .muted { color: #64748b; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <h1>Dashboard ejecutivo - ${getDashboardPeriodoLabel(periodo)}</h1>
+          ${lines.map((line) => `<p>${line}</p>`).join('')}
+          <p class="muted">Usá la opción de imprimir/guardar como PDF del navegador.</p>
+          <script>window.onload = () => setTimeout(() => { window.print(); }, 250);</script>
+        </body>
+      </html>
+    `);
+    popup.document.close();
+  };
+
   const alertasTop = useMemo(() => {
     const priorityScore = (priority: string) => (priority === 'critica' ? 3 : priority === 'media' ? 2 : 1);
     const stateScore = (state: string) => (state === 'pendiente' ? 3 : state === 'en seguimiento' ? 2 : state === 'atendida' ? 1 : 0);
@@ -115,7 +193,6 @@ export const DashboardPage = () => {
     return parts.length > 0 ? parts.join(' · ') : 'Sin dato asociado';
   };
 
-  const recientes = useMemo(() => ordenes.slice().sort((a, b) => +new Date(b.fecha_creacion) - +new Date(a.fecha_creacion)).slice(0, 5), [ordenes]);
   const valorInventarioPtLabel = kpis.stock_total_pt > 0
     ? (kpis.valor_inventario_pt > 0 ? fmtARS(kpis.valor_inventario_pt) : 'Sin costo confiable')
     : 'Sin stock PT';
@@ -127,6 +204,161 @@ export const DashboardPage = () => {
         <h1 className="text-3xl font-black mt-1">Centro Ejecutivo de Producción</h1>
         <p className="text-sm text-slate-500 mt-2">Métricas reales de stock, producción, costos y trazabilidad.</p>
       </Card>
+
+      <section>
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Dashboard ejecutivo</p>
+            <h2 className="text-2xl font-black text-slate-900 mt-1">Ventas y clientes por período</h2>
+            <p className="text-sm text-slate-500 mt-2">La vista se actualiza con datos reales de salidas de PT, clientes y stock.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {PERIODOS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setPeriodo(item)}
+                className={`rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.2em] transition-colors ${
+                  periodo === item
+                    ? 'bg-cyan-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {getDashboardPeriodoLabel(item)}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              className="rounded-full bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-slate-800"
+            >
+              Exportar PDF
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+          <Card>
+            <h3 className="font-semibold mb-3">Ventas por producto terminado</h3>
+            <p className="text-xs text-slate-500 mb-3">Monto y kg vendidos en {executiveInsights.periodoLabel.toLowerCase()}.</p>
+            {executiveInsights.ventasPorProducto.length === 0 ? (
+              <p className="text-sm text-slate-500">Sin ventas de producto terminado.</p>
+            ) : (
+              <div className="space-y-3">
+                {executiveInsights.ventasPorProducto.map((item, idx) => {
+                  const max = Math.max(1, executiveInsights.ventasPorProducto[0]?.importe ?? 1);
+                  const width = Math.max(8, (item.importe / max) * 100);
+                  return (
+                    <div key={`${item.producto_id ?? item.producto_nombre}-${idx}`} className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800 truncate">{item.producto_nombre}</p>
+                          <p className="text-slate-500">{item.kg.toLocaleString('es-AR')} kg · {item.clientes_atendidos} clientes</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-semibold text-emerald-700">{fmtARS(item.importe)}</p>
+                          <p className="text-slate-500">{item.movimientos} movimientos</p>
+                        </div>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500" style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <h3 className="font-semibold mb-3">Kg despachados por producto</h3>
+            <p className="text-xs text-slate-500 mb-3">Volumen total de salidas de PT en el período.</p>
+            {executiveInsights.kgDespachadosPorProducto.length === 0 ? (
+              <p className="text-sm text-slate-500">Sin despachos de producto terminado.</p>
+            ) : (
+              <div className="space-y-3">
+                {executiveInsights.kgDespachadosPorProducto.map((item, idx) => {
+                  const max = Math.max(1, executiveInsights.kgDespachadosPorProducto[0]?.kg ?? 1);
+                  const width = Math.max(8, (item.kg / max) * 100);
+                  return (
+                    <div key={`${item.producto_id ?? item.producto_nombre}-${idx}`} className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800 truncate">{item.producto_nombre}</p>
+                          <p className="text-slate-500">{item.movimientos} salidas · Último {item.ultima_fecha ? new Date(item.ultima_fecha).toLocaleDateString('es-AR') : 'Sin dato'}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-semibold text-cyan-700">{item.kg.toLocaleString('es-AR')} kg</p>
+                          <p className="text-slate-500">{fmtARS(item.importe)}</p>
+                        </div>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-600" style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <h3 className="font-semibold mb-3">Clientes atendidos</h3>
+            <p className="text-xs text-slate-500 mb-3">Clientes con salidas de PT durante el período seleccionado.</p>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-slate-500">Clientes únicos</p>
+              <p className="text-3xl font-black text-violet-700 mt-2">{executiveInsights.clientesAtendidos}</p>
+              <p className="mt-3 text-sm text-slate-600">Kg totales: <strong>{executiveInsights.totalKgDespachados.toLocaleString('es-AR')}</strong></p>
+              <p className="text-sm text-slate-600">Importe estimado: <strong>{fmtARS(executiveInsights.totalImporte)}</strong></p>
+            </div>
+            <div className="mt-4 space-y-2">
+              {executiveInsights.topClientesPorVolumen.slice(0, 3).map((item) => (
+                <div key={`${item.cliente_nombre}-${item.ultima_fecha ?? 'sin-fecha'}`} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-900">{item.cliente_nombre}</p>
+                    <p className="truncate text-xs text-slate-500">{item.movimientos} movimientos · {item.importe > 0 ? fmtARS(item.importe) : 'Sin importe'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-violet-700">{item.kg.toLocaleString('es-AR')} kg</p>
+                    <p className="text-[10px] uppercase tracking-widest text-slate-400">{item.ultima_fecha ? new Date(item.ultima_fecha).toLocaleDateString('es-AR') : 'Sin fecha'}</p>
+                  </div>
+                </div>
+              ))}
+              {executiveInsights.topClientesPorVolumen.length === 0 ? (
+                <p className="text-sm text-slate-500">Sin clientes atendidos en el período.</p>
+              ) : null}
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-semibold mb-3">Top clientes por volumen</h3>
+            <p className="text-xs text-slate-500 mb-3">Ranking de clientes por kg despachados.</p>
+            {executiveInsights.topClientesPorVolumen.length === 0 ? (
+              <p className="text-sm text-slate-500">Sin volumen para mostrar.</p>
+            ) : (
+              <div className="space-y-2">
+                {executiveInsights.topClientesPorVolumen.map((item, idx) => {
+                  const max = Math.max(1, executiveInsights.topClientesPorVolumen[0]?.kg ?? 1);
+                  const width = Math.max(8, (item.kg / max) * 100);
+                  return (
+                    <div key={`${item.cliente_id ?? item.cliente_nombre}-${idx}`} className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800 truncate">{item.cliente_nombre}</p>
+                          <p className="text-slate-500">{item.movimientos} salidas · {fmtARS(item.importe)}</p>
+                        </div>
+                        <p className="font-semibold text-fuchsia-700 shrink-0">{item.kg.toLocaleString('es-AR')} kg</p>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-fuchsia-500 to-pink-500" style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
+      </section>
 
       <section>
         <h2 className="text-lg font-bold text-slate-900 mb-3">Materia Prima</h2>

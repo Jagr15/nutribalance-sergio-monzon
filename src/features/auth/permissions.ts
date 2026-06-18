@@ -13,6 +13,7 @@ export type AppModule =
   | 'formulas'
   | 'ordenes'
   | 'finanzas'
+  | 'tesoreria'
   | 'trazabilidad'
   | 'stock_mp'
   | 'productos';
@@ -34,7 +35,7 @@ export type AppAction =
 
 const allModules: AppModule[] = [
   'dashboard', 'usuarios', 'clientes', 'stock_general', 'alertas', 'proveedores', 'silos', 'insumos',
-  'formulas', 'ordenes', 'finanzas', 'trazabilidad', 'stock_mp', 'productos',
+  'formulas', 'ordenes', 'finanzas', 'tesoreria', 'trazabilidad', 'stock_mp', 'productos',
 ];
 
 const emptyByModule = allModules.reduce<Record<AppModule, AppAction[]>>((acc, mod) => {
@@ -67,6 +68,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
     ordenes: ['view', 'create', 'edit', 'approve', 'start_order', 'finish_order', 'cancel_order'],
     productos: ['view', 'edit'],
     finanzas: ['view', 'register_financial_movement', 'approve'],
+    tesoreria: ['view', 'approve'],
     alertas: ['view', 'approve'],
     trazabilidad: ['view'],
     usuarios: [],
@@ -81,6 +83,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
     productos: ['view'],
     stock_general: ['view'],
     ordenes: ['view', 'start_order', 'finish_order', 'cancel_order'],
+    tesoreria: ['view'],
     usuarios: [],
     finanzas: [],
   },
@@ -97,6 +100,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
     proveedores: ['view', 'modify_stock', 'edit'],
     silos: ['view', 'modify_stock', 'edit'],
     ordenes: ['view'],
+    tesoreria: ['view'],
     usuarios: [],
     finanzas: [],
   },
@@ -108,6 +112,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
     productos: ['view'],
     ordenes: ['view'],
     finanzas: ['view', 'register_financial_movement', 'approve'],
+    tesoreria: ['view'],
     stock_general: ['view'],
     usuarios: [],
   },
@@ -122,6 +127,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
     trazabilidad: ['view'],
     alertas: ['view'],
     finanzas: ['view'],
+    tesoreria: ['view'],
     usuarios: [],
   },
 };

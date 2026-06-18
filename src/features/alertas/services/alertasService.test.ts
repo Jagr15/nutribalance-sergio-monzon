@@ -5,14 +5,17 @@ const { getAlertasOperativasMock, fromMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
 }));
 
-let runtimeMode: 'supabase' | 'mock' = 'supabase';
+const runtimeState = vi.hoisted(() => ({
+  mode: 'supabase' as 'supabase' | 'mock',
+}));
+
 let alertStateRows: Array<{ alerta_key: string; estado: string; prioridad?: string; origen?: string }> = [];
 const upsertMock = vi.fn().mockResolvedValue({ error: null });
 
 vi.mock('../../../infrastructure/api/runtimeConfig', () => ({
   runtimeConfig: {
     get mode() {
-      return runtimeMode;
+      return runtimeState.mode;
     },
   },
 }));
@@ -43,7 +46,7 @@ describe('alertasService', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
-    runtimeMode = 'supabase';
+    runtimeState.mode = 'supabase';
     alertStateRows = [];
     fromMock.mockImplementation((table: string) => {
       if (table !== 'alertas_estado') throw new Error(`tabla inesperada: ${table}`);
@@ -145,7 +148,7 @@ describe('alertasService', () => {
   });
 
   it('mantiene compatibilidad en modo mock', async () => {
-    runtimeMode = 'mock';
+    runtimeState.mode = 'mock';
     getAlertasOperativasMock.mockResolvedValue([
       {
         alerta_id: 'm1',

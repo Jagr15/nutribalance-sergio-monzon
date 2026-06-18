@@ -1,0 +1,412 @@
+import type { Cliente } from '../../clientes/types/cliente';
+import type { MovimientoStockPT } from '../../productos/types';
+import type {
+  AlertaTesoreriaRaw,
+  ChequeTesoreriaRow,
+  ClienteCarteraRow,
+  FinanzasTesoreriaInsights,
+  GastoPorRubro,
+  PresupuestoVsRealRubro,
+  ProyeccionFlujoRow,
+  RubroFinanciero,
+} from '../types';
+
+const rubros: RubroFinanciero[] = ['Compras MP', 'Producción', 'Logística', 'Nómina', 'Servicios', 'Marketing', 'Otros'];
+const num = (value: unknown) => Number(value ?? 0);
+const today = new Date();
+const currentYear = today.getFullYear();
+const currentMonth = today.getMonth() + 1;
+
+export interface PresupuestoMensualRow {
+  rubro?: string | null;
+  categoria?: string | null;
+  centro_costo?: string | null;
+  monto_presupuestado: number | string | null;
+  anio: number;
+  mes: number;
+}
+
+export interface FlujoCajaRubroRow {
+  fecha: string;
+  tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA';
+  origen_operativo?: string | null;
+  descripcion: string;
+  monto: number | string | null;
+  categoria?: string | null;
+  centro_costo?: string | null;
+}
+
+export interface ComprobanteCarteraRow {
+  cliente_id?: string | null;
+  tercero?: string | null;
+  fecha_emision: string;
+  fecha_vencimiento: string | null;
+  estado: string;
+  saldo: number | string | null;
+  tipo: string;
+}
+
+export interface ChequeTesoreriaSourceRow {
+  id: string;
+  numero: string;
+  tipo: 'EMITIDO' | 'RECIBIDO';
+  tercero: string;
+  importe: number | string | null;
+  fecha_emision: string;
+  fecha_vencimiento: string;
+  estado: 'PENDIENTE' | 'DEPOSITADO' | 'COBRADO' | 'RECHAZADO' | 'VENCIDO';
+  cliente_id: string | null;
+  cliente_nombre: string | null;
+}
+
+export interface FlujoProjectionInputs {
+  saldoActual: number;
+  cartera: ClienteCarteraRow[];
+  chequesEmitidos: ChequeTesoreriaRow[];
+  chequesRecibidos: ChequeTesoreriaRow[];
+  egresoPromedioDiario: number;
+}
+
+const monthKey = (isoLike: string) => {
+  const d = new Date(isoLike);
+  if (Number.isNaN(d.getTime())) return 'N/A';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const currentMonthKey = monthKey(today.toISOString());
+
+const normalize = (value: string | null | undefined) => (value ?? '').trim().toLowerCase();
+
+export const classifyRubro = (row: Pick<FlujoCajaRubroRow, 'categoria' | 'centro_costo' | 'origen_operativo' | 'descripcion'>): RubroFinanciero => {
+  const categoria = normalize(row.categoria);
+  const centro = normalize(row.centro_costo);
+  const origen = normalize(row.origen_operativo);
+  const descripcion = normalize(row.descripcion);
+
+  if (categoria.includes('compra') || origen.includes('compra')) return 'Compras MP';
+  if (categoria.includes('venta') || origen.includes('venta') || origen.includes('cobranza')) return 'Otros';
+  if (origen.includes('produccion') || categoria.includes('produccion') || descripcion.includes('produccion') || descripcion.includes('op')) return 'Producción';
+  if (categoria.includes('logistica') || centro.includes('logistica') || origen.includes('logistica') || origen.includes('despacho') || descripcion.includes('flete')) return 'Logística';
+  if (descripcion.includes('nomina') || descripcion.includes('nómina') || descripcion.includes('sueldo') || descripcion.includes('salario') || descripcion.includes('personal')) return 'Nómina';
+  if (descripcion.includes('servicio') || descripcion.includes('internet') || descripcion.includes('luz') || descripcion.includes('agua') || descripcion.includes('alquiler')) return 'Servicios';
+  if (descripcion.includes('marketing') || descripcion.includes('publicidad') || descripcion.includes('campaña') || descripcion.includes('redes')) return 'Marketing';
+  if (centro.includes('administracion') || centro.includes('administración')) return 'Servicios';
+  return 'Otros';
+};
+
+const pickClientName = (clienteId: string | null | undefined, tercero: string | null | undefined, clientes: Cliente[]) => {
+  if (clienteId) {
+    const found = clientes.find((cliente) => cliente.uid === clienteId);
+    if (found) return found.nombre;
+  }
+  return tercero?.trim() || 'Sin cliente asociado';
+};
+
+export const buildPresupuestoVsReal = (
+  presupuestos: PresupuestoMensualRow[],
+  movimientos: FlujoCajaRubroRow[],
+): { rows: PresupuestoVsRealRubro[]; warning: string | null } => {
+  const egresos = movimientos.filter((movimiento) => movimiento.tipo === 'EGRESO');
+  const actualByRubro = new Map<RubroFinanciero, number>();
+  const historicByRubro = new Map<RubroFinanciero, number[]>();
+  const currentBudgetByRubro = new Map<RubroFinanciero, number>();
+
+  egresos.forEach((movimiento) => {
+    const rubro = classifyRubro(movimiento);
+    const amount = num(movimiento.monto);
+    const isCurrentMonth = monthKey(movimiento.fecha) === currentMonthKey;
+    if (isCurrentMonth) {
+      actualByRubro.set(rubro, (actualByRubro.get(rubro) ?? 0) + amount);
+    } else {
+      const current = historicByRubro.get(rubro) ?? [];
+      current.push(amount);
+      historicByRubro.set(rubro, current);
+    }
+  });
+
+  presupuestos.forEach((row) => {
+    if (row.anio !== currentYear || row.mes !== currentMonth) return;
+    const rubro = classifyRubro({
+      categoria: row.categoria ?? null,
+      centro_costo: row.centro_costo ?? null,
+      origen_operativo: null,
+      descripcion: row.categoria ?? row.centro_costo ?? 'presupuesto',
+    });
+    currentBudgetByRubro.set(rubro, (currentBudgetByRubro.get(rubro) ?? 0) + num(row.monto_presupuestado));
+  });
+
+  const rows = rubros.map((rubro) => {
+    const presupuesto = currentBudgetByRubro.get(rubro) ?? 0;
+    const real = actualByRubro.get(rubro) ?? 0;
+    const historical = historicByRubro.get(rubro) ?? [];
+    const generated = presupuesto <= 0 && historical.length > 0;
+    const fallback = historical.length > 0 ? historical.reduce((acc, value) => acc + value, 0) / historical.length : 0;
+    const finalBudget = presupuesto > 0 ? presupuesto : fallback;
+    const variacionAbs = real - finalBudget;
+    const variacionPct = finalBudget > 0 ? (variacionAbs / finalBudget) * 100 : 0;
+    return {
+      rubro,
+      presupuesto: Number(finalBudget.toFixed(2)),
+      real: Number(real.toFixed(2)),
+      variacion_abs: Number(variacionAbs.toFixed(2)),
+      variacion_pct: Number(variacionPct.toFixed(2)),
+      generado: generated,
+    };
+  });
+
+  return {
+    rows,
+    warning: rows.some((row) => row.generado) ? 'Se generaron presupuestos iniciales desde el histórico para algunos rubros sin presupuesto cargado.' : null,
+  };
+};
+
+export const buildGastosPorRubro = (movimientos: FlujoCajaRubroRow[]): GastoPorRubro[] => {
+  const totals = new Map<RubroFinanciero, number>();
+  movimientos.filter((movimiento) => movimiento.tipo === 'EGRESO').forEach((movimiento) => {
+    const rubro = classifyRubro(movimiento);
+    totals.set(rubro, (totals.get(rubro) ?? 0) + num(movimiento.monto));
+  });
+  const total = Math.max(1, [...totals.values()].reduce((acc, value) => acc + value, 0));
+  return rubros
+    .map((rubro) => ({ rubro, monto: Number((totals.get(rubro) ?? 0).toFixed(2)), porcentaje: Number((((totals.get(rubro) ?? 0) / total) * 100).toFixed(2)) }))
+    .filter((row) => row.monto > 0)
+    .sort((a, b) => b.monto - a.monto);
+};
+
+export const buildVariacionesPorRubro = (rows: PresupuestoVsRealRubro[], sortBy: 'desviacion' | 'menor_desviacion' | 'mayor_gasto' | 'menor_gasto' = 'desviacion') => {
+  const sorted = [...rows];
+  if (sortBy === 'desviacion') sorted.sort((a, b) => Math.abs(b.variacion_pct) - Math.abs(a.variacion_pct));
+  if (sortBy === 'menor_desviacion') sorted.sort((a, b) => Math.abs(a.variacion_pct) - Math.abs(b.variacion_pct));
+  if (sortBy === 'mayor_gasto') sorted.sort((a, b) => b.real - a.real);
+  if (sortBy === 'menor_gasto') sorted.sort((a, b) => a.real - b.real);
+  return sorted;
+};
+
+export const buildCarteraClientes = (
+  clientes: Cliente[],
+  comprobantes: ComprobanteCarteraRow[],
+  ventasPT: MovimientoStockPT[],
+): ClienteCarteraRow[] => {
+  const ventasByCliente = new Map<string, { ultimaCompra: string | null }>();
+  ventasPT.forEach((movimiento) => {
+    if (!movimiento.cliente_id) return;
+    const current = ventasByCliente.get(movimiento.cliente_id) ?? { ultimaCompra: null };
+    current.ultimaCompra = !current.ultimaCompra || new Date(movimiento.created_at).getTime() > new Date(current.ultimaCompra).getTime()
+      ? movimiento.created_at
+      : current.ultimaCompra;
+    ventasByCliente.set(movimiento.cliente_id, current);
+  });
+
+  const grouped = new Map<string, ClienteCarteraRow>();
+  comprobantes
+    .filter((row) => row.tipo === 'FACTURA_VENTA' && num(row.saldo) > 0)
+    .forEach((row) => {
+      const key = row.cliente_id ?? row.tercero ?? 'sin-cliente';
+      const clienteNombre = pickClientName(row.cliente_id, row.tercero, clientes);
+      const current = grouped.get(key) ?? {
+        cliente_id: row.cliente_id ?? null,
+        cliente_nombre: clienteNombre,
+        saldo_pendiente: 0,
+        ultima_compra: ventasByCliente.get(row.cliente_id ?? '')?.ultimaCompra ?? row.fecha_emision,
+        dias_atraso: null,
+        proximo_vencimiento: null,
+      };
+      current.saldo_pendiente += num(row.saldo);
+      const venc = row.fecha_vencimiento ? new Date(row.fecha_vencimiento) : null;
+      if (venc && (!current.proximo_vencimiento || venc.getTime() < new Date(current.proximo_vencimiento).getTime())) {
+        current.proximo_vencimiento = row.fecha_vencimiento;
+      }
+      current.ultima_compra = ventasByCliente.get(row.cliente_id ?? '')?.ultimaCompra ?? current.ultima_compra;
+      if (venc) {
+        const diffDays = Math.floor((today.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          current.dias_atraso = current.dias_atraso === null ? diffDays : Math.max(current.dias_atraso, diffDays);
+        }
+      }
+      grouped.set(key, current);
+    });
+
+  return [...grouped.values()].sort((a, b) => b.saldo_pendiente - a.saldo_pendiente);
+};
+
+export const buildChequesTesoreria = (rows: ChequeTesoreriaSourceRow[]): { emitidos: ChequeTesoreriaRow[]; recibidos: ChequeTesoreriaRow[] } => {
+  const mapRow = (row: ChequeTesoreriaSourceRow): ChequeTesoreriaRow => ({
+    id: row.id,
+    numero: row.numero,
+    tipo: row.tipo,
+    tercero: row.tercero,
+    importe: num(row.importe),
+    fecha_emision: row.fecha_emision,
+    fecha_vencimiento: row.fecha_vencimiento,
+    estado: row.estado,
+    cliente_id: row.cliente_id,
+    cliente_nombre: row.cliente_nombre,
+  });
+
+  const emitidos = rows.filter((row) => row.tipo === 'EMITIDO').map(mapRow).sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime());
+  const recibidos = rows.filter((row) => row.tipo === 'RECIBIDO').map(mapRow).sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime());
+  return { emitidos, recibidos };
+};
+
+export const buildProyeccionFlujo = (inputs: FlujoProjectionInputs): ProyeccionFlujoRow[] => {
+  const cxcPorVencer = inputs.cartera
+    .filter((row) => row.proximo_vencimiento && row.saldo_pendiente > 0)
+    .map((row) => ({
+      saldo: row.saldo_pendiente,
+      days: Math.max(0, Math.ceil((new Date(row.proximo_vencimiento as string).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))),
+    }));
+  const chequesRecibidos = inputs.chequesRecibidos.map((row) => ({
+    saldo: row.importe,
+    days: Math.max(0, Math.ceil((new Date(row.fecha_vencimiento).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))),
+  }));
+  const chequesEmitidos = inputs.chequesEmitidos.map((row) => ({
+    saldo: row.importe,
+    days: Math.max(0, Math.ceil((new Date(row.fecha_vencimiento).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))),
+  }));
+
+  const horizons = [0, 7, 15, 30] as const;
+  return horizons.map((days) => {
+    const ingresosEstimados = cxcPorVencer.filter((row) => row.days <= days).reduce((acc, row) => acc + row.saldo, 0)
+      + chequesRecibidos.filter((row) => row.days <= days).reduce((acc, row) => acc + row.saldo, 0);
+    const egresosEstimados = chequesEmitidos.filter((row) => row.days <= days).reduce((acc, row) => acc + row.saldo, 0)
+      + inputs.egresoPromedioDiario * days;
+    const horizonte: ProyeccionFlujoRow['horizonte'] = days === 0 ? 'Hoy' : `${days} días` as ProyeccionFlujoRow['horizonte'];
+    return {
+      horizonte,
+      saldo_estimado: Number((inputs.saldoActual + ingresosEstimados - egresosEstimados).toFixed(2)),
+      ingresos_estimados: Number(ingresosEstimados.toFixed(2)),
+      egresos_estimados: Number(egresosEstimados.toFixed(2)),
+    };
+  });
+};
+
+export const buildAlertasTesoreria = (inputs: {
+  cartera: ClienteCarteraRow[];
+  chequesEmitidos: ChequeTesoreriaRow[];
+  chequesRecibidos: ChequeTesoreriaRow[];
+  proyeccionFlujo: ProyeccionFlujoRow[];
+}): AlertaTesoreriaRaw[] => {
+  const alerts: AlertaTesoreriaRaw[] = [];
+  const todayTime = today.getTime();
+  const within = (date: string, days: number) => {
+    const diff = Math.ceil((new Date(date).getTime() - todayTime) / (1000 * 60 * 60 * 24));
+    return diff >= 0 && diff <= days;
+  };
+
+  inputs.chequesEmitidos
+    .filter((cheque) => cheque.estado === 'PENDIENTE' && within(cheque.fecha_vencimiento, 7))
+    .forEach((cheque) => {
+      alerts.push({
+        alerta_id: `tes-cheque-emitido-${cheque.id}`,
+        tipo: 'Cheque emitido próximo a vencer',
+        prioridad: 'media',
+        area: 'tesoreria',
+        titulo: `Cheque emitido ${cheque.numero} vence pronto`,
+        dato_asociado: {
+          cheque: cheque.numero,
+          tercero: cheque.tercero,
+          importe: cheque.importe,
+          vence: cheque.fecha_vencimiento,
+        },
+        fecha_evento: cheque.fecha_vencimiento,
+      });
+    });
+
+  inputs.chequesRecibidos
+    .filter((cheque) => cheque.estado === 'PENDIENTE' && within(cheque.fecha_vencimiento, 7))
+    .forEach((cheque) => {
+      alerts.push({
+        alerta_id: `tes-cheque-recibido-${cheque.id}`,
+        tipo: 'Cheque recibido próximo a cobrar',
+        prioridad: 'media',
+        area: 'tesoreria',
+        titulo: `Cheque recibido ${cheque.numero} vence pronto`,
+        dato_asociado: {
+          cheque: cheque.numero,
+          tercero: cheque.tercero,
+          importe: cheque.importe,
+          vence: cheque.fecha_vencimiento,
+        },
+        fecha_evento: cheque.fecha_vencimiento,
+      });
+    });
+
+  inputs.cartera
+    .filter((row) => row.dias_atraso !== null && row.dias_atraso > 0)
+    .slice(0, 5)
+    .forEach((row) => {
+      alerts.push({
+        alerta_id: `tes-cxc-${row.cliente_id ?? row.cliente_nombre}`,
+        tipo: 'Cuenta por cobrar vencida',
+        prioridad: row.dias_atraso && row.dias_atraso > 30 ? 'critica' : 'media',
+        area: 'tesoreria',
+        titulo: `Cuenta por cobrar vencida: ${row.cliente_nombre}`,
+        dato_asociado: {
+          cliente: row.cliente_nombre,
+          saldo: row.saldo_pendiente,
+          atraso_dias: row.dias_atraso,
+        },
+        fecha_evento: row.proximo_vencimiento ?? today.toISOString(),
+      });
+    });
+
+  inputs.proyeccionFlujo
+    .filter((row) => row.saldo_estimado < 0)
+    .forEach((row) => {
+      alerts.push({
+        alerta_id: `tes-flujo-${row.horizonte}`,
+        tipo: 'Flujo de caja proyectado negativo',
+        prioridad: 'critica',
+        area: 'tesoreria',
+        titulo: `Posible flujo negativo en ${row.horizonte}`,
+        dato_asociado: {
+          horizonte: row.horizonte,
+          saldo_estimado: row.saldo_estimado,
+        },
+        fecha_evento: today.toISOString(),
+      });
+    });
+
+  return alerts;
+};
+
+export const buildTesoreriaInsights = (
+  presupuestos: PresupuestoMensualRow[],
+  movimientos: FlujoCajaRubroRow[],
+  clientes: Cliente[],
+  comprobantes: ComprobanteCarteraRow[],
+  ventasPT: MovimientoStockPT[],
+  cheques: ChequeTesoreriaSourceRow[],
+  saldoActual: number,
+): FinanzasTesoreriaInsights => {
+  const presupuestoResult = buildPresupuestoVsReal(presupuestos, movimientos);
+  const gastosPorRubro = buildGastosPorRubro(movimientos);
+  const variacionesPorRubro = buildVariacionesPorRubro(presupuestoResult.rows);
+  const carteraClientes = buildCarteraClientes(clientes, comprobantes, ventasPT);
+  const { emitidos, recibidos } = buildChequesTesoreria(cheques);
+  const egresosDelMes = movimientos.filter((movimiento) => movimiento.tipo === 'EGRESO' && monthKey(movimiento.fecha) === currentMonthKey);
+  const egresoPromedioDiario = egresosDelMes.reduce((acc, row) => acc + num(row.monto), 0) / Math.max(1, new Date().getDate());
+  const proyeccionFlujo = buildProyeccionFlujo({
+    saldoActual,
+    cartera: carteraClientes,
+    chequesEmitidos: emitidos,
+    chequesRecibidos: recibidos,
+    egresoPromedioDiario,
+  });
+
+  return {
+    presupuestoVsReal: presupuestoResult.rows,
+    gastosPorRubro,
+    variacionesPorRubro,
+    carteraClientes,
+    chequesEmitidos: emitidos,
+    chequesRecibidos: recibidos,
+    proyeccionFlujo,
+    alertasTesoreria: buildAlertasTesoreria({
+      cartera: carteraClientes,
+      chequesEmitidos: emitidos,
+      chequesRecibidos: recibidos,
+      proyeccionFlujo,
+    }),
+  };
+};

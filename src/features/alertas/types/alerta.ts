@@ -1,5 +1,5 @@
 export type PrioridadAlerta = "critica" | "media" | "informativa";
-export type AreaAlerta = "stock" | "produccion" | "clientes" | "costos" | "productos";
+export type AreaAlerta = "stock" | "produccion" | "clientes" | "costos" | "productos" | "tesoreria";
 export type EstadoAlerta = "pendiente" | "en seguimiento" | "atendida" | "descartada";
 
 export interface DatoAsociadoAlerta {
@@ -7,6 +7,7 @@ export interface DatoAsociadoAlerta {
   orden?: string;
   cliente?: string;
   producto?: string;
+  cheque?: string;
   insumo?: string;
   disponible_kg?: number;
   umbral_kg?: number;

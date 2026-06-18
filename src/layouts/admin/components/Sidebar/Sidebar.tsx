@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom"; // Importa
 import { ROUTES } from "../../../../app/config/routes"; // Tus constantes de rutas
 import {
   FiGrid, FiUsers, FiPackage, FiTruck, FiBarChart2,
-   FiLogOut,FiInbox,FiDatabase,
+   FiLogOut,FiInbox,FiDatabase,FiDollarSign,
   FiLayers, FiArchive, FiChevronDown, FiChevronRight, FiGitMerge, FiBell,
 } from "react-icons/fi";
 import type { IconType } from "react-icons";
@@ -47,6 +47,7 @@ const menuItems: SidebarGroup[] = [
       { name: "Fórmulas", icon: FiLayers, path: ROUTES.FORMULAS, module: "formulas" },
       { name: "Órdenes", icon: FiLayers, path: ROUTES.ORDENES, module: "ordenes"},
       { name: "Costos", icon: FiBarChart2, path: ROUTES.COSTOS, module: "finanzas" },
+      { name: "Tesorería", icon: FiDollarSign, path: ROUTES.TESORERIA, module: "tesoreria" },
       { name: "Trazabilidad", icon: FiGitMerge, path: ROUTES.TRAZABILIDAD, module: "trazabilidad" },
     ],
   },

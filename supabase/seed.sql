@@ -608,14 +608,14 @@ set estado = excluded.estado,
 
 -- Comprobantes, caja y presupuesto
 insert into public.comprobantes (
-  legacy_uid, tipo, numero, fecha_emision, fecha_vencimiento, tercero, estado, total, saldo
+  legacy_uid, tipo, numero, fecha_emision, fecha_vencimiento, tercero, estado, total, saldo, cliente_id
 )
 values
-  ('comp-001', 'FACTURA_COMPRA', 'FC-001-2604', current_date - 12, current_date + 18, 'AgroNecta S.A.', 'PENDIENTE', 83250, 83250),
-  ('comp-002', 'FACTURA_COMPRA', 'FC-002-2604', current_date - 10, current_date + 20, 'Granos del Sudeste SRL', 'PENDIENTE', 132000, 132000),
-  ('comp-003', 'FACTURA_COMPRA', 'FC-003-2604', current_date - 8, current_date + 22, 'Nutrimix Insumos', 'PAGADO', 244400, 0),
-  ('comp-004', 'FACTURA_VENTA', 'FV-004-2604', current_date - 5, current_date + 10, 'Lácteos del Sur', 'PENDIENTE', 186000, 62000),
-  ('comp-005', 'FACTURA_VENTA', 'FV-005-2604', current_date - 2, current_date + 12, 'Cabañas Unidas', 'VENCIDO', 94500, 94500)
+  ('comp-001', 'FACTURA_COMPRA', 'FC-001-2604', current_date - 12, current_date + 18, 'AgroNecta S.A.', 'PENDIENTE', 83250, 83250, null),
+  ('comp-002', 'FACTURA_COMPRA', 'FC-002-2604', current_date - 10, current_date + 20, 'Granos del Sudeste SRL', 'PENDIENTE', 132000, 132000, null),
+  ('comp-003', 'FACTURA_COMPRA', 'FC-003-2604', current_date - 8, current_date + 22, 'Nutrimix Insumos', 'PAGADO', 244400, 0, null),
+  ('comp-004', 'FACTURA_VENTA', 'FV-004-2604', current_date - 5, current_date + 10, 'Lácteos del Sur', 'PENDIENTE', 186000, 62000, (select id from public.clientes where legacy_uid = 'cli-001')),
+  ('comp-005', 'FACTURA_VENTA', 'FV-005-2604', current_date - 2, current_date + 12, 'Cabañas Unidas', 'VENCIDO', 94500, 94500, (select id from public.clientes where legacy_uid = 'cli-002'))
 on conflict (legacy_uid) do update
 set tipo = excluded.tipo,
     numero = excluded.numero,
@@ -625,6 +625,27 @@ set tipo = excluded.tipo,
     estado = excluded.estado,
     total = excluded.total,
     saldo = excluded.saldo,
+    cliente_id = excluded.cliente_id,
+    updated_at = now();
+
+insert into public.tesoreria_cheques (
+  legacy_uid, numero, tipo, tercero, importe, fecha_emision, fecha_vencimiento, estado, cliente_id, cliente_nombre
+)
+values
+  ('chq-001', '000101', 'RECIBIDO', 'Lácteos del Sur', 62000, current_date - 5, current_date + 5, 'PENDIENTE', (select id from public.clientes where legacy_uid = 'cli-001'), 'Lácteos del Sur'),
+  ('chq-002', '000102', 'RECIBIDO', 'Cabañas Unidas', 94500, current_date - 2, current_date + 12, 'PENDIENTE', (select id from public.clientes where legacy_uid = 'cli-002'), 'Cabañas Unidas'),
+  ('chq-003', '000201', 'EMITIDO', 'Proveedor Maíz SRL', 78000, current_date - 3, current_date + 8, 'PENDIENTE', null, null),
+  ('chq-004', '000202', 'EMITIDO', 'Servicios Logísticos SA', 54000, current_date - 1, current_date + 15, 'DEPOSITADO', null, null)
+on conflict (legacy_uid) do update
+set numero = excluded.numero,
+    tipo = excluded.tipo,
+    tercero = excluded.tercero,
+    importe = excluded.importe,
+    fecha_emision = excluded.fecha_emision,
+    fecha_vencimiento = excluded.fecha_vencimiento,
+    estado = excluded.estado,
+    cliente_id = excluded.cliente_id,
+    cliente_nombre = excluded.cliente_nombre,
     updated_at = now();
 
 insert into public.flujo_caja_movimientos (

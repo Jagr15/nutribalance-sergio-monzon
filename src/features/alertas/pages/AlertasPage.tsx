@@ -61,6 +61,7 @@ const getOrigenDetalle = (alerta: AlertaOperativa) => {
   if (alerta.area === 'produccion') return `Orden: ${alerta.datoAsociado.orden || 'Sin dato'} · Producto: ${alerta.datoAsociado.producto || 'Sin dato'} · Merma y costo revisados.`;
   if (alerta.area === 'clientes') return `Cliente: ${alerta.datoAsociado.cliente || 'Sin dato'} · Saldo vencido y vencimiento crítico de cuenta corriente.`;
   if (alerta.area === 'costos') return `Insumo: ${alerta.datoAsociado.insumo || 'Sin dato'} · Variación de costo con impacto en margen de fórmula.`;
+  if (alerta.area === 'tesoreria') return `Tesorería: ${alerta.datoAsociado.cheque || alerta.datoAsociado.cliente || 'Sin dato'} · Revisar cobertura, vencimientos y flujo proyectado.`;
   return `Producto: ${alerta.datoAsociado.producto || 'Sin dato'} · Rotación y cobertura comercial por debajo de objetivo.`;
 };
 

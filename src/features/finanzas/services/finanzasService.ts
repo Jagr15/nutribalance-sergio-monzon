@@ -1,9 +1,18 @@
 import { supabaseClient } from '../../../infrastructure/api/supabase/client';
 import { ApiService } from '../../../infrastructure/api';
-import type { CostosFormulaVsReal, FinanzasInventarioResumen, FinanzasKPIs, FinanzasReportes, MovimientoFinanciero } from '../types';
+import type { MovimientoStockPT } from '../../productos/types';
+import type {
+  CostosFormulaVsReal,
+  FinanzasInventarioResumen,
+  FinanzasKPIs,
+  FinanzasReportes,
+  FinanzasTesoreriaInsights,
+  MovimientoFinanciero,
+} from '../types';
 import { normalizeKpis } from '../utils/finanzasCalculations';
 import { buildCostosFormulaVsReal } from '../utils/costosFormulaVsReal';
 import { buildIngresosPtPorProducto } from '../utils/ingresosPtPorProducto';
+import { buildTesoreriaInsights } from '../utils/tesoreriaInsights';
 import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
 
@@ -42,6 +51,51 @@ type CostosFormulaVsRealRow = {
   variacion_pct: number | string | null;
   ultima_op: string | null;
 };
+type ChequeTesoreriaDbRow = {
+  id: string;
+  numero: string;
+  tipo: 'EMITIDO' | 'RECIBIDO';
+  tercero: string;
+  importe: number | string | null;
+  fecha_emision: string;
+  fecha_vencimiento: string;
+  estado: 'PENDIENTE' | 'DEPOSITADO' | 'COBRADO' | 'RECHAZADO' | 'VENCIDO';
+  cliente_id: string | null;
+  cliente_nombre: string | null;
+};
+type CuentasBancariasSaldoRow = {
+  saldo_actual: number | string | null;
+};
+type FlujoCajaRubroDbRow = {
+  fecha: string;
+  tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA';
+  origen_operativo: string | null;
+  descripcion: string;
+  monto: number | string | null;
+  categoria: string | null;
+  centro_costo: string | null;
+};
+type ComprobanteCarteraDbRow = {
+  cliente_id: string | null;
+  tercero: string | null;
+  fecha_emision: string;
+  fecha_vencimiento: string | null;
+  estado: string;
+  saldo: number | string | null;
+  tipo: string;
+};
+type PresupuestoDbRow = {
+  anio: number;
+  mes: number;
+  monto_presupuestado: number | string | null;
+  categorias_financieras?: { nombre: string | null } | null;
+  centros_costo?: { nombre: string | null } | null;
+};
+type StockPTMovimientoVentaRow = {
+  cliente_id: string | null;
+  created_at: string;
+  tipo: string;
+};
 
 const emptyReportes: FinanzasReportes = {
   flujo_caja_mensual: [],
@@ -75,6 +129,82 @@ export const finanzasService = {
       rentabilidad_por_formula: asArray<FinanzasReportes['rentabilidad_por_formula'][number]>(payload.rentabilidad_por_formula),
       costo_operativo_mensual: asArray<FinanzasReportes['costo_operativo_mensual'][number]>(payload.costo_operativo_mensual),
     };
+  },
+
+  async getTreasuryInsights(): Promise<FinanzasTesoreriaInsights> {
+    const [presupuestosResult, flujoResult, comprobantesResult, chequesResult, ventasPtResult, saldoResult, clientes] = await Promise.all([
+      supabaseClient
+        .from('presupuestos_mensuales')
+        .select('anio,mes,monto_presupuestado,categorias_financieras(nombre),centros_costo(nombre)')
+        .is('deleted_at', null)
+        .order('anio', { ascending: false }),
+      supabaseClient
+        .from('flujo_caja_movimientos')
+        .select('fecha,tipo,origen_operativo,descripcion,monto,categorias_financieras(nombre),centros_costo(nombre)')
+        .is('deleted_at', null)
+        .eq('estado', 'CONFIRMADO')
+        .order('fecha', { ascending: false }),
+      supabaseClient
+        .from('comprobantes')
+        .select('cliente_id,tercero,fecha_emision,fecha_vencimiento,estado,saldo,tipo')
+        .is('deleted_at', null)
+        .order('fecha_vencimiento', { ascending: true }),
+      supabaseClient
+        .from('tesoreria_cheques')
+        .select('id,numero,tipo,tercero,importe,fecha_emision,fecha_vencimiento,estado,cliente_id,cliente_nombre')
+        .is('deleted_at', null)
+        .order('fecha_vencimiento', { ascending: true }),
+      supabaseClient
+        .from('stock_pt_movimientos')
+        .select('cliente_id,created_at,tipo')
+        .order('created_at', { ascending: false }),
+      supabaseClient
+        .from('cuentas_bancarias')
+        .select('saldo_actual')
+        .is('deleted_at', null),
+      ApiService.clientes.getAll(),
+    ]);
+
+    if (presupuestosResult.error) throw presupuestosResult.error;
+    if (flujoResult.error) throw flujoResult.error;
+    if (comprobantesResult.error) throw comprobantesResult.error;
+    if (chequesResult.error) throw chequesResult.error;
+    if (ventasPtResult.error) throw ventasPtResult.error;
+    if (saldoResult.error) throw saldoResult.error;
+
+    const presupuestos = ((presupuestosResult.data ?? []) as unknown as PresupuestoDbRow[]).map((row) => ({
+      anio: row.anio,
+      mes: row.mes,
+      monto_presupuestado: row.monto_presupuestado,
+      categoria: row.categorias_financieras?.nombre ?? null,
+      centro_costo: row.centros_costo?.nombre ?? null,
+    }));
+    const flujo = ((flujoResult.data ?? []) as unknown as FlujoCajaRubroDbRow[]).map((row) => ({
+      fecha: row.fecha,
+      tipo: row.tipo,
+      origen_operativo: row.origen_operativo,
+      descripcion: row.descripcion,
+      monto: row.monto,
+      categoria: row.categoria ?? null,
+      centro_costo: row.centro_costo ?? null,
+    }));
+    const comprobantes = (comprobantesResult.data ?? []) as ComprobanteCarteraDbRow[];
+    const cheques = ((chequesResult.data ?? []) as ChequeTesoreriaDbRow[]).map((row) => ({
+      ...row,
+      importe: Number(row.importe ?? 0),
+    }));
+    const ventasPt = (ventasPtResult.data ?? []) as StockPTMovimientoVentaRow[];
+    const saldoActual = ((saldoResult.data ?? []) as CuentasBancariasSaldoRow[]).reduce((acc, row) => acc + Number(row.saldo_actual ?? 0), 0);
+
+    return buildTesoreriaInsights(
+      presupuestos,
+      flujo,
+      clientes,
+      comprobantes,
+      ventasPt as unknown as MovimientoStockPT[],
+      cheques,
+      saldoActual,
+    );
   },
 
   async getMovimientos(): Promise<MovimientoFinanciero[]> {
@@ -178,13 +308,14 @@ export const finanzasService = {
     });
   },
 
-  async getOperationalFallback(): Promise<{ kpis: FinanzasKPIs; reportes: FinanzasReportes; movimientos: MovimientoFinanciero[]; costosComparativos: CostosFormulaVsReal[]; inventario: FinanzasInventarioResumen }> {
-    const [ordenes, lotes, formulas, resumenPt, movimientosPt] = await Promise.all([
+  async getOperationalFallback(): Promise<{ kpis: FinanzasKPIs; reportes: FinanzasReportes; tesoreria: FinanzasTesoreriaInsights; movimientos: MovimientoFinanciero[]; costosComparativos: CostosFormulaVsReal[]; inventario: FinanzasInventarioResumen }> {
+    const [ordenes, lotes, formulas, resumenPt, movimientosPt, clientes] = await Promise.all([
       ApiService.ordenes.getAll(),
       ApiService.stockMP.getAllLotes(),
       ApiService.formulas.findAll(),
       ApiService.stockPT.getResumen(),
       ApiService.stockPT.getMovimientos(),
+      ApiService.clientes.getAll(),
     ]);
 
     const costoProduccion = ordenes.reduce((acc, orden) => acc + Number(orden.costo_total_insumos ?? 0), 0);
@@ -251,6 +382,65 @@ export const finanzasService = {
       costo_operativo_mensual: costoOperativoMensual,
     };
 
+    const tesoreria = buildTesoreriaInsights(
+      [
+        {
+          anio: new Date().getFullYear(),
+          mes: new Date().getMonth() + 1,
+          monto_presupuestado: costoProduccion,
+          categoria: 'Producción',
+          centro_costo: 'Planta',
+        },
+      ],
+      ordenes.map((orden) => ({
+        fecha: orden.fecha_creacion,
+        tipo: 'EGRESO' as const,
+        origen_operativo: 'PRODUCCION',
+        descripcion: `Producción ${orden.nombre_producto}`,
+        monto: orden.costo_total_insumos ?? 0,
+        categoria: 'Producción',
+        centro_costo: 'Planta',
+      })),
+      clientes,
+      clientes.map((cliente, index) => ({
+        cliente_id: cliente.uid,
+        tercero: cliente.nombre,
+        fecha_emision: cliente.ultimaCompra ?? new Date().toISOString(),
+        fecha_vencimiento: new Date(Date.now() + (index + 1) * 86400000 * 7).toISOString(),
+        estado: cliente.saldoPendienteArs > 0 ? 'PENDIENTE' : 'COBRADO',
+        saldo: cliente.saldoPendienteArs,
+        tipo: 'FACTURA_VENTA',
+      })),
+      movimientosPt as unknown as MovimientoStockPT[],
+      [
+        {
+          id: 'chq-demo-1',
+          numero: '00001234',
+          tipo: 'RECIBIDO',
+          tercero: clientes[0]?.nombre ?? 'Cliente demo',
+          importe: 125000,
+          fecha_emision: new Date().toISOString(),
+          fecha_vencimiento: new Date(Date.now() + 7 * 86400000).toISOString(),
+          estado: 'PENDIENTE',
+          cliente_id: clientes[0]?.uid ?? null,
+          cliente_nombre: clientes[0]?.nombre ?? null,
+        },
+        {
+          id: 'chq-demo-2',
+          numero: '00004567',
+          tipo: 'EMITIDO',
+          tercero: 'Proveedor demo',
+          importe: 82000,
+          fecha_emision: new Date().toISOString(),
+          fecha_vencimiento: new Date(Date.now() + 14 * 86400000).toISOString(),
+          estado: 'PENDIENTE',
+          cliente_id: null,
+          cliente_nombre: null,
+        },
+      ],
+      0,
+    );
+
     const kpis: FinanzasKPIs = {
       saldo_actual: 0,
       ingresos_mes: 0,
@@ -270,6 +460,7 @@ export const finanzasService = {
     return {
       kpis,
       reportes,
+      tesoreria,
       movimientos: [],
       costosComparativos: buildCostosFormulaVsReal(formulas, ordenes),
       inventario: {
