@@ -6,6 +6,8 @@ import withReactContent from 'sweetalert2-react-content';
 // Componentes e Hooks
 import FormulaTable from '../components/FormulaTable';
 import FormulaModal from '../components/FormulaModal';
+import FormulaComparisonBuilder from '../components/FormulaComparisonBuilder';
+import FormulaComparisonModal from '../components/FormulaComparisonModal';
 import { useFormulas } from '../hooks';
 import type { Formula } from '../types';
 import { usePermissions } from '../../auth/usePermissions';
@@ -22,6 +24,8 @@ const FormulaPage: React.FC = () => {
   // Estados locales de la UI
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isComparisonBuilderOpen, setIsComparisonBuilderOpen] = useState(false);
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const [selectedFormula, setSelectedFormula] = useState<Formula | undefined>();
 
   // Carga inicial
@@ -37,6 +41,14 @@ const FormulaPage: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedFormula(undefined);
+  };
+
+  const handleCloseComparison = () => {
+    setIsComparisonOpen(false);
+  };
+
+  const handleCloseComparisonBuilder = () => {
+    setIsComparisonBuilderOpen(false);
   };
 
   const handleDelete = async (uid: string) => {
@@ -104,14 +116,33 @@ const FormulaPage: React.FC = () => {
           </div>
         </div>
 
-        {canCreateFormula ? (
-          <button 
-            onClick={() => handleOpenModal()}
-            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+        <div className="flex flex-wrap gap-3">
+          {canCreateFormula ? (
+            <button
+              type="button"
+              onClick={() => setIsComparisonBuilderOpen(true)}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-700 transition-all hover:border-blue-300 hover:text-blue-700"
+            >
+              Comparar alternativas
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setIsComparisonOpen(true)}
+            disabled={filteredFormulas.length < 2}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-700 transition-all hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <FiPlus size={16} /> Nueva Fórmula
+            Comparar fórmulas
           </button>
-        ) : null}
+          {canCreateFormula ? (
+            <button 
+              onClick={() => handleOpenModal()}
+              className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+            >
+              <FiPlus size={16} /> Nueva Fórmula
+            </button>
+          ) : null}
+        </div>
       </header>
       <div className="relative max-w-md">
         <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
@@ -158,9 +189,21 @@ const FormulaPage: React.FC = () => {
       {isModalOpen && (
         <FormulaModal 
           formula={selectedFormula}
+          formulas={formulas}
           onClose={handleCloseModal}
           onSuccess={getAll}
         />
+      )}
+
+      {isComparisonBuilderOpen && (
+        <FormulaComparisonBuilder
+          onClose={handleCloseComparisonBuilder}
+          onSuccess={getAll}
+        />
+      )}
+
+      {isComparisonOpen && (
+        <FormulaComparisonModal formulas={filteredFormulas.length >= 2 ? filteredFormulas : formulas} onClose={handleCloseComparison} />
       )}
     </div>
   );

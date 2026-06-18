@@ -5,6 +5,7 @@ truncate table
   public.presupuestos_mensuales,
   public.comprobantes,
   public.stock_pt_movimientos,
+  public.ordenes_expedicion,
   public.stock_pt,
   public.trazabilidad_eventos,
   public.orden_consumo_lotes,
@@ -49,6 +50,30 @@ on conflict (legacy_uid) do update
 set role_id = excluded.role_id,
     nombre = excluded.nombre,
     email = excluded.email,
+    esta_activo = excluded.esta_activo,
+    updated_at = now();
+
+-- Clientes
+insert into public.clientes (
+  legacy_uid, nombre, razon_social, segmento, ubicacion, contacto, producto_principal,
+  condicion_comercial, estado, observaciones, ultima_compra, saldo_pendiente_ars, esta_activo
+)
+values
+  ('cli-001', 'Estancia La Esperanza', 'Estancia La Esperanza SRL', 'Tambo', 'Rafaela, Santa Fe', 'Marina Gómez · +54 3492 445112', 'Alimento Lechera', '30 días fecha factura', 'Activo', 'Cliente estable con compras quincenales.', current_date - 33, 325000, true),
+  ('cli-002', 'Agropecuaria Don Sergio', 'Agropecuaria Don Sergio SAS', 'Mixto agrícola-ganadero', 'Pergamino, Buenos Aires', 'Julián Díaz · +54 2477 518223', 'Ración Recría/Engorde', '21 días', 'En riesgo', 'Cliente con tensión de cobranzas.', current_date - 40, 1185000, true),
+  ('cli-003', 'Tambo San Miguel', 'Tambo San Miguel SRL', 'Tambo', 'Villa María, Córdoba', 'Natalia Ferreyra · +54 353 4869012', 'Alimento Lechera', 'Contado contra entrega', 'Activo', 'Cuenta saneada.', current_date - 31, 0, true)
+on conflict (legacy_uid) do update
+set nombre = excluded.nombre,
+    razon_social = excluded.razon_social,
+    segmento = excluded.segmento,
+    ubicacion = excluded.ubicacion,
+    contacto = excluded.contacto,
+    producto_principal = excluded.producto_principal,
+    condicion_comercial = excluded.condicion_comercial,
+    estado = excluded.estado,
+    observaciones = excluded.observaciones,
+    ultima_compra = excluded.ultima_compra,
+    saldo_pendiente_ars = excluded.saldo_pendiente_ars,
     esta_activo = excluded.esta_activo,
     updated_at = now();
 
@@ -469,12 +494,38 @@ set orden_id = excluded.orden_id,
 
 insert into public.stock_pt_movimientos (
   stock_pt_id, producto_id, nombre_producto, lote, numero_orden, silo, tipo, cantidad,
-  unidad, costo_unitario, valor_total, motivo, referencia
+  unidad, costo_unitario, valor_total, motivo, referencia, cliente_id
 )
 values
-  ((select id from public.stock_pt where legacy_uid = 'pt-demo-005'), 'form-lechera-premium', 'Alimento Lechera Premium', 'PT-2604-01', 'OP-2026-000005', 'Silo C1', 'INGRESO', 40, 'KG', 350, 14000, 'Ingreso de lote inicial demo', 'Saldo inicial demo'),
-  ((select id from public.stock_pt where legacy_uid = 'pt-demo-005'), 'form-lechera-premium', 'Alimento Lechera Premium', 'PT-2604-01', 'OP-2026-000005', 'Silo C1', 'SALIDA', 25, 'KG', 350, 8750, 'Despacho parcial demo', 'Salida demo PT 1'),
-  ((select id from public.stock_pt where legacy_uid = 'pt-demo-006'), 'form-pellet-crecimiento', 'Pellet Crecimiento', 'PT-2604-02', 'OP-2026-000006', 'Silo C2', 'SALIDA', 60, 'KG', 360, 21600, 'Despacho demo', 'Salida demo PT 2');
+  ((select id from public.stock_pt where legacy_uid = 'pt-demo-005'), 'form-lechera-premium', 'Alimento Lechera Premium', 'PT-2604-01', 'OP-2026-000005', 'Silo C1', 'INGRESO', 40, 'KG', 350, 14000, 'Ingreso de lote inicial demo', 'Saldo inicial demo', null),
+  ((select id from public.stock_pt where legacy_uid = 'pt-demo-005'), 'form-lechera-premium', 'Alimento Lechera Premium', 'PT-2604-01', 'OP-2026-000005', 'Silo C1', 'SALIDA', 25, 'KG', 350, 8750, 'Despacho parcial demo', 'Salida demo PT 1', (select id from public.clientes where legacy_uid = 'cli-001')),
+  ((select id from public.stock_pt where legacy_uid = 'pt-demo-006'), 'form-pellet-crecimiento', 'Pellet Crecimiento', 'PT-2604-02', 'OP-2026-000006', 'Silo C2', 'SALIDA', 60, 'KG', 360, 21600, 'Despacho demo', 'Salida demo PT 2', (select id from public.clientes where legacy_uid = 'cli-002')),
+  ((select id from public.stock_pt where legacy_uid = 'pt-demo-007'), 'form-recria-balance', 'Recria Balance', 'PT-2604-03', 'OP-2026-000007', 'Silo Bolsa', 'SALIDA', 35, 'KG', 340, 11900, 'Despacho demo', 'Salida demo PT 3', (select id from public.clientes where legacy_uid = 'cli-003')),
+  ((select id from public.stock_pt where legacy_uid = 'pt-demo-008'), 'form-nucleo-inicio', 'Nucleo Inicio', 'PT-2604-04', 'OP-2026-000008', 'Silo PTO', 'SALIDA', 55, 'KG', 400, 22000, 'Despacho demo', 'Salida demo PT 4', (select id from public.clientes where legacy_uid = 'cli-001'));
+
+insert into public.ordenes_expedicion (
+  legacy_uid, numero_expedicion, stock_pt_id, producto_id, nombre_producto, lote_pt, cliente_id,
+  presentacion, cantidad, estado, motivo, referencia
+)
+values
+  ('exp-demo-001', 'EXP-2026-000001', (select id from public.stock_pt where legacy_uid = 'pt-demo-005'), 'form-lechera-premium', 'Alimento Lechera Premium', 'PT-2604-01', (select id from public.clientes where legacy_uid = 'cli-001'), 'GRANEL', 25, 'REGISTRADA', 'Despacho demo', 'EXP-2605-001'),
+  ('exp-demo-002', 'EXP-2026-000002', (select id from public.stock_pt where legacy_uid = 'pt-demo-005'), 'form-lechera-premium', 'Alimento Lechera Premium', 'PT-2604-01', (select id from public.clientes where legacy_uid = 'cli-003'), 'BIG_BAG', 40, 'REGISTRADA', 'Despacho demo', 'EXP-2605-002'),
+  ('exp-demo-003', 'EXP-2026-000003', (select id from public.stock_pt where legacy_uid = 'pt-demo-006'), 'form-pellet-crecimiento', 'Pellet Crecimiento', 'PT-2604-02', (select id from public.clientes where legacy_uid = 'cli-002'), 'BOLSA', 60, 'REGISTRADA', 'Despacho demo', 'EXP-2605-003'),
+  ('exp-demo-004', 'EXP-2026-000004', (select id from public.stock_pt where legacy_uid = 'pt-demo-007'), 'form-recria-balance', 'Recria Balance', 'PT-2604-03', (select id from public.clientes where legacy_uid = 'cli-002'), 'GRANEL', 35, 'REGISTRADA', 'Despacho demo', 'EXP-2605-004'),
+  ('exp-demo-005', 'EXP-2026-000005', (select id from public.stock_pt where legacy_uid = 'pt-demo-008'), 'form-nucleo-inicio', 'Nucleo Inicio', 'PT-2604-04', (select id from public.clientes where legacy_uid = 'cli-001'), 'BIG_BAG', 55, 'REGISTRADA', 'Despacho demo', 'EXP-2605-005')
+on conflict (legacy_uid) do update
+set numero_expedicion = excluded.numero_expedicion,
+    stock_pt_id = excluded.stock_pt_id,
+    producto_id = excluded.producto_id,
+    nombre_producto = excluded.nombre_producto,
+    lote_pt = excluded.lote_pt,
+    cliente_id = excluded.cliente_id,
+    presentacion = excluded.presentacion,
+    cantidad = excluded.cantidad,
+    estado = excluded.estado,
+    motivo = excluded.motivo,
+    referencia = excluded.referencia,
+    updated_at = now();
 
 insert into public.stock_movimientos (
   lote_id, usuario_id, tipo, origen, cantidad, observaciones, metadata
@@ -589,6 +640,8 @@ values
   ('fcm-005', now() - interval '5 days', 'INGRESO', 'VENTA', 'Cobro venta PT', 62000, (select id from public.categorias_financieras where legacy_uid = 'cat-cobranzas'), (select id from public.centros_costo where legacy_uid = 'cc-administracion'), (select id from public.cuentas_bancarias where legacy_uid = 'cb-cobros'), (select id from public.formas_pago where legacy_uid = 'fp-transferencia'), (select id from public.comprobantes where legacy_uid = 'comp-004'), null, null, (select id from public.stock_pt where legacy_uid = 'pt-demo-006'), 'CONFIRMADO', jsonb_build_object('origen', 'cobranza demo')),
   ('fcm-006', now() - interval '4 days', 'EGRESO', 'LOGISTICA', 'Flete despacho PT demo', 18000, (select id from public.categorias_financieras where legacy_uid = 'cat-logistica'), (select id from public.centros_costo where legacy_uid = 'cc-logistica'), (select id from public.cuentas_bancarias where legacy_uid = 'cb-main'), (select id from public.formas_pago where legacy_uid = 'fp-efectivo'), null, (select id from public.ordenes_produccion where legacy_uid = 'op-demo-005'), null, (select id from public.stock_pt where legacy_uid = 'pt-demo-005'), 'CONFIRMADO', jsonb_build_object('origen', 'logistica demo')),
   ('fcm-007', now() - interval '3 days', 'INGRESO', 'VENTA', 'Cobro por venta de PT', 94500, (select id from public.categorias_financieras where legacy_uid = 'cat-cobranzas'), (select id from public.centros_costo where legacy_uid = 'cc-administracion'), (select id from public.cuentas_bancarias where legacy_uid = 'cb-reserva'), (select id from public.formas_pago where legacy_uid = 'fp-cheque-30'), (select id from public.comprobantes where legacy_uid = 'comp-005'), null, null, null, 'CONFIRMADO', jsonb_build_object('origen', 'venta demo')),
+  ('fcm-009', now() - interval '2 days', 'INGRESO', 'VENTA', 'Cobro venta PT Recria Balance', 11900, (select id from public.categorias_financieras where legacy_uid = 'cat-cobranzas'), (select id from public.centros_costo where legacy_uid = 'cc-administracion'), (select id from public.cuentas_bancarias where legacy_uid = 'cb-cobros'), (select id from public.formas_pago where legacy_uid = 'fp-transferencia'), null, (select id from public.ordenes_produccion where legacy_uid = 'op-demo-007'), null, (select id from public.stock_pt where legacy_uid = 'pt-demo-007'), 'CONFIRMADO', jsonb_build_object('origen', 'venta demo')),
+  ('fcm-010', now() - interval '2 days' + interval '2 hours', 'INGRESO', 'VENTA', 'Cobro venta PT Nucleo Inicio', 22000, (select id from public.categorias_financieras where legacy_uid = 'cat-cobranzas'), (select id from public.centros_costo where legacy_uid = 'cc-administracion'), (select id from public.cuentas_bancarias where legacy_uid = 'cb-cobros'), (select id from public.formas_pago where legacy_uid = 'fp-transferencia'), null, (select id from public.ordenes_produccion where legacy_uid = 'op-demo-008'), null, (select id from public.stock_pt where legacy_uid = 'pt-demo-008'), 'CONFIRMADO', jsonb_build_object('origen', 'venta demo')),
   ('fcm-008', now() - interval '1 day', 'TRANSFERENCIA', 'TESORERIA', 'Transferencia entre cuentas demo', 50000, (select id from public.categorias_financieras where legacy_uid = 'cat-transferencias'), (select id from public.centros_costo where legacy_uid = 'cc-administracion'), (select id from public.cuentas_bancarias where legacy_uid = 'cb-main'), (select id from public.formas_pago where legacy_uid = 'fp-transferencia'), null, null, null, null, 'CONFIRMADO', jsonb_build_object('origen', 'tesoreria demo'));
 
 insert into public.presupuestos_mensuales (

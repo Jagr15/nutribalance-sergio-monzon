@@ -21,6 +21,8 @@ describe('mockStockPTService', () => {
       cantidad: 10,
       motivo: 'Venta',
       referencia: 'FAC-001',
+      cliente_id: 'cli-001',
+      cliente_nombre: 'Estancia La Esperanza',
     });
 
     expect(updated.cantidad_total).toBe(primerLote.cantidad_total - 10);
@@ -31,6 +33,8 @@ describe('mockStockPTService', () => {
       tipo: 'SALIDA',
       motivo: 'Venta',
       referencia: 'FAC-001',
+      cliente_id: 'cli-001',
+      cliente_nombre: 'Estancia La Esperanza',
     });
   });
 

@@ -32,6 +32,13 @@ export interface FinanzasReportes {
   flujo_caja_mensual: Array<{ mes: string; ingresos: number; egresos: number; neto: number }>;
   gastos_por_categoria: Array<{ categoria: string; monto: number }>;
   ingresos_por_categoria: Array<{ categoria: string; monto: number }>;
+  ingresos_pt_por_producto: Array<{
+    producto: string;
+    cantidad_kg: number;
+    importe_total: number;
+    clientes_count: number;
+    ultima_fecha: string | null;
+  }>;
   rentabilidad_por_formula: Array<{ id_formula: string; nombre_producto: string; costo_total: number; kg_total: number; costo_promedio_kg: number }>;
   costo_operativo_mensual: Array<{ mes: string; monto: number }>;
 }

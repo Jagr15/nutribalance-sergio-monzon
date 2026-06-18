@@ -42,6 +42,8 @@ export interface MovimientoStockPT {
   valor_total?: number | null;
   motivo?: string | null;
   referencia?: string | null;
+  cliente_id?: string | null;
+  cliente_nombre?: string | null;
   created_at: string;
 }
 
@@ -50,6 +52,8 @@ export interface RegistrarSalidaStockPTData {
   cantidad: number;
   motivo: string;
   referencia?: string;
+  cliente_id?: string | null;
+  cliente_nombre?: string | null;
 }
 
 export interface StockProductoTerminadoResumen {

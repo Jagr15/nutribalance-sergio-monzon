@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { dashboardOperativoService } from '../services/dashboardOperativoService';
 import type {
   ConsumoMensualInsumo,
+  DashboardExpedicionInsights,
   DashboardOperativoKPIs,
+  DashboardProductoTerminadoInsights,
   DashboardStockResumenes,
   FormulaComposicion,
 } from '../types/operativo';
@@ -29,34 +31,63 @@ const EMPTY_RESUMENES: DashboardStockResumenes = {
   stockProductoTerminado: [],
 };
 
+const EMPTY_PT_INSIGHTS: DashboardProductoTerminadoInsights = {
+  salidasPorProducto: [],
+  participacionStock: [],
+  entregasPorCliente: [],
+};
+
+const EMPTY_EXPEDICION_INSIGHTS: DashboardExpedicionInsights = {
+  resumen: {
+    expediciones_registradas: 0,
+    expediciones_pendientes: 0,
+    kg_expedidos: 0,
+    clientes_atendidos: 0,
+    producto_mas_expedido: 'Sin dato',
+    kg_producto_mas_expedido: 0,
+  },
+  porProducto: [],
+  porCliente: [],
+};
+
 export const useDashboardOperativo = () => {
   const [kpis, setKpis] = useState<DashboardOperativoKPIs>(EMPTY_KPI);
   const [formulas, setFormulas] = useState<FormulaComposicion[]>([]);
   const [consumoMensual, setConsumoMensual] = useState<ConsumoMensualInsumo[]>([]);
   const [stockResumenes, setStockResumenes] = useState<DashboardStockResumenes>(EMPTY_RESUMENES);
+  const [ptInsights, setPtInsights] = useState<DashboardProductoTerminadoInsights>(EMPTY_PT_INSIGHTS);
+  const [expedicionInsights, setExpedicionInsights] = useState<DashboardExpedicionInsights>(EMPTY_EXPEDICION_INSIGHTS);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [kpiData, extra, resumenes] = await Promise.all([
-          dashboardOperativoService.getKPIs(),
-          dashboardOperativoService.getComposicionYConsumo(),
-          dashboardOperativoService.getStockResumenes(),
-        ]);
-        setKpis(kpiData);
-        setFormulas(extra.formulas);
-        setConsumoMensual(extra.consumoMensual);
-        setStockResumenes(resumenes);
-      } catch (error) {
-        console.error('Error cargando dashboard operativo:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void load();
+  const reload = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [kpiData, extra, resumenes, ptInsightsData, expedicionInsightsData] = await Promise.all([
+        dashboardOperativoService.getKPIs(),
+        dashboardOperativoService.getComposicionYConsumo(),
+        dashboardOperativoService.getStockResumenes(),
+        dashboardOperativoService.getProductoTerminadoInsights(),
+        dashboardOperativoService.getExpedicionInsights(),
+      ]);
+      setKpis(kpiData);
+      setFormulas(extra.formulas);
+      setConsumoMensual(extra.consumoMensual);
+      setStockResumenes(resumenes);
+      setPtInsights(ptInsightsData);
+      setExpedicionInsights(expedicionInsightsData);
+    } catch (error) {
+      console.error('Error cargando dashboard operativo:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { kpis, formulas, consumoMensual, stockResumenes, loading };
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void reload();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [reload]);
+
+  return { kpis, formulas, consumoMensual, stockResumenes, ptInsights, expedicionInsights, loading, reload };
 };

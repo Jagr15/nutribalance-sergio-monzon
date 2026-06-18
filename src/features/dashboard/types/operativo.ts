@@ -1,5 +1,15 @@
 import type { StockMateriaPrimaResumen } from '../../insumos/types';
 import type { StockProductoTerminadoResumen } from '../../productos/types';
+import type {
+  DashboardPTEntregaCliente,
+  DashboardPTParticipacionProducto,
+  DashboardPTSalidaProducto,
+} from '../utils/productoTerminadoInsights';
+import type {
+  DashboardExpedicionCliente,
+  DashboardExpedicionProducto,
+  DashboardExpedicionResumen,
+} from '../utils/ordenesExpedicionInsights';
 
 export interface DashboardOperativoKPIs {
   stock_total_mp: number;
@@ -21,6 +31,18 @@ export interface DashboardOperativoKPIs {
 export interface DashboardStockResumenes {
   stockMateriaPrima: StockMateriaPrimaResumen[];
   stockProductoTerminado: StockProductoTerminadoResumen[];
+}
+
+export interface DashboardProductoTerminadoInsights {
+  salidasPorProducto: DashboardPTSalidaProducto[];
+  participacionStock: DashboardPTParticipacionProducto[];
+  entregasPorCliente: DashboardPTEntregaCliente[];
+}
+
+export interface DashboardExpedicionInsights {
+  resumen: DashboardExpedicionResumen;
+  porProducto: DashboardExpedicionProducto[];
+  porCliente: DashboardExpedicionCliente[];
 }
 
 export interface FormulaComposicion {

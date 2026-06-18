@@ -62,6 +62,8 @@ interface StockPTMovimientoRow {
   valor_total: number | null;
   motivo: string | null;
   referencia: string | null;
+  cliente_id: string | null;
+  clientes: { legacy_uid: string | null; nombre: string | null } | null;
   created_at: string;
 }
 
@@ -127,7 +129,7 @@ export const supabaseStockPTService = {
   async getMovimientos(): Promise<MovimientoStockPT[]> {
     const { data, error } = await supabaseClient
       .from('stock_pt_movimientos')
-      .select('id,stock_pt_id,producto_id,nombre_producto,lote,numero_orden,silo,tipo,cantidad,unidad,costo_unitario,valor_total,motivo,referencia,created_at')
+      .select('id,stock_pt_id,producto_id,nombre_producto,lote,numero_orden,silo,tipo,cantidad,unidad,costo_unitario,valor_total,motivo,referencia,cliente_id,clientes(legacy_uid,nombre),created_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -149,17 +151,31 @@ export const supabaseStockPTService = {
         valor_total: movimiento.valor_total,
         motivo: movimiento.motivo,
         referencia: movimiento.referencia,
+        cliente_id: movimiento.cliente_id ?? movimiento.clientes?.legacy_uid ?? null,
+        cliente_nombre: movimiento.clientes?.nombre ?? null,
         created_at: movimiento.created_at,
       };
     });
   },
 
   async registrarSalida(payload: RegistrarSalidaStockPTData): Promise<StockProductoTerminado> {
+    let clienteDbId: string | null = null;
+    if (payload.cliente_id) {
+      const { data: cliente, error: clienteError } = await supabaseClient
+        .from('clientes')
+        .select('id')
+        .eq('legacy_uid', payload.cliente_id)
+        .maybeSingle<{ id: string }>();
+      if (clienteError) throw clienteError;
+      clienteDbId = cliente?.id ?? null;
+    }
+
     const { data, error } = await supabaseClient.rpc('registrar_salida_stock_pt', {
       p_stock_pt_id: payload.stock_pt_id,
       p_cantidad: payload.cantidad,
       p_motivo: payload.motivo,
       p_referencia: payload.referencia ?? null,
+      p_cliente_id: clienteDbId,
     });
 
     if (error) throw error;

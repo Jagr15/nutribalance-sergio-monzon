@@ -2,6 +2,12 @@ import { ControlEstado, type MovimientoStockPT, type RegistrarSalidaStockPTData,
 import { buildStockPTResumen } from '../../../../features/productos/utils/stockPtResumen';
 import { mockApiCall } from '../mockClient';
 
+const seedClientes = new Map<string, string>([
+  ['cli-001', 'Estancia La Esperanza'],
+  ['cli-002', 'Agropecuaria Don Sergio'],
+  ['cli-003', 'Tambo San Miguel'],
+]);
+
 const seedStockPT: StockProductoTerminado[] = [
   {
     uid: 'pt-001',
@@ -111,6 +117,32 @@ const pushMovimiento = (movimiento: Omit<MovimientoStockPT, 'id' | 'created_at'>
   return row;
 };
 
+const buildSalidaMovimiento = (
+  stock: StockProductoTerminado,
+  cantidad: number,
+  referencia: string,
+  clienteId: string | null,
+  motivo = 'Despacho de producto terminado'
+): MovimientoStockPT => ({
+  id: `seed-salida-${stock.uid}-${referencia}`,
+  stock_pt_id: stock.uid,
+  producto_id: stock.id_formula ?? stock.nombre_producto,
+  nombre_producto: stock.nombre_producto,
+  lote: stock.lote,
+  numero_orden: stock.numero_orden,
+  silo: stock.nombre_silo,
+  tipo: 'SALIDA',
+  cantidad,
+  unidad: stock.unidad_medida,
+  costo_unitario: stock.costo_unitario_estimado ?? null,
+  valor_total: Number((cantidad * Number(stock.costo_unitario_estimado ?? 0)).toFixed(6)),
+  motivo,
+  referencia,
+  cliente_id: clienteId,
+  cliente_nombre: clienteId ? (seedClientes.get(clienteId) ?? 'Sin cliente asociado') : 'Sin cliente asociado',
+  created_at: nowIso(),
+});
+
 const buildIngresoMovimiento = (stock: StockProductoTerminado): MovimientoStockPT => ({
   id: `seed-${stock.uid}`,
   stock_pt_id: stock.uid,
@@ -142,6 +174,12 @@ const recomputeEstado = (stock: StockProductoTerminado) => {
 const resetMockStockPTState = () => {
   stockPTMock = structuredClone(seedStockPT);
   movimientosMock = seedStockPT.map(buildIngresoMovimiento);
+  movimientosMock = [
+    buildSalidaMovimiento(stockPTMock[0]!, 25, 'Salida demo PT 1', 'cli-001', 'Venta de producto terminado'),
+    buildSalidaMovimiento(stockPTMock[1]!, 40, 'Salida demo PT 2', 'cli-002', 'Despacho a cliente'),
+    buildSalidaMovimiento(stockPTMock[2]!, 18, 'Salida demo PT 3', null, 'Egreso sin cliente'),
+    ...movimientosMock,
+  ];
   nextUid = seedStockPT.length + 1;
   nextMovimiento = movimientosMock.length + 1;
 };
@@ -240,6 +278,8 @@ export const mockStockPTService = {
       valor_total: Number((payload.cantidad * Number(nextStock.costo_unitario_estimado ?? 0)).toFixed(6)),
       motivo: payload.motivo,
       referencia: payload.referencia ?? null,
+      cliente_id: payload.cliente_id ?? null,
+      cliente_nombre: payload.cliente_nombre ?? null,
     });
 
     return mockApiCall(nextStock, 300);

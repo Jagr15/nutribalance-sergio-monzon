@@ -23,6 +23,7 @@ const EMPTY_REPORTES: FinanzasReportes = {
   flujo_caja_mensual: [],
   gastos_por_categoria: [],
   ingresos_por_categoria: [],
+  ingresos_pt_por_producto: [],
   rentabilidad_por_formula: [],
   costo_operativo_mensual: [],
 };

@@ -1,25 +1,49 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { FiX, FiPlus, FiTrash2, FiChevronDown, FiSearch, FiCheckCircle, FiLayers } from "react-icons/fi";
+import { FiX, FiPlus, FiTrash2, FiChevronDown, FiSearch, FiCheckCircle, FiLayers, FiGitMerge } from "react-icons/fi";
 import { useFormulas } from '../hooks/useFormulas';
 import { ApiService } from '../../../infrastructure/api';
 import type { Formula, Ingrediente as InsumoFormula } from '../types';
 import type { Insumo, StockMateriaPrima } from '../../insumos/types';
 import { calculateFormulaNutrition } from '../utils/nutritionCalculator';
 import { calculateFormulaCost } from '../utils/costCalculator';
+import { compareFormulas } from '../utils/formulaComparison';
 import Swal from 'sweetalert2';
 
 interface Props {
   formula?: Formula;
+  formulas?: Formula[];
   onClose: () => void;
   onSuccess: () => Promise<void>;
 }
 
-const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
+const money = (value: number | null) => (typeof value === 'number'
+  ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(value)
+  : 'Sin costo');
+
+const pct = (value: number | null, decimals = 2) => (typeof value === 'number' ? `${value.toFixed(decimals)}%` : 'Sin dato');
+
+const badgeClass = (value: number | null) => {
+  if (value === null || value === 0) {
+    return 'bg-slate-100 text-slate-600';
+  }
+  return value > 0
+    ? 'bg-rose-100 text-rose-700'
+    : 'bg-emerald-100 text-emerald-700';
+};
+
+const badgeLabel = (value: number | null, positive: string, negative: string) => {
+  if (value === null || value === 0) return 'sin diferencia';
+  return value > 0 ? positive : negative;
+};
+
+const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSuccess }) => {
   const { create, update, isLoading } = useFormulas();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
+  const [comparisonFormulaId, setComparisonFormulaId] = useState('');
   
   // Datos del usuario (Idealmente de un contexto de Auth)
   const currentUser = { id: 'usr-101', name: 'Admin IAWARE' }; 
@@ -32,6 +56,11 @@ const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
   const [maestroStock, setMaestroStock] = useState<StockMateriaPrima[]>([]);
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const comparisonFormulas = useMemo(
+    () => formulas.filter((item) => item.uid !== formula?.uid),
+    [formulas, formula?.uid]
+  );
 
   const Toast = Swal.mixin({
     toast: true,
@@ -69,6 +98,67 @@ const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
     return calculateFormulaCost(insumosSeleccionados, maestroStock, maestroInsumos);
   }, [insumosSeleccionados, maestroStock, maestroInsumos]);
 
+  const ingredientesValidos = useMemo(
+    () => insumosSeleccionados.filter((ing) => Boolean(ing.id_insumo)),
+    [insumosSeleccionados]
+  );
+
+  const sumaTotal = useMemo(
+    () => ingredientesValidos.reduce((acc, ing) => acc + (Number(ing.porcentaje) || 0), 0),
+    [ingredientesValidos]
+  );
+
+  const resolvedComparisonFormulaId = useMemo(() => {
+    if (comparisonFormulas.length === 0) return '';
+    return comparisonFormulas.some((item) => item.uid === comparisonFormulaId)
+      ? comparisonFormulaId
+      : comparisonFormulas[0].uid;
+  }, [comparisonFormulaId, comparisonFormulas]);
+
+  const selectedComparisonFormula = useMemo(
+    () => comparisonFormulas.find((item) => item.uid === resolvedComparisonFormulaId) ?? null,
+    [comparisonFormulas, resolvedComparisonFormulaId]
+  );
+
+  const comparisonDraftFormula = useMemo<Formula | null>(() => {
+    const validIngredients = ingredientesValidos.map((ing) => {
+      const n = nutrition.byIngredient.find((item) => item.id_insumo === ing.id_insumo);
+      const c = cost.byIngredient.find((item) => item.id_insumo === ing.id_insumo);
+
+      return {
+        ...ing,
+        aporte_proteina_pct: n?.aporte_proteina_pct,
+        aporte_proteina_g_kg: n?.aporte_proteina_g_kg,
+        costo_unitario_usado: c?.costo_unitario_usado,
+        costo_contribucion_kg: c?.fuente_costo === 'SIN_COSTO' ? undefined : c?.costo_contribucion_kg,
+        fuente_costo: c?.fuente_costo,
+      };
+    });
+
+    return {
+      uid: formula?.uid ?? 'draft-formula',
+      nombre_producto: nombre.trim() || 'Nueva Fórmula',
+      version: formula?.version ?? 0,
+      esta_activa: estaActiva,
+      ultima_edicion: formula?.ultima_edicion ?? new Date(),
+      id_usuario: currentUser.id,
+      author: currentUser.name,
+      createdAt: formula?.createdAt ?? new Date(),
+      proteina_calculada_pct: nutrition.totals.proteina_bruta_pct,
+      costo_total: cost.costo_total_formula,
+      costo_por_kg: cost.costo_por_kg,
+      costo_por_tonelada: cost.costo_por_tonelada,
+      advertencias_nutricionales: nutrition.warnings,
+      advertencias_costos: cost.warnings,
+      ingredientes: validIngredients,
+    };
+  }, [formula, nombre, estaActiva, currentUser.id, currentUser.name, ingredientesValidos, nutrition, cost]);
+
+  const comparisonResult = useMemo(() => {
+    if (!comparisonDraftFormula || !selectedComparisonFormula) return null;
+    return compareFormulas(comparisonDraftFormula, selectedComparisonFormula);
+  }, [comparisonDraftFormula, selectedComparisonFormula]);
+
   const hasStructuralChanges = useMemo(() => {
     if (!formula) return true;
     if (nombre.trim().toUpperCase() !== formula.nombre_producto.toUpperCase()) return true;
@@ -85,19 +175,12 @@ const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
 
   const hasStatusChanged = useMemo(() => formula ? estaActiva !== formula.esta_activa : false, [estaActiva, formula]);
 
-  const sumaTotal = useMemo(() => 
-    insumosSeleccionados.reduce((acc, ing) => acc + (Number(ing.porcentaje) || 0), 0)
-  , [insumosSeleccionados]);
-
   const isSumaValida = Math.abs(sumaTotal - 100) < 0.01;
 
-  const canSave = useMemo(() => {
-    const hayCambios = hasStructuralChanges || hasStatusChanged;
-    const ids = insumosSeleccionados.map((i) => i.id_insumo).filter(Boolean);
-    const hasDuplicates = new Set(ids).size !== ids.length;
-    const allValid = insumosSeleccionados.every((ing) => ing.id_insumo && Number(ing.porcentaje) > 0);
-    return nombre.trim() !== '' && isSumaValida && hayCambios && insumosSeleccionados.length > 0 && allValid && !hasDuplicates;
-  }, [nombre, isSumaValida, hasStructuralChanges, hasStatusChanged, insumosSeleccionados]);
+  const canSave = useMemo(
+    () => nombre.trim() !== '' && ingredientesValidos.length > 0 && (hasStructuralChanges || hasStatusChanged),
+    [nombre, ingredientesValidos, hasStructuralChanges, hasStatusChanged]
+  );
 
   const handleSelectInsumo = (index: number, ins: Insumo) => {
     const yaExiste = insumosSeleccionados.some((item, i) => item.id_insumo === ins.uid && i !== index);
@@ -121,25 +204,8 @@ const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
       setSubmitError('El nombre del producto es obligatorio.');
       return;
     }
-    if (insumosSeleccionados.length === 0) {
+    if (ingredientesValidos.length === 0) {
       setSubmitError('Debe agregar al menos un ingrediente.');
-      return;
-    }
-    if (insumosSeleccionados.some((ing) => !ing.id_insumo)) {
-      setSubmitError('Todos los ingredientes deben tener un insumo seleccionado.');
-      return;
-    }
-    if (insumosSeleccionados.some((ing) => Number(ing.porcentaje) <= 0)) {
-      setSubmitError('Todos los porcentajes deben ser mayores a 0.');
-      return;
-    }
-    const ids = insumosSeleccionados.map((ing) => ing.id_insumo);
-    if (new Set(ids).size !== ids.length) {
-      setSubmitError('No se permiten insumos duplicados en la fórmula.');
-      return;
-    }
-    if (!isSumaValida) {
-      setSubmitError('La suma de porcentajes debe ser 100%.');
       return;
     }
     if (catalogError) {
@@ -157,7 +223,7 @@ const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
         
         await create({
           nombre_producto: normalizedName,
-          ingredientes: insumosSeleccionados.map((ing) => {
+          ingredientes: ingredientesValidos.map((ing) => {
             const n = nutrition.byIngredient.find((item) => item.id_insumo === ing.id_insumo);
             const c = cost.byIngredient.find((item) => item.id_insumo === ing.id_insumo);
             return {
@@ -211,7 +277,7 @@ const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
         input[type=number] { -moz-appearance: textfield; }
       `}</style>
 
-      <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl shadow-xl flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+      <div className="bg-white border border-slate-200 w-full max-w-5xl rounded-2xl shadow-xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
         
         <header className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
           <div className="flex items-center gap-2">
@@ -304,9 +370,9 @@ const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
                     )}
                   </div>
 
-                  <div className="w-20 relative">
+                    <div className="w-20 relative">
                     <input 
-                      type="number" step="0.01" required value={item.porcentaje}
+                      type="number" step="0.01" value={item.porcentaje}
                       onChange={e => {
                         const val = parseFloat(e.target.value) || 0;
                         setInsumosSeleccionados(prev => prev.map((it, i) => i === index ? { ...it, porcentaje: val } : it));
@@ -339,11 +405,161 @@ const FormulaModal: React.FC<Props> = ({ formula, onClose, onSuccess }) => {
               <div className="text-slate-700">Costo/ton: <span className="text-emerald-300 font-bold">{cost.costo_por_tonelada.toFixed(2)}</span></div>
             </div>
             {(nutrition.warnings.length > 0 || cost.warnings.length > 0) && (
-              <div className="text-[9px] text-amber-300 space-y-1 pt-2 border-t border-slate-200">
+              <div className="space-y-1 rounded-xl border border-red-200 bg-[#fef2f2] px-3 py-2 text-[9px] text-red-800">
                 {nutrition.warnings.slice(0, 2).map((w) => <p key={`n-${w}`}>• {w}</p>)}
                 {cost.warnings.slice(0, 2).map((w) => <p key={`c-${w}`}>• {w}</p>)}
               </div>
             )}
+          </div>
+
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+            <button
+              type="button"
+              onClick={() => setIsComparisonOpen((current) => !current)}
+              className="flex w-full items-center justify-between gap-3 text-left"
+            >
+              <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-700">
+                <FiGitMerge size={14} className="text-blue-500" />
+                Comparar con fórmula existente
+              </span>
+              <FiChevronDown size={14} className={`text-slate-500 transition-transform ${isComparisonOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isComparisonOpen ? (
+              <div className="space-y-4 border-t border-slate-200 pt-4">
+                {comparisonFormulas.length === 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    No hay fórmulas disponibles para comparar.
+                  </div>
+                ) : !ingredientesValidos.length ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    Agrega insumos para comparar.
+                  </div>
+                ) : (
+                  <>
+                    <label className="grid gap-2 md:max-w-md">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Fórmula existente</span>
+                      <select
+                        value={resolvedComparisonFormulaId}
+                        onChange={(event) => setComparisonFormulaId(event.target.value)}
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500"
+                      >
+                        {comparisonFormulas.map((item) => (
+                          <option key={item.uid} value={item.uid}>
+                            {item.nombre_producto} v{item.version}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {comparisonResult && selectedComparisonFormula ? (
+                      <div className="space-y-4">
+                        <div className="grid gap-4 xl:grid-cols-[1fr_auto_1fr]">
+                          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Fórmula nueva</p>
+                            <h4 className="mt-2 text-base font-semibold text-slate-900">{comparisonResult.formulaA.nombre_producto}</h4>
+                            <dl className="mt-4 grid gap-2 text-sm text-slate-700">
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Versión</dt><dd>{comparisonResult.formulaA.version > 0 ? `V${comparisonResult.formulaA.version}` : 'Sin versión'}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Proteína fórmula</dt><dd>{pct(comparisonResult.formulaA.proteina_formula)}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">PB g/kg</dt><dd>{comparisonResult.formulaA.pb_g_kg !== null ? comparisonResult.formulaA.pb_g_kg.toFixed(1) : 'Sin dato'}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Costo/kg</dt><dd>{money(comparisonResult.formulaA.costo_por_kg)}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Costo/ton</dt><dd>{money(comparisonResult.formulaA.costo_por_tonelada)}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Total ingredientes %</dt><dd>{pct(comparisonResult.formulaA.total_ingredientes_pct)}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Cantidad ingredientes</dt><dd>{comparisonResult.formulaA.cantidad_ingredientes}</dd></div>
+                            </dl>
+                          </section>
+
+                          <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-blue-700">Diferencias existente - nueva</p>
+                            <div className="mt-4 space-y-3 text-sm text-slate-800">
+                              <div className="rounded-xl border border-blue-100 bg-white px-4 py-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Costo/kg</p>
+                                  <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${badgeClass(comparisonResult.diferencias.costo_por_kg)}`}>
+                                    {badgeLabel(comparisonResult.diferencias.costo_por_kg, 'costo mayor', 'costo menor')}
+                                  </span>
+                                </div>
+                                <p className="mt-2 text-lg font-bold text-slate-900">{money(comparisonResult.diferencias.costo_por_kg)}</p>
+                              </div>
+
+                              <div className="rounded-xl border border-blue-100 bg-white px-4 py-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Proteína %</p>
+                                  <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${badgeClass(comparisonResult.diferencias.proteina_formula)}`}>
+                                    {badgeLabel(comparisonResult.diferencias.proteina_formula, 'proteína mayor', 'proteína menor')}
+                                  </span>
+                                </div>
+                                <p className="mt-2 text-lg font-bold text-slate-900">{pct(comparisonResult.diferencias.proteina_formula)}</p>
+                              </div>
+
+                              <div className="rounded-xl border border-blue-100 bg-white px-4 py-3">
+                                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">PB g/kg</p>
+                                <p className="mt-2 text-lg font-bold text-slate-900">
+                                  {comparisonResult.diferencias.pb_g_kg !== null ? comparisonResult.diferencias.pb_g_kg.toFixed(1) : 'Sin dato'}
+                                </p>
+                              </div>
+
+                              <div className="rounded-xl border border-blue-100 bg-white px-4 py-3">
+                                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Costo/ton</p>
+                                <p className="mt-2 text-lg font-bold text-slate-900">{money(comparisonResult.diferencias.costo_por_tonelada)}</p>
+                              </div>
+                            </div>
+                          </section>
+
+                          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Fórmula existente</p>
+                            <h4 className="mt-2 text-base font-semibold text-slate-900">{comparisonResult.formulaB.nombre_producto}</h4>
+                            <dl className="mt-4 grid gap-2 text-sm text-slate-700">
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Versión</dt><dd>V{comparisonResult.formulaB.version}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Proteína fórmula</dt><dd>{pct(comparisonResult.formulaB.proteina_formula)}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">PB g/kg</dt><dd>{comparisonResult.formulaB.pb_g_kg !== null ? comparisonResult.formulaB.pb_g_kg.toFixed(1) : 'Sin dato'}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Costo/kg</dt><dd>{money(comparisonResult.formulaB.costo_por_kg)}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Costo/ton</dt><dd>{money(comparisonResult.formulaB.costo_por_tonelada)}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Total ingredientes %</dt><dd>{pct(comparisonResult.formulaB.total_ingredientes_pct)}</dd></div>
+                              <div className="flex justify-between gap-4"><dt className="font-medium text-slate-500">Cantidad ingredientes</dt><dd>{comparisonResult.formulaB.cantidad_ingredientes}</dd></div>
+                            </dl>
+                          </section>
+                        </div>
+
+                        <section className="rounded-2xl border border-slate-200 bg-white">
+                          <div className="border-b border-slate-200 px-4 py-3">
+                            <h4 className="text-sm font-semibold text-slate-900">Comparación de ingredientes</h4>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-[960px] w-full text-sm">
+                              <thead className="bg-slate-50 text-slate-600">
+                                <tr>
+                                  <th className="px-4 py-3 text-left">Insumo</th>
+                                  <th className="px-4 py-3 text-right">% Fórmula nueva</th>
+                                  <th className="px-4 py-3 text-right">% Fórmula existente</th>
+                                  <th className="px-4 py-3 text-right">Diferencia %</th>
+                                  <th className="px-4 py-3 text-right">Costo estimado nueva</th>
+                                  <th className="px-4 py-3 text-right">Costo estimado existente</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {comparisonResult.ingredientes.map((row) => (
+                                  <tr key={row.id_insumo} className="hover:bg-slate-50">
+                                    <td className="px-4 py-3 font-medium text-slate-900">{row.nombre_insumo}</td>
+                                    <td className="px-4 py-3 text-right text-slate-700">{pct(row.porcentaje_a)}</td>
+                                    <td className="px-4 py-3 text-right text-slate-700">{pct(row.porcentaje_b)}</td>
+                                    <td className={`px-4 py-3 text-right font-semibold ${row.diferencia_pct > 0 ? 'text-emerald-700' : row.diferencia_pct < 0 ? 'text-rose-700' : 'text-slate-700'}`}>
+                                      {pct(row.diferencia_pct)}
+                                    </td>
+                                    <td className="px-4 py-3 text-right text-slate-700">{money(row.costo_estimado_a_kg)}</td>
+                                    <td className="px-4 py-3 text-right text-slate-700">{money(row.costo_estimado_b_kg)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </section>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ) : null}
           </div>
         </form>
 

@@ -8,6 +8,7 @@ import type {
   UltimoPrecioPagadoInsumo,
 } from '../../features/insumos/types';
 import type { OrdenProduccion } from '../../features/ordenes/types';
+import type { OrdenExpedicion, RegistrarOrdenExpedicionPayload } from '../../features/ordenes/types';
 import type {
   MovimientoStockPT,
   RegistrarSalidaStockPTData,
@@ -107,6 +108,11 @@ export interface OrdenesService {
   delete: (id: string) => Promise<boolean>;
 }
 
+export interface OrdenesExpedicionService {
+  getAll: () => Promise<OrdenExpedicion[]>;
+  create: (data: RegistrarOrdenExpedicionPayload) => Promise<OrdenExpedicion>;
+}
+
 export interface StockPTService {
   getAll: () => Promise<StockProductoTerminado[]>;
   getResumen: () => Promise<StockProductoTerminadoResumen[]>;
@@ -130,4 +136,5 @@ export interface ApiServices {
   trazabilidad: TrazabilidadService;
   silos: SilosService;
   ordenes: OrdenesService;
+  ordenesExpedicion: OrdenesExpedicionService;
 }

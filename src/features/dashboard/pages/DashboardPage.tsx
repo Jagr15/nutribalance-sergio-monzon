@@ -7,15 +7,16 @@ import { useAlertas } from '../../alertas/hooks/useAlertas';
 import { useDashboardOperativo } from '../hooks/useDashboardOperativo';
 import { ApiService } from '../../../infrastructure/api';
 import type { OrdenProduccion } from '../../ordenes/types';
+import OrdenExpedicionModal from '../../ordenes/components/OrdenExpedicionModal';
 import { DataTable, EmptyState, StatusBadge, TableBody, TableCell, TableHeader, TableRow } from '../../../shared/components/table';
 
 const fmtARS = (v: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v);
-const fmtPct = (v: number) => (Number.isFinite(v) ? v.toFixed(2) : '0.00');
 
 export const DashboardPage = () => {
   const { summary, alertas } = useAlertas();
-  const { kpis, formulas, consumoMensual, stockResumenes, loading } = useDashboardOperativo();
+  const { kpis, consumoMensual, stockResumenes, ptInsights, expedicionInsights, loading, reload } = useDashboardOperativo();
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
+  const [isExpedicionOpen, setIsExpedicionOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -60,23 +61,14 @@ export const DashboardPage = () => {
       .map(([mes, total]) => ({ mes, value: total }));
   }, [consumoMensual]);
 
-  const formulaPie = useMemo(() => formulas.slice(0, 5), [formulas]);
-  const totalPie = Math.max(1, formulaPie.reduce((a, b) => a + b.total_pct, 0));
-  const formulaRingStyle = useMemo(() => {
-    if (formulaPie.length === 0) return undefined;
-    const colors = ['#0ea5e9', '#14b8a6', '#f59e0b', '#818cf8', '#64748b'];
-    let acc = 0;
-    const segments = formulaPie.map((item, idx) => {
-      const start = (acc / totalPie) * 360;
-      acc += item.total_pct;
-      const end = (acc / totalPie) * 360;
-      return `${colors[idx % colors.length]} ${start}deg ${end}deg`;
-    });
-    return { background: `conic-gradient(${segments.join(',')})` };
-  }, [formulaPie, totalPie]);
-
   const stockMpResumen = stockResumenes.stockMateriaPrima;
   const stockPtResumen = stockResumenes.stockProductoTerminado;
+  const stockMpTop = useMemo(() => {
+    return [...stockMpResumen]
+      .sort((a, b) => b.stock_actual - a.stock_actual)
+      .slice(0, 6);
+  }, [stockMpResumen]);
+  const stockMpMax = Math.max(1, ...stockMpTop.map((item) => item.stock_actual));
 
   const estadoMateriaPrima = useMemo(() => {
     const total = Math.max(1, kpis.stock_total_mp);
@@ -147,23 +139,7 @@ export const DashboardPage = () => {
       </section>
 
       <section>
-        <h2 className="text-lg font-bold text-slate-900 mb-3">Producción</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <Card><p className="text-xs text-slate-500">OP pendientes</p><p className="text-3xl font-black mt-2 text-blue-300">{kpis.ordenes_pendientes}</p></Card>
-          <Card><p className="text-xs text-slate-500">OP en proceso</p><p className="text-3xl font-black mt-2 text-sky-300">{kpis.ordenes_en_proceso}</p></Card>
-          <Card><p className="text-xs text-slate-500">OP finalizadas</p><p className="text-3xl font-black mt-2 text-emerald-300">{kpis.ordenes_finalizadas}</p></Card>
-          <Card>
-            <p className="text-xs text-slate-500">Producción total</p>
-            <p className="text-3xl font-black mt-2 text-amber-300">{kpis.produccion_total.toLocaleString('es-AR')} kg</p>
-            <p className="text-xs text-slate-400 mt-2">
-              Merma total: {kpis.merma_total.toLocaleString('es-AR')} kg · Costo prom.: {fmtARS(kpis.costo_promedio_produccion)}
-            </p>
-          </Card>
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-lg font-bold text-slate-900 mb-3">Producto Terminado</h2>
+        <h2 className="text-lg font-bold text-slate-900 mb-3">Resumen de Producto Terminado</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card><p className="text-xs text-slate-500">Stock PT total</p><p className="text-3xl font-black mt-2 text-fuchsia-300">{kpis.stock_total_pt.toLocaleString('es-AR')} kg</p></Card>
           <Card>
@@ -172,6 +148,97 @@ export const DashboardPage = () => {
             <p className="text-xs text-slate-400 mt-2">Base estimada desde órdenes finalizadas con costo real disponible.</p>
           </Card>
         </div>
+      </section>
+
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card>
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-xl font-semibold">Órdenes de Producción</h2>
+              <p className="text-sm text-slate-500">Fabricación de producto terminado.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(`${ROUTES.ORDENES}?crear=1`)}
+              className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-blue-500"
+            >
+              Nueva orden de producción
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Pendientes</p>
+              <p className="mt-2 text-3xl font-black text-blue-300">{kpis.ordenes_pendientes}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">En proceso</p>
+              <p className="mt-2 text-3xl font-black text-sky-300">{kpis.ordenes_en_proceso}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Finalizadas</p>
+              <p className="mt-2 text-3xl font-black text-emerald-300">{kpis.ordenes_finalizadas}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Producción total</p>
+              <p className="mt-2 text-2xl font-black text-amber-300">{kpis.produccion_total.toLocaleString('es-AR')} kg</p>
+              <p className="mt-2 text-xs text-slate-500">
+                Merma total: {kpis.merma_total.toLocaleString('es-AR')} kg · Costo prom.: {fmtARS(kpis.costo_promedio_produccion)}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-xl font-semibold">Órdenes de Expedición</h2>
+              <p className="text-sm text-slate-500">Salida y despacho de producto terminado hacia clientes.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsExpedicionOpen(true)}
+              className="rounded-xl bg-cyan-600 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-cyan-500"
+            >
+              Nueva orden de expedición
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Registradas</p>
+              <p className="mt-2 text-3xl font-black text-cyan-700">{expedicionInsights.resumen.expediciones_registradas}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Kg expedidos</p>
+              <p className="mt-2 text-3xl font-black text-cyan-700">{expedicionInsights.resumen.kg_expedidos.toLocaleString('es-AR')}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Clientes atendidos</p>
+              <p className="mt-2 text-3xl font-black text-cyan-700">{expedicionInsights.resumen.clientes_atendidos}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Producto más expedido</p>
+              <p className="mt-2 text-sm font-semibold text-slate-800">{expedicionInsights.resumen.producto_mas_expedido}</p>
+              <p className="mt-2 text-xs text-slate-500">{expedicionInsights.resumen.kg_producto_mas_expedido.toLocaleString('es-AR')} kg</p>
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            {expedicionInsights.porCliente.slice(0, 3).map((item) => (
+              <div key={`${item.fecha}-${item.producto_nombre}-${item.cliente_nombre}`} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-slate-900">{item.cliente_nombre}</p>
+                  <p className="truncate text-xs text-slate-500">{item.producto_nombre} · {item.presentacion.replace('_', ' ').toLowerCase()}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-cyan-700">{item.kg.toLocaleString('es-AR')} kg</p>
+                  <p className="text-[10px] uppercase tracking-widest text-slate-400">{new Date(item.fecha).toLocaleDateString('es-AR')}</p>
+                </div>
+              </div>
+            ))}
+            {expedicionInsights.porCliente.length === 0 ? (
+              <p className="text-sm text-slate-500">Sin expediciones registradas todavía.</p>
+            ) : null}
+          </div>
+        </Card>
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -298,34 +365,42 @@ export const DashboardPage = () => {
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card>
-          <h3 className="font-semibold mb-3">Composición de fórmula: top insumos</h3>
-          {formulaPie.length === 0 ? (
+          <h3 className="font-semibold mb-3">Stock real por materia prima</h3>
+          <p className="text-xs text-slate-500 mb-3">Top insumos por stock físico real, consolidado desde `stock_mp_resumen`.</p>
+          {stockMpTop.length === 0 ? (
             <div className="h-48 flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
-              Sin composición disponible todavía.
+              Sin stock de materia prima disponible todavía.
             </div>
           ) : (
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="relative h-44 w-44 md:h-48 md:w-48 mx-auto shrink-0">
-                <div className="absolute inset-0 rounded-full" style={formulaRingStyle} />
-                <div className="absolute inset-[22%] rounded-full bg-white border border-slate-100 flex items-center justify-center">
-                  <div className="text-center">
-                    <p className="text-[10px] uppercase tracking-widest text-slate-500">Top</p>
-                    <p className="text-xs font-semibold text-slate-700">{formulaPie.length} insumos</p>
+            <div className="space-y-3">
+              {stockMpTop.map((item, idx) => {
+                const width = Math.max(8, (item.stock_actual / stockMpMax) * 100);
+                return (
+                  <div key={item.insumo_id} className="space-y-1.5">
+                    <div className="flex items-start justify-between gap-3 text-xs">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800 truncate">{item.nombre_insumo}</p>
+                        <p className="text-slate-500">
+                          Disponible {item.stock_disponible.toLocaleString('es-AR')} kg · Comprometido {item.stock_comprometido.toLocaleString('es-AR')} kg
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-semibold text-cyan-700">{item.stock_actual.toLocaleString('es-AR')} kg</p>
+                        <p className="text-slate-400 uppercase tracking-widest text-[10px]">#{idx + 1}</p>
+                      </div>
+                    </div>
+                    <div className="h-3 rounded-full bg-slate-200 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 transition-all duration-300"
+                        style={{ width: `${width}%` }}
+                        title={`${item.nombre_insumo}: ${item.stock_actual.toLocaleString('es-AR')} kg`}
+                      />
+                    </div>
                   </div>
-                </div>
+                );
+              })}
               </div>
-              <div className="space-y-2 text-xs">
-                {formulaPie.map((item, idx) => (
-                  <div key={`${item.id_formula}-${item.nombre_producto}-${idx}`} className="flex items-center gap-2 text-slate-600">
-                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ['#0ea5e9', '#14b8a6', '#f59e0b', '#818cf8', '#64748b'][idx % 5] }} />
-                    <span>{item.nombre_producto}</span>
-                    <span className="font-semibold ml-auto">{item.total_pct.toFixed(1)}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           )}
-          <p className="text-xs text-slate-500 mt-3">Proteína promedio fórmulas: <strong>{fmtPct(kpis.proteina_promedio_formula)}%</strong></p>
         </Card>
 
         <Card>
@@ -355,6 +430,100 @@ export const DashboardPage = () => {
         </Card>
       </section>
 
+      <section>
+        <h2 className="text-lg font-bold text-slate-900 mb-3">Producto Terminado</h2>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <Card>
+            <h3 className="font-semibold mb-3">Salidas de producto terminado</h3>
+            <p className="text-xs text-slate-500 mb-3">Egresos consolidados por producto terminado en kg.</p>
+            {ptInsights.salidasPorProducto.length === 0 ? (
+              <div className="h-40 flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+                Sin salidas registradas.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {ptInsights.salidasPorProducto.map((item, idx) => {
+                  const max = Math.max(1, ptInsights.salidasPorProducto[0]?.kg_salidos ?? 1);
+                  const width = Math.max(8, (item.kg_salidos / max) * 100);
+                  return (
+                    <div key={`${item.producto_id}-${idx}`} className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800 truncate">{item.nombre_producto}</p>
+                          <p className="text-slate-500">{item.cantidad_movimientos} movimientos · Última salida {item.ultima_salida ? new Date(item.ultima_salida).toLocaleDateString('es-AR') : 'Sin dato'}</p>
+                        </div>
+                        <p className="font-semibold text-blue-700 shrink-0">{item.kg_salidos.toLocaleString('es-AR')} kg</p>
+                      </div>
+                      <div className="h-3 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-blue-500 via-cyan-500 to-emerald-500" style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <h3 className="font-semibold mb-3">% de producto terminado</h3>
+            <p className="text-xs text-slate-500 mb-3">Participación del stock PT actual por producto.</p>
+            {ptInsights.participacionStock.length === 0 ? (
+              <div className="h-40 flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+                Sin stock de producto terminado para calcular participación.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {ptInsights.participacionStock.map((item, idx) => {
+                  const max = Math.max(1, ptInsights.participacionStock[0]?.stock_actual ?? 1);
+                  const width = Math.max(8, (item.stock_actual / max) * 100);
+                  return (
+                    <div key={`${item.producto_id ?? item.nombre_producto}-${idx}`} className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800 truncate">{item.nombre_producto}</p>
+                          <p className="text-slate-500">{item.stock_actual.toLocaleString('es-AR')} kg · {item.porcentaje.toFixed(1)}%</p>
+                        </div>
+                        <p className="font-semibold text-violet-700 shrink-0">{item.porcentaje.toFixed(1)}%</p>
+                      </div>
+                      <div className="h-3 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500" style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <h3 className="font-semibold mb-3">PT entregado por cliente</h3>
+            <p className="text-xs text-slate-500 mb-3">Últimas salidas con cliente asociado, producto y fecha.</p>
+            {ptInsights.entregasPorCliente.length === 0 ? (
+              <div className="h-40 flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+                Sin movimientos de clientes para mostrar.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {ptInsights.entregasPorCliente.map((item, idx) => (
+                  <div key={`${item.producto_nombre}-${idx}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{item.cliente_nombre}</p>
+                        <p className="text-xs text-slate-500 truncate">{item.producto_nombre} · {new Date(item.fecha).toLocaleDateString('es-AR')}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-semibold text-emerald-700">{item.kg.toLocaleString('es-AR')} kg</p>
+                        <p className="text-[10px] uppercase tracking-widest text-slate-400">{item.referencia ?? 'Sin referencia'}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      </section>
+
       <Card className="border-red-500/20">
         <div className="flex items-center justify-between">
           <div>
@@ -378,6 +547,12 @@ export const DashboardPage = () => {
       </Card>
 
       {loading ? <p className="text-sm text-gray-500">Cargando métricas…</p> : null}
+      {isExpedicionOpen ? (
+        <OrdenExpedicionModal
+          onClose={() => setIsExpedicionOpen(false)}
+          onSuccess={reload}
+        />
+      ) : null}
     </div>
   );
 };

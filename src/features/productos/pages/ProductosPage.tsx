@@ -9,6 +9,7 @@ import { useOrdenService } from '../../ordenes/services';
 import { EstadoOrden, type DetalleInsumoLote } from '../../ordenes/types';
 import { ControlEstado, type MovimientoStockPT, type StockProductoTerminado, type StockProductoTerminadoResumen } from '../types';
 import type { Formula } from '../../formulas/types';
+import type { Cliente } from '../../clientes/types/cliente';
 
 type EstadoProductoUi = 'OK' | 'Bajo' | 'Crítico';
 
@@ -152,6 +153,7 @@ const openStockDetail = (producto: ProductoUi) => {
 const openSalidaModal = async (
   producto: ProductoUi,
   lotes: ProductoUi[],
+  clientes: Cliente[],
   onSuccess: () => Promise<void> | void
 ) => {
   const opciones = lotes
@@ -167,6 +169,11 @@ const openSalidaModal = async (
         <label style="display:block; margin: 0 0 6px;">Lote / OP</label>
         <select id="salida-lote" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;">
           ${opciones}
+        </select>
+        <label style="display:block; margin: 0 0 6px;">Cliente destino</label>
+        <select id="salida-cliente" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;">
+          <option value="">Sin cliente asociado</option>
+          ${clientes.map((cliente) => `<option value="${cliente.uid}">${cliente.nombre}</option>`).join('')}
         </select>
         <label style="display:block; margin: 0 0 6px;">Cantidad a salir</label>
         <input id="salida-cantidad" type="number" min="1" step="0.001" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
@@ -186,49 +193,71 @@ const openSalidaModal = async (
     width: 680,
     showLoaderOnConfirm: true,
     preConfirm: async () => {
-      const loteId = (document.getElementById('salida-lote') as HTMLSelectElement | null)?.value;
-      const cantidad = Number((document.getElementById('salida-cantidad') as HTMLInputElement | null)?.value);
-      const motivo = (document.getElementById('salida-motivo') as HTMLInputElement | null)?.value.trim();
-      const referencia = (document.getElementById('salida-ref') as HTMLInputElement | null)?.value.trim();
-      const selected = lotes.find((lote) => lote.uid === loteId);
+      try {
+        const loteId = (document.getElementById('salida-lote') as HTMLSelectElement | null)?.value;
+        const clienteId = (document.getElementById('salida-cliente') as HTMLSelectElement | null)?.value || null;
+        const cliente = clientes.find((item) => item.uid === clienteId) ?? null;
+        const cantidad = Number((document.getElementById('salida-cantidad') as HTMLInputElement | null)?.value);
+        const motivo = (document.getElementById('salida-motivo') as HTMLInputElement | null)?.value.trim();
+        const referencia = (document.getElementById('salida-ref') as HTMLInputElement | null)?.value.trim();
+        const selected = lotes.find((lote) => lote.uid === loteId);
 
-      if (!selected) {
-        Swal.showValidationMessage('Seleccioná un lote válido.');
-        return false;
-      }
-      if (!Number.isFinite(cantidad) || cantidad <= 0) {
-        Swal.showValidationMessage('Ingresá una cantidad válida mayor a 0.');
-        return false;
-      }
-      if (cantidad > selected.stockKg) {
-        Swal.showValidationMessage('La cantidad no puede superar el saldo del lote.');
-        return false;
-      }
-      if (!motivo) {
-        Swal.showValidationMessage('Ingresá un motivo de salida.');
-        return false;
-      }
+        if (!selected) {
+          Swal.showValidationMessage('Seleccioná un lote válido.');
+          return false;
+        }
+        if (!Number.isFinite(cantidad) || cantidad <= 0) {
+          Swal.showValidationMessage('Ingresá una cantidad válida mayor a 0.');
+          return false;
+        }
+        if (cantidad > selected.stockKg) {
+          Swal.showValidationMessage('La cantidad no puede superar el saldo del lote.');
+          return false;
+        }
+        if (!motivo) {
+          Swal.showValidationMessage('Ingresá un motivo de salida.');
+          return false;
+        }
 
-      await ApiService.stockPT.registrarSalida({
-        stock_pt_id: selected.uid,
-        cantidad,
-        motivo,
-        referencia: referencia || undefined,
-      });
-      await onSuccess();
-      return true;
+        await ApiService.stockPT.registrarSalida({
+          stock_pt_id: selected.uid,
+          cantidad,
+          motivo,
+          referencia: referencia || undefined,
+          cliente_id: cliente?.uid ?? null,
+          cliente_nombre: cliente?.nombre ?? null,
+        });
+
+        return { ok: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'No se pudo registrar la salida.';
+        Swal.showValidationMessage(message);
+        return false;
+      }
     },
   });
 
   if (result.isConfirmed) {
-    void Swal.fire({
-      icon: 'success',
-      title: 'Salida registrada',
-      text: `Se descontó stock de ${producto.nombre}.`,
-      background: '#ffffff',
-      color: '#0f172a',
-      confirmButtonColor: '#2563eb',
-    });
+    try {
+      await onSuccess();
+      void Swal.fire({
+        icon: 'success',
+        title: 'Salida registrada',
+        text: `Se descontó stock de ${producto.nombre}.`,
+        background: '#ffffff',
+        color: '#0f172a',
+        confirmButtonColor: '#2563eb',
+      });
+    } catch (error) {
+      void Swal.fire({
+        icon: 'error',
+        title: 'Salida registrada, pero falló la recarga',
+        text: error instanceof Error ? error.message : 'No se pudo refrescar el stock de PT.',
+        background: '#ffffff',
+        color: '#0f172a',
+        confirmButtonColor: '#2563eb',
+      });
+    }
   }
 };
 
@@ -381,6 +410,7 @@ const ProductosPage = () => {
   const [resumenPT, setResumenPT] = useState<StockProductoTerminadoResumen[]>([]);
   const [movimientosPT, setMovimientosPT] = useState<MovimientoStockPT[]>([]);
   const [formulas, setFormulas] = useState<Formula[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isResumenLoading, setIsResumenLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -393,16 +423,18 @@ const ProductosPage = () => {
     setIsResumenLoading(true);
     setLoadError(null);
     try {
-      const [stock, resumen, movimientos, formulasData] = await Promise.all([
+      const [stock, resumen, movimientos, formulasData, clientesData] = await Promise.all([
         ApiService.stockPT.getAll(),
         ApiService.stockPT.getResumen().catch(() => [] as StockProductoTerminadoResumen[]),
         ApiService.stockPT.getMovimientos().catch(() => [] as MovimientoStockPT[]),
         ApiService.formulas.findAll().catch(() => [] as Formula[]),
+        ApiService.clientes.getAll().catch(() => [] as Cliente[]),
       ]);
       setItems(stock.map(toUi));
       setResumenPT(resumen);
       setMovimientosPT(movimientos);
       setFormulas(formulasData);
+      setClientes(clientesData);
     } catch (error: unknown) {
       setItems([]);
       setLoadError(error instanceof Error ? error.message : 'No se pudo cargar el stock de productos terminados.');
@@ -580,6 +612,7 @@ const ProductosPage = () => {
                               detalleInsumos: [],
                             },
                             lotesDelProducto,
+                            clientes,
                             async () => { await refreshData(); }
                           )}
                           className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
@@ -709,7 +742,7 @@ const ProductosPage = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => openSalidaModal(producto, itemsWithProteina.filter((item) => item.nombre.trim().toLowerCase() === producto.nombre.trim().toLowerCase()), refreshData)}
+                          onClick={() => openSalidaModal(producto, itemsWithProteina.filter((item) => item.nombre.trim().toLowerCase() === producto.nombre.trim().toLowerCase()), clientes, refreshData)}
                           className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                         >
                           Registrar salida

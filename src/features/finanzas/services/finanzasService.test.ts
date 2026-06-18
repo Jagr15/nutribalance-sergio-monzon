@@ -22,13 +22,14 @@ describe('finanzasService', () => {
   it('obtiene reportes financieros', async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === 'vw_finanzas_reportes') {
-        return { select: () => ({ single: async () => ({ data: { payload: { flujo_caja_mensual: [{ mes: '2026-05', ingresos: 1, egresos: 2, neto: -1 }], gastos_por_categoria: [], ingresos_por_categoria: [], rentabilidad_por_formula: [], costo_operativo_mensual: [] } }, error: null }) }) };
+        return { select: () => ({ single: async () => ({ data: { payload: { flujo_caja_mensual: [{ mes: '2026-05', ingresos: 1, egresos: 2, neto: -1 }], gastos_por_categoria: [], ingresos_por_categoria: [], ingresos_pt_por_producto: [{ producto: 'Pellet Crecimiento', cantidad_kg: 60, importe_total: 21600, clientes_count: 1, ultima_fecha: '2026-05-10T00:00:00Z' }], rentabilidad_por_formula: [], costo_operativo_mensual: [] } }, error: null }) }) };
       }
       throw new Error('tabla inesperada');
     });
 
     const r = await finanzasService.getReportes();
     expect(r.flujo_caja_mensual).toHaveLength(1);
+    expect(r.ingresos_pt_por_producto).toHaveLength(1);
   });
 
   it('obtiene comparativa de costos formulado vs real', async () => {

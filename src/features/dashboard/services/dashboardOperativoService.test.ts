@@ -8,6 +8,8 @@ const {
   mockStockPtAll,
   mockStockPtMovs,
   mockInsumosAll,
+  mockClientesAll,
+  mockExpedicionesAll,
 } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockStockMpResumen: vi.fn(),
@@ -16,6 +18,8 @@ const {
   mockStockPtAll: vi.fn(),
   mockStockPtMovs: vi.fn(),
   mockInsumosAll: vi.fn(),
+  mockClientesAll: vi.fn(),
+  mockExpedicionesAll: vi.fn(),
 }));
 
 vi.mock('../../../infrastructure/api/supabase/client', () => ({
@@ -35,6 +39,12 @@ vi.mock('../../../infrastructure/api', () => ({
     },
     insumos: {
       getAllInsumos: mockInsumosAll,
+    },
+    clientes: {
+      getAll: mockClientesAll,
+    },
+    ordenesExpedicion: {
+      getAll: mockExpedicionesAll,
     },
   },
 }));
@@ -122,5 +132,111 @@ describe('dashboardOperativoService', () => {
     expect(mockStockPtResumen).toHaveBeenCalledTimes(1);
     expect(resumenes.stockMateriaPrima[0].nombre_insumo).toBe('Maíz');
     expect(resumenes.stockProductoTerminado[0].nombre_producto).toBe('Balanceado Demo');
+  });
+
+  it('construye insights de producto terminado con clientes', async () => {
+    mockStockPtResumen.mockResolvedValue([
+      {
+        producto_id: 'prod-a',
+        nombre_producto: 'Producto A',
+        unidad: 'KG',
+        stock_actual: 120,
+        valor_monetario: 36000,
+        estado: 'OK',
+        cantidad_lotes: 2,
+        ultima_actualizacion: new Date().toISOString(),
+        numero_orden: 'OP-001',
+        id_formula: 'form-a',
+        version_formula: 1,
+      },
+    ]);
+    mockStockPtMovs.mockResolvedValue([
+      {
+        id: 'm-1',
+        stock_pt_id: 'pt-1',
+        producto_id: 'prod-a',
+        nombre_producto: 'Producto A',
+        lote: 'L-1',
+        numero_orden: 'OP-001',
+        silo: 'Silo 1',
+        tipo: 'SALIDA',
+        cantidad: 25,
+        unidad: 'KG',
+        costo_unitario: 300,
+        valor_total: 7500,
+        motivo: 'Salida',
+        referencia: 'REM-1',
+        cliente_id: 'cli-001',
+        cliente_nombre: 'Estancia La Esperanza',
+        created_at: new Date().toISOString(),
+      },
+    ]);
+    mockClientesAll.mockResolvedValue([
+      { uid: 'cli-001', nombre: 'Estancia La Esperanza', estado: 'Activo', saldoPendienteArs: 0, estaActivo: true },
+    ]);
+
+    const insights = await dashboardOperativoService.getProductoTerminadoInsights();
+
+    expect(mockStockPtResumen).toHaveBeenCalledTimes(1);
+    expect(mockStockPtMovs).toHaveBeenCalledTimes(1);
+    expect(mockClientesAll).toHaveBeenCalledTimes(1);
+    expect(insights.salidasPorProducto[0]).toMatchObject({
+      nombre_producto: 'Producto A',
+      kg_salidos: 25,
+    });
+    expect(insights.entregasPorCliente[0]?.cliente_nombre).toBe('Estancia La Esperanza');
+  });
+
+  it('construye insights de expedición', async () => {
+    mockExpedicionesAll.mockResolvedValue([
+      {
+        id: 'e-1',
+        legacy_uid: 'exp-1',
+        numero_expedicion: 'EXP-2026-000001',
+        stock_pt_id: 'pt-1',
+        producto_id: 'prod-a',
+        nombre_producto: 'Producto A',
+        lote_pt: 'L-1',
+        cliente_id: 'cli-001',
+        cliente_nombre: 'Estancia La Esperanza',
+        presentacion: 'GRANEL',
+        cantidad: 50,
+        estado: 'REGISTRADA',
+        motivo: 'Venta',
+        referencia: 'REM-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: 'e-2',
+        legacy_uid: 'exp-2',
+        numero_expedicion: 'EXP-2026-000002',
+        stock_pt_id: 'pt-2',
+        producto_id: 'prod-a',
+        nombre_producto: 'Producto A',
+        lote_pt: 'L-2',
+        cliente_id: 'cli-002',
+        cliente_nombre: 'Agropecuaria Don Sergio',
+        presentacion: 'BIG_BAG',
+        cantidad: 25,
+        estado: 'REGISTRADA',
+        motivo: 'Venta',
+        referencia: 'REM-2',
+        created_at: new Date(Date.now() - 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ]);
+    mockClientesAll.mockResolvedValue([
+      { uid: 'cli-001', nombre: 'Estancia La Esperanza', estado: 'Activo', saldoPendienteArs: 0, estaActivo: true },
+      { uid: 'cli-002', nombre: 'Agropecuaria Don Sergio', estado: 'Activo', saldoPendienteArs: 0, estaActivo: true },
+    ]);
+
+    const insights = await dashboardOperativoService.getExpedicionInsights();
+
+    expect(mockExpedicionesAll).toHaveBeenCalledTimes(1);
+    expect(insights.resumen.expediciones_registradas).toBe(2);
+    expect(insights.resumen.kg_expedidos).toBe(75);
+    expect(insights.resumen.producto_mas_expedido).toBe('Producto A');
+    expect(insights.porCliente[0]?.cliente_nombre).toBe('Estancia La Esperanza');
   });
 });

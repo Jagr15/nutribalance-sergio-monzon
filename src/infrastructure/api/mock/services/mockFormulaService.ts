@@ -69,31 +69,13 @@ export const mockFormulaService = {
     return mockApiCall(formula);
   },
 
-  // Crear una nueva fórmula con VALIDACIÓN DE NEGOCIO
+  // Crear una nueva fórmula manteniendo solo validaciones estructurales mínimas.
   create: async (data: Omit<Formula, 'uid' | 'ultima_edicion'>): Promise<Formula> => {
     if (!data.nombre_producto?.trim()) {
       throw new Error('El nombre del producto es obligatorio.');
     }
     if (!data.ingredientes?.length) {
       throw new Error('Debe incluir al menos un ingrediente.');
-    }
-    if (data.ingredientes.some((ing) => !ing.id_insumo)) {
-      throw new Error('Todos los ingredientes deben tener insumo.');
-    }
-    if (data.ingredientes.some((ing) => ing.porcentaje <= 0)) {
-      throw new Error('Todos los porcentajes deben ser mayores a 0.');
-    }
-    const ids = data.ingredientes.map((ing) => ing.id_insumo);
-    if (new Set(ids).size !== ids.length) {
-      throw new Error('No se permiten ingredientes duplicados.');
-    }
-
-    // REGLA DE ORO: Validación del 100%
-    const sumaTotal = data.ingredientes.reduce((acc, ing) => acc + ing.porcentaje, 0);
-    
-    // Usamos un margen de error mínimo por decimales (ej. 99.999 es válido como 100)
-    if (Math.abs(sumaTotal - 100) > 0.01) {
-      throw new Error(`La fórmula no suma 100% (Suma actual: ${sumaTotal.toFixed(2)}%).`);
     }
 
     const newFormula: Formula = {
@@ -108,26 +90,8 @@ export const mockFormulaService = {
     return mockApiCall(enriched);
   },
 
-  // Actualizar datos de la receta
+  // Actualizar datos de la receta sin bloquear por advertencias de composición.
   update: async (uid: string, data: Partial<Formula>): Promise<Formula> => {
-    // Si se actualizan ingredientes, validamos el 100% nuevamente
-    if (data.ingredientes) {
-      if (data.ingredientes.some((ing) => !ing.id_insumo)) {
-        throw new Error('Todos los ingredientes deben tener insumo.');
-      }
-      if (data.ingredientes.some((ing) => ing.porcentaje <= 0)) {
-        throw new Error('Todos los porcentajes deben ser mayores a 0.');
-      }
-      const ids = data.ingredientes.map((ing) => ing.id_insumo);
-      if (new Set(ids).size !== ids.length) {
-        throw new Error('No se permiten ingredientes duplicados.');
-      }
-      const suma = data.ingredientes.reduce((acc, ing) => acc + ing.porcentaje, 0);
-      if (Math.abs(suma - 100) > 0.01) {
-        throw new Error("Los nuevos porcentajes deben sumar 100%");
-      }
-    }
-
     mockFormulas = mockFormulas.map((f) =>
       f.uid === uid ? withSnapshots({ ...f, ...data, ultima_edicion: new Date() }) : f
     );

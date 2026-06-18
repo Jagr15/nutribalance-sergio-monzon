@@ -3,6 +3,7 @@ import { mockUsuarioService } from '../mock/services/mockUsuarioService';
 import { supabaseFormulaService } from '../supabase/services/supabaseFormulaService';
 import { supabaseInsumoService } from '../supabase/services/supabaseInsumoService';
 import { supabaseOrdenService } from '../supabase/services/supabaseOrdenService';
+import { supabaseOrdenesExpedicionService } from '../supabase/services/supabaseOrdenesExpedicionService';
 import { supabaseProveedorService } from '../supabase/services/supabaseProveedorService';
 import { supabaseSiloService } from '../supabase/services/supabaseSiloService';
 import { supabaseStockMPService } from '../supabase/services/supabaseStockMPService';
@@ -16,6 +17,7 @@ export const supabaseAdapter: ApiServices = {
   clientes: supabaseClienteService,
   formulas: supabaseFormulaService,
   ordenes: supabaseOrdenService,
+  ordenesExpedicion: supabaseOrdenesExpedicionService,
 
   proveedores: supabaseProveedorService,
   insumos: supabaseInsumoService,

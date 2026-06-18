@@ -1,5 +1,6 @@
 // src/features/ordenes/pages/OrdenPage.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FiPlus, FiSearch, FiActivity } from "react-icons/fi";
 import OrdenTable from '../components/OrdenTable';
 import OrdenModal from '../components/OrdenModal';
@@ -14,6 +15,7 @@ const OrdenPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [ordenAFinalizar, setOrdenAFinalizar] = useState<OrdenProduccion | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // Extraemos fetchOrdenes para poder refrescar la lista
   const { ordenes, isLoading, error, handleStartProduction, handleDeleteOrder, handleFinishProduction, fetchOrdenes } = useOrdenes();
@@ -23,6 +25,17 @@ const OrdenPage: React.FC = () => {
   const canStartOrder = canAccess('ordenes', 'start_order');
   const canFinishOrder = canAccess('ordenes', 'finish_order');
   const canCancelOrder = canAccess('ordenes', 'delete') || canAccess('ordenes', 'cancel_order');
+
+  useEffect(() => {
+    if (searchParams.get('crear') !== '1' || !canCreateOrder) return;
+    const timer = window.setTimeout(() => {
+      setIsModalOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('crear');
+      setSearchParams(next, { replace: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [canCreateOrder, searchParams, setSearchParams]);
 
   const onConfirmFinish = async (data: FinalizarOrdenPayload) => {
     if (!ordenAFinalizar) return;

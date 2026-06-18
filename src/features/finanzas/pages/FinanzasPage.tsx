@@ -15,6 +15,7 @@ const FinanzasPage = () => {
     reportes.flujo_caja_mensual.length > 0 ||
     reportes.gastos_por_categoria.length > 0 ||
     reportes.ingresos_por_categoria.length > 0 ||
+    reportes.ingresos_pt_por_producto.length > 0 ||
     reportes.rentabilidad_por_formula.length > 0 ||
     reportes.costo_operativo_mensual.length > 0 ||
     costosComparativos.length > 0;
@@ -124,12 +125,13 @@ const FinanzasPage = () => {
           <li>Flujo caja mensual: {reportes.flujo_caja_mensual.length} períodos.</li>
           <li>Gastos por categoría: {reportes.gastos_por_categoria.length} categorías.</li>
           <li>Ingresos por categoría: {reportes.ingresos_por_categoria.length} categorías.</li>
+          <li>Ingresos PT por producto: {reportes.ingresos_pt_por_producto.length} productos.</li>
           <li>Rentabilidad por fórmula: {reportes.rentabilidad_por_formula.length} fórmulas.</li>
           <li>Costo operativo mensual: {reportes.costo_operativo_mensual.length} períodos.</li>
           <li>Comparativa costo real/formulado: {costosComparativos.length} fórmulas.</li>
         </ul>
         <p className="text-sm text-slate-600 mt-3">
-          Resumen operativo: {categoriasTotales} categorías financieras activas en reportes.
+          Resumen operativo: {categoriasTotales} categorías financieras activas y {reportes.ingresos_pt_por_producto.length} productos PT con ingresos.
         </p>
       </Card>
 

@@ -3,6 +3,7 @@ import { ApiService } from '../../../infrastructure/api';
 import type { CostosFormulaVsReal, FinanzasInventarioResumen, FinanzasKPIs, FinanzasReportes, MovimientoFinanciero } from '../types';
 import { normalizeKpis } from '../utils/finanzasCalculations';
 import { buildCostosFormulaVsReal } from '../utils/costosFormulaVsReal';
+import { buildIngresosPtPorProducto } from '../utils/ingresosPtPorProducto';
 import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
 
@@ -46,6 +47,7 @@ const emptyReportes: FinanzasReportes = {
   flujo_caja_mensual: [],
   gastos_por_categoria: [],
   ingresos_por_categoria: [],
+  ingresos_pt_por_producto: [],
   rentabilidad_por_formula: [],
   costo_operativo_mensual: [],
 };
@@ -69,6 +71,7 @@ export const finanzasService = {
       flujo_caja_mensual: asArray<FinanzasReportes['flujo_caja_mensual'][number]>(payload.flujo_caja_mensual),
       gastos_por_categoria: asArray<FinanzasReportes['gastos_por_categoria'][number]>(payload.gastos_por_categoria),
       ingresos_por_categoria: asArray<FinanzasReportes['ingresos_por_categoria'][number]>(payload.ingresos_por_categoria),
+      ingresos_pt_por_producto: asArray<FinanzasReportes['ingresos_pt_por_producto'][number]>(payload.ingresos_pt_por_producto),
       rentabilidad_por_formula: asArray<FinanzasReportes['rentabilidad_por_formula'][number]>(payload.rentabilidad_por_formula),
       costo_operativo_mensual: asArray<FinanzasReportes['costo_operativo_mensual'][number]>(payload.costo_operativo_mensual),
     };
@@ -176,11 +179,12 @@ export const finanzasService = {
   },
 
   async getOperationalFallback(): Promise<{ kpis: FinanzasKPIs; reportes: FinanzasReportes; movimientos: MovimientoFinanciero[]; costosComparativos: CostosFormulaVsReal[]; inventario: FinanzasInventarioResumen }> {
-    const [ordenes, lotes, formulas, resumenPt] = await Promise.all([
+    const [ordenes, lotes, formulas, resumenPt, movimientosPt] = await Promise.all([
       ApiService.ordenes.getAll(),
       ApiService.stockMP.getAllLotes(),
       ApiService.formulas.findAll(),
       ApiService.stockPT.getResumen(),
+      ApiService.stockPT.getMovimientos(),
     ]);
 
     const costoProduccion = ordenes.reduce((acc, orden) => acc + Number(orden.costo_total_insumos ?? 0), 0);
@@ -242,6 +246,7 @@ export const finanzasService = {
         { categoria: 'Merma', monto: perdidaMerma },
       ].filter((row) => row.monto > 0),
       ingresos_por_categoria: [],
+      ingresos_pt_por_producto: buildIngresosPtPorProducto(movimientosPt),
       rentabilidad_por_formula: rentabilidadPorFormula,
       costo_operativo_mensual: costoOperativoMensual,
     };

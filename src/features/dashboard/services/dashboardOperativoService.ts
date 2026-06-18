@@ -3,10 +3,14 @@ import { ApiService } from '../../../infrastructure/api';
 import { EstadoOrden } from '../../ordenes/types';
 import { buildStockMPResumen } from '../../insumos/utils/stockResumen';
 import { buildStockPTResumen } from '../../productos/utils/stockPtResumen';
+import { buildProductoTerminadoInsights } from '../utils/productoTerminadoInsights';
+import { buildOrdenesExpedicionInsights } from '../utils/ordenesExpedicionInsights';
 import type {
   AlertaOperativaRaw,
   ConsumoMensualInsumo,
   DashboardOperativoKPIs,
+  DashboardExpedicionInsights,
+  DashboardProductoTerminadoInsights,
   DashboardStockResumenes,
   FormulaComposicion,
   TrazabilidadVisualRow,
@@ -144,6 +148,32 @@ const buildFallbackStockResumenes = async (): Promise<DashboardStockResumenes> =
   };
 };
 
+const buildFallbackProductoTerminadoInsights = async (): Promise<DashboardProductoTerminadoInsights> => {
+  const [stockPT, movimientosPT, clientes] = await Promise.allSettled([
+    ApiService.stockPT.getResumen(),
+    ApiService.stockPT.getMovimientos(),
+    ApiService.clientes.getAll(),
+  ]);
+
+  return buildProductoTerminadoInsights(
+    settledValue(stockPT, []),
+    settledValue(movimientosPT, []),
+    settledValue(clientes, []),
+  );
+};
+
+const buildFallbackExpedicionInsights = async (): Promise<DashboardExpedicionInsights> => {
+  const [expediciones, clientes] = await Promise.allSettled([
+    ApiService.ordenesExpedicion.getAll(),
+    ApiService.clientes.getAll(),
+  ]);
+
+  return buildOrdenesExpedicionInsights(
+    settledValue(expediciones, []),
+    settledValue(clientes, []),
+  );
+};
+
 export const dashboardOperativoService = {
   async getStockResumenes(): Promise<DashboardStockResumenes> {
     try {
@@ -243,6 +273,33 @@ export const dashboardOperativoService = {
         formulas: fallback.formulas,
         consumoMensual: fallback.consumoMensual,
       };
+    }
+  },
+
+  async getProductoTerminadoInsights(): Promise<DashboardProductoTerminadoInsights> {
+    try {
+      const [stockPT, movimientosPT, clientes] = await Promise.all([
+        ApiService.stockPT.getResumen(),
+        ApiService.stockPT.getMovimientos(),
+        ApiService.clientes.getAll(),
+      ]);
+
+      return buildProductoTerminadoInsights(stockPT, movimientosPT, clientes);
+    } catch {
+      return buildFallbackProductoTerminadoInsights();
+    }
+  },
+
+  async getExpedicionInsights(): Promise<DashboardExpedicionInsights> {
+    try {
+      const [expediciones, clientes] = await Promise.all([
+        ApiService.ordenesExpedicion.getAll(),
+        ApiService.clientes.getAll(),
+      ]);
+
+      return buildOrdenesExpedicionInsights(expediciones, clientes);
+    } catch {
+      return buildFallbackExpedicionInsights();
     }
   },
 

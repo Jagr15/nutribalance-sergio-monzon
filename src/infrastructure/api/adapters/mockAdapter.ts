@@ -2,6 +2,7 @@ import { mockClienteService } from '../mock/services/mockClienteService';
 import { mockFormulaService } from '../mock/services/mockFormulaService';
 import { mockInsumoService } from '../mock/services/mockInsumoService';
 import { mockOrdenService } from '../mock/services/mockOrdenService';
+import { mockOrdenesExpedicionService } from '../mock/services/mockOrdenesExpedicionService';
 import { mockProveedorService } from '../mock/services/mockProveedorService';
 import { mockSiloService } from '../mock/services/mockSiloService';
 import { mockStockPTService } from '../mock/services/mockStockPTService';
@@ -21,4 +22,5 @@ export const mockAdapter: ApiServices = {
   trazabilidad: mockTrazabilidadService,
   silos: mockSiloService,
   ordenes: mockOrdenService,
+  ordenesExpedicion: mockOrdenesExpedicionService,
 };
