@@ -2,6 +2,7 @@
   {
     "uid": "p-1",
     "nombre_empresa": "AgroGranos Pampeanos S.A.",
+    "producto_que_provee": "Maíz molido y grano",
     "contacto_nombre": "Mariano Fernández",
     "telefono": "+54 9 11 4455 7788",
     "direccion": "Ruta 8 Km 212, Pergamino, Buenos Aires",
@@ -12,6 +13,7 @@
   {
     "uid": "p-2",
     "nombre_empresa": "NutriSoja del Litoral SRL",
+    "producto_que_provee": "Harina de soja 47%",
     "contacto_nombre": "Luciana Rivas",
     "telefono": "+54 9 341 522 3344",
     "direccion": "Av. Circunvalación 1450, Rosario, Santa Fe",
@@ -22,6 +24,7 @@
   {
     "uid": "p-3",
     "nombre_empresa": "Premezclas Andinas",
+    "producto_que_provee": "Premix vitamínico y mineral",
     "contacto_nombre": "Gustavo Páez",
     "telefono": "+54 9 261 611 2300",
     "direccion": "Parque Industrial 3, Godoy Cruz, Mendoza",

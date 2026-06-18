@@ -2,6 +2,7 @@
 export interface Proveedor {
     uid: string;
     nombre_empresa: string;
+    producto_que_provee?: string | null;
     contacto_nombre: string;
     telefono: string;
     email: string;

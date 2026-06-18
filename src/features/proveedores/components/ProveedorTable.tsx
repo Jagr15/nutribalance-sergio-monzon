@@ -13,10 +13,11 @@ interface Props {
 
 const ProveedorTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) => {
   return (
-    <DataTable minWidthClassName="min-w-[860px]">
+    <DataTable minWidthClassName="min-w-[1100px]">
       <TableHeader>
         <tr>
           <TableCell header>Empresa / Documento</TableCell>
+          <TableCell header>Producto que provee</TableCell>
           <TableCell header>Contacto Principal</TableCell>
           <TableCell header>Teléfono</TableCell>
           <TableCell header>Email</TableCell>
@@ -31,6 +32,9 @@ const ProveedorTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage 
                   <span className="text-sm font-bold text-slate-900 uppercase">{p.nombre_empresa}</span>
                   <span className="text-xs font-mono text-slate-500">{p.documento || 'SIN DOC'}</span>
                 </div>
+              </TableCell>
+              <TableCell className="text-slate-700 text-sm">
+                {p.producto_que_provee?.trim() ? p.producto_que_provee : 'Sin producto asociado'}
               </TableCell>
               <TableCell className="text-slate-900">
                 <div className="flex items-center gap-2">
@@ -53,7 +57,7 @@ const ProveedorTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage 
               </TableCell>
             </TableRow>
           ))}
-          {data.length === 0 ? <EmptyState colSpan={5} message={emptyMessage || "No hay proveedores registrados."} /> : null}
+          {data.length === 0 ? <EmptyState colSpan={6} message={emptyMessage || "No hay proveedores registrados."} /> : null}
       </TableBody>
     </DataTable>
   );

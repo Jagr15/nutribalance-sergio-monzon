@@ -6,12 +6,20 @@ import { EstadoCliente, type Cliente, type ClienteCreatePayload, type EstadoClie
 
 type ClienteFormPayload = {
   nombre: string;
-  segmento: string;
-  ubicacion: string;
-  contacto: string;
-  productoPrincipal: string;
+  razonSocial?: string;
+  cuit?: string;
+  email?: string;
+  telefono?: string;
+  direccion?: string;
+  localidad?: string;
+  provincia?: string;
+  segmento?: string;
+  ubicacion?: string;
+  contacto?: string;
+  productoPrincipal?: string;
+  condicionComercial?: string;
   estado: EstadoClienteType;
-  observaciones: string;
+  observaciones?: string;
 };
 
 const statusStyle: Record<EstadoClienteType, string> = {
@@ -32,54 +40,140 @@ const formatDate = (value?: string | null) => {
 
 const normalizeText = (value?: string | null) => value?.trim() || "Sin dato";
 
+const toInputValue = (value?: string | null) => value ?? "";
+
+const preserveExisting = (rawValue?: string, currentValue?: string | null) => {
+  const trimmed = rawValue?.trim() ?? "";
+  if (trimmed) return trimmed;
+  return currentValue ?? undefined;
+};
+
 const buildCreatePayload = (payload: ClienteFormPayload): ClienteCreatePayload => ({
   nombre: payload.nombre,
-  razonSocial: payload.nombre,
+  razonSocial: payload.razonSocial || payload.nombre,
+  cuit: payload.cuit || undefined,
+  email: payload.email || undefined,
+  telefono: payload.telefono || undefined,
+  direccion: payload.direccion || undefined,
+  localidad: payload.localidad || undefined,
+  provincia: payload.provincia || undefined,
   segmento: payload.segmento || undefined,
   ubicacion: payload.ubicacion || undefined,
   contacto: payload.contacto || undefined,
   productoPrincipal: payload.productoPrincipal || undefined,
+  condicionComercial: payload.condicionComercial || undefined,
   estado: payload.estado,
   observaciones: payload.observaciones || undefined,
   saldoPendienteArs: 0,
   estaActivo: payload.estado !== EstadoCliente.SUSPENDIDO,
 });
 
-const buildUpdatePayload = (payload: ClienteFormPayload): Partial<Omit<Cliente, "uid">> => ({
-  nombre: payload.nombre,
-  razonSocial: payload.nombre,
-  segmento: payload.segmento || undefined,
-  ubicacion: payload.ubicacion || undefined,
-  contacto: payload.contacto || undefined,
-  productoPrincipal: payload.productoPrincipal || undefined,
+const buildUpdatePayload = (payload: ClienteFormPayload, current: Cliente): Partial<Omit<Cliente, "uid">> => ({
+  nombre: preserveExisting(payload.nombre, current.nombre) ?? current.nombre,
+  razonSocial: preserveExisting(payload.razonSocial, current.razonSocial) ?? current.nombre,
+  cuit: preserveExisting(payload.cuit, current.cuit),
+  email: preserveExisting(payload.email, current.email),
+  telefono: preserveExisting(payload.telefono, current.telefono),
+  direccion: preserveExisting(payload.direccion, current.direccion),
+  localidad: preserveExisting(payload.localidad, current.localidad),
+  provincia: preserveExisting(payload.provincia, current.provincia),
+  segmento: preserveExisting(payload.segmento, current.segmento),
+  ubicacion: preserveExisting(payload.ubicacion, current.ubicacion),
+  contacto: preserveExisting(payload.contacto, current.contacto),
+  productoPrincipal: preserveExisting(payload.productoPrincipal, current.productoPrincipal),
+  condicionComercial: preserveExisting(payload.condicionComercial, current.condicionComercial),
   estado: payload.estado,
-  observaciones: payload.observaciones || undefined,
+  observaciones: preserveExisting(payload.observaciones, current.observaciones),
+  ultimaCompra: current.ultimaCompra,
+  saldoPendienteArs: current.saldoPendienteArs,
   estaActivo: payload.estado !== EstadoCliente.SUSPENDIDO,
+  createdAt: current.createdAt,
+  updatedAt: current.updatedAt,
 });
 
 const openEditarCliente = (cliente: Cliente, onSave: (payload: ClienteFormPayload) => Promise<void>) => {
   void Swal.fire({
     title: "Editar cliente",
     html: `
-      <div style="text-align:left; color:#f8fafc; font-size:14px;">
-        <label style="display:block; margin:0 0 6px;">Nombre</label>
-        <input id="cli-nombre" value="${cliente.nombre ?? ""}" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
-        <label style="display:block; margin:0 0 6px;">Segmento</label>
-        <input id="cli-segmento" value="${cliente.segmento ?? ""}" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
-        <label style="display:block; margin:0 0 6px;">Ubicación</label>
-        <input id="cli-ubicacion" value="${cliente.ubicacion ?? ""}" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
-        <label style="display:block; margin:0 0 6px;">Contacto</label>
-        <input id="cli-contacto" value="${cliente.contacto ?? ""}" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
-        <label style="display:block; margin:0 0 6px;">Producto principal</label>
-        <input id="cli-producto" value="${cliente.productoPrincipal ?? ""}" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;" />
-        <label style="display:block; margin:0 0 6px;">Estado</label>
-        <select id="cli-estado" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;">
-          <option value="Activo" ${cliente.estado === "Activo" ? "selected" : ""}>Activo</option>
-          <option value="En riesgo" ${cliente.estado === "En riesgo" ? "selected" : ""}>En riesgo</option>
-          <option value="Suspendido" ${cliente.estado === "Suspendido" ? "selected" : ""}>Suspendido</option>
-        </select>
-        <label style="display:block; margin:0 0 6px;">Observaciones</label>
-        <textarea id="cli-observaciones" rows="3" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #374151; border-radius:8px; padding:8px;">${cliente.observaciones ?? ""}</textarea>
+      <div style="text-align:left; color:#0f172a; font-size:14px;">
+        <div style="display:grid; gap:10px;">
+          <div style="display:grid; gap:6px;">
+            <label for="cli-nombre" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Nombre</label>
+            <input id="cli-nombre" value="${toInputValue(cliente.nombre)}" placeholder="Nombre del cliente" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-razonsocial" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Razón social</label>
+            <input id="cli-razonsocial" value="${toInputValue(cliente.razonSocial)}" placeholder="Razón social" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-cuit" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">CUIT</label>
+            <input id="cli-cuit" value="${toInputValue(cliente.cuit)}" placeholder="CUIT / Documento" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-email" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Email</label>
+            <input id="cli-email" value="${toInputValue(cliente.email)}" placeholder="correo@dominio.com" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-telefono" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Teléfono</label>
+            <input id="cli-telefono" value="${toInputValue(cliente.telefono)}" placeholder="Número de contacto" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-direccion" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Dirección</label>
+            <input id="cli-direccion" value="${toInputValue(cliente.direccion)}" placeholder="Dirección comercial" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-localidad" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Localidad</label>
+            <input id="cli-localidad" value="${toInputValue(cliente.localidad)}" placeholder="Ciudad o localidad" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-provincia" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Provincia</label>
+            <input id="cli-provincia" value="${toInputValue(cliente.provincia)}" placeholder="Provincia" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-segmento" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Segmento</label>
+            <input id="cli-segmento" value="${toInputValue(cliente.segmento)}" placeholder="Ej: Tambo" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-ubicacion" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Ubicación</label>
+            <input id="cli-ubicacion" value="${toInputValue(cliente.ubicacion)}" placeholder="Ubicación operativa" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-contacto" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Contacto</label>
+            <input id="cli-contacto" value="${toInputValue(cliente.contacto)}" placeholder="Contacto principal" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-producto" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Producto principal</label>
+            <input id="cli-producto" value="${toInputValue(cliente.productoPrincipal)}" placeholder="Producto principal" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-condicion" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Condición comercial</label>
+            <input id="cli-condicion" value="${toInputValue(cliente.condicionComercial)}" placeholder="Condición comercial" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-estado" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Estado</label>
+            <select id="cli-estado" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;">
+              <option value="Activo" ${cliente.estado === "Activo" ? "selected" : ""}>Activo</option>
+              <option value="En riesgo" ${cliente.estado === "En riesgo" ? "selected" : ""}>En riesgo</option>
+              <option value="Suspendido" ${cliente.estado === "Suspendido" ? "selected" : ""}>Suspendido</option>
+            </select>
+          </div>
+          <div style="display:grid; gap:6px;">
+            <label for="cli-observaciones" style="display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Observaciones</label>
+            <textarea id="cli-observaciones" rows="3" placeholder="Notas comerciales" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;">${toInputValue(cliente.observaciones)}</textarea>
+          </div>
+          <div style="display:grid; gap:6px; padding:12px 14px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0;">
+            <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Última compra</span>
+            <span style="color:#0f172a; font-weight:600;">${formatDate(cliente.ultimaCompra)}</span>
+          </div>
+          <div style="display:grid; gap:6px; padding:12px 14px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0;">
+            <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Saldo pendiente</span>
+            <span style="color:#0f172a; font-weight:700;">${formatCurrency(cliente.saldoPendienteArs)}</span>
+          </div>
+          <div style="display:grid; gap:6px; padding:12px 14px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0;">
+            <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155;">Activo</span>
+            <span style="color:#0f172a; font-weight:600;">${cliente.estaActivo ? "Sí" : "No"}</span>
+          </div>
+        </div>
       </div>
     `,
     background: "#ffffff",
@@ -97,13 +191,37 @@ const openEditarCliente = (cliente: Cliente, onSave: (payload: ClienteFormPayloa
         return;
       }
 
+      const razonSocial = (document.getElementById("cli-razonsocial") as HTMLInputElement | null)?.value.trim() ?? "";
+      const cuit = (document.getElementById("cli-cuit") as HTMLInputElement | null)?.value.trim() ?? "";
+      const email = (document.getElementById("cli-email") as HTMLInputElement | null)?.value.trim() ?? "";
+      const telefono = (document.getElementById("cli-telefono") as HTMLInputElement | null)?.value.trim() ?? "";
+      const direccion = (document.getElementById("cli-direccion") as HTMLInputElement | null)?.value.trim() ?? "";
+      const localidad = (document.getElementById("cli-localidad") as HTMLInputElement | null)?.value.trim() ?? "";
+      const provincia = (document.getElementById("cli-provincia") as HTMLInputElement | null)?.value.trim() ?? "";
       const segmento = (document.getElementById("cli-segmento") as HTMLInputElement | null)?.value.trim() ?? "";
       const ubicacion = (document.getElementById("cli-ubicacion") as HTMLInputElement | null)?.value.trim() ?? "";
       const contacto = (document.getElementById("cli-contacto") as HTMLInputElement | null)?.value.trim() ?? "";
       const productoPrincipal = (document.getElementById("cli-producto") as HTMLInputElement | null)?.value.trim() ?? "";
+      const condicionComercial = (document.getElementById("cli-condicion") as HTMLInputElement | null)?.value.trim() ?? "";
       const estado = ((document.getElementById("cli-estado") as HTMLSelectElement | null)?.value ?? "Activo") as EstadoClienteType;
       const observaciones = (document.getElementById("cli-observaciones") as HTMLTextAreaElement | null)?.value.trim() ?? "";
-      return { nombre, segmento, ubicacion, contacto, productoPrincipal, estado, observaciones } satisfies ClienteFormPayload;
+      return {
+        nombre,
+        razonSocial,
+        cuit,
+        email,
+        telefono,
+        direccion,
+        localidad,
+        provincia,
+        segmento,
+        ubicacion,
+        contacto,
+        productoPrincipal,
+        condicionComercial,
+        estado,
+        observaciones,
+      } satisfies ClienteFormPayload;
     },
   }).then(async (result) => {
     if (!result.isConfirmed || !result.value) return;
@@ -177,26 +295,72 @@ const openNuevoCliente = (onCreate: (payload: ClienteFormPayload) => Promise<voi
 };
 
 const buildDetalleHtml = (cliente: Cliente) => `
-  <div style="text-align:left; color:#f8fafc; font-size:14px;">
-    <p style="margin:0 0 6px;"><strong>Nombre:</strong> ${normalizeText(cliente.nombre)}</p>
-    <p style="margin:0 0 6px;"><strong>Segmento:</strong> ${normalizeText(cliente.segmento)}</p>
-    <p style="margin:0 0 6px;"><strong>Ubicación:</strong> ${normalizeText(cliente.ubicacion)}</p>
-    <p style="margin:0 0 6px;"><strong>Contacto:</strong> ${normalizeText(cliente.contacto)}</p>
-    <p style="margin:0 0 6px;"><strong>Producto principal:</strong> ${normalizeText(cliente.productoPrincipal)}</p>
-    <p style="margin:0 0 6px;"><strong>Estado:</strong> ${cliente.estado}</p>
-    <p style="margin:0 0 6px;"><strong>Condición comercial:</strong> ${normalizeText(cliente.condicionComercial)}</p>
-    <p style="margin:0 0 6px;"><strong>Última compra:</strong> ${formatDate(cliente.ultimaCompra)}</p>
-    <p style="margin:0 0 10px;"><strong>Saldo pendiente:</strong> ${formatCurrency(cliente.saldoPendienteArs)}</p>
-    <p style="margin:0; color:#9ca3af;"><strong>Observaciones:</strong> ${normalizeText(cliente.observaciones)}</p>
+  <div style="text-align:left; color:#0f172a; font-size:14px;">
+    <div style="display:grid; gap:10px;">
+      <div style="display:grid; gap:3px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Nombre</span>
+        <span style="color:#0f172a; font-weight:600;">${normalizeText(cliente.nombre)}</span>
+      </div>
+      <div style="display:grid; gap:3px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Segmento</span>
+        <span style="color:#0f172a; font-weight:600;">${normalizeText(cliente.segmento)}</span>
+      </div>
+      <div style="display:grid; gap:3px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Ubicación</span>
+        <span style="color:#0f172a; font-weight:600;">${normalizeText(cliente.ubicacion)}</span>
+      </div>
+      <div style="display:grid; gap:3px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Contacto</span>
+        <span style="color:#0f172a; font-weight:600;">${normalizeText(cliente.contacto)}</span>
+      </div>
+      <div style="display:grid; gap:3px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Producto principal</span>
+        <span style="color:#0f172a; font-weight:600;">${normalizeText(cliente.productoPrincipal)}</span>
+      </div>
+      <div style="display:grid; gap:3px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Estado</span>
+        <span style="color:#1d4ed8; font-weight:700;">${cliente.estado}</span>
+      </div>
+      <div style="display:grid; gap:3px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Condición comercial</span>
+        <span style="color:#0f172a; font-weight:600;">${normalizeText(cliente.condicionComercial)}</span>
+      </div>
+      <div style="display:grid; gap:3px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Última compra</span>
+        <span style="color:#0f172a; font-weight:600;">${formatDate(cliente.ultimaCompra)}</span>
+      </div>
+      <div style="display:grid; gap:3px; padding:12px 14px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Saldo pendiente</span>
+        <span style="color:#0f172a; font-weight:800;">${formatCurrency(cliente.saldoPendienteArs)}</span>
+      </div>
+      <div style="display:grid; gap:3px; padding:12px 14px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Observaciones</span>
+        <span style="color:#334155; line-height:1.5;">${normalizeText(cliente.observaciones)}</span>
+      </div>
+    </div>
   </div>
 `;
 
 const buildCuentaHtml = (cliente: Cliente) => `
-  <div style="text-align:left; color:#f8fafc; font-size:14px;">
-    <p style="margin:0 0 6px;"><strong>Saldo pendiente:</strong> ${formatCurrency(cliente.saldoPendienteArs)}</p>
-    <p style="margin:0 0 6px;"><strong>Condición comercial:</strong> ${normalizeText(cliente.condicionComercial)}</p>
-    <p style="margin:0 0 6px;"><strong>Estado comercial:</strong> ${cliente.estado}</p>
-    <p style="margin:0; color:#9ca3af;"><strong>Observaciones:</strong> ${normalizeText(cliente.observaciones)}</p>
+  <div style="text-align:left; color:#0f172a; font-size:14px;">
+    <div style="display:grid; gap:10px;">
+      <div style="display:grid; gap:3px; padding:12px 14px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Saldo pendiente</span>
+        <span style="color:#0f172a; font-weight:800;">${formatCurrency(cliente.saldoPendienteArs)}</span>
+      </div>
+      <div style="display:grid; gap:3px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Condición comercial</span>
+        <span style="color:#0f172a; font-weight:600;">${normalizeText(cliente.condicionComercial)}</span>
+      </div>
+      <div style="display:grid; gap:3px;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Estado comercial</span>
+        <span style="color:#1d4ed8; font-weight:700;">${cliente.estado}</span>
+      </div>
+      <div style="display:grid; gap:3px; padding:12px 14px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0;">
+        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Observaciones</span>
+        <span style="color:#334155; line-height:1.5;">${normalizeText(cliente.observaciones)}</span>
+      </div>
+    </div>
   </div>
 `;
 
@@ -246,7 +410,11 @@ const ClientesPage = () => {
 
   const handleEdit = async (uid: string, payload: ClienteFormPayload) => {
     try {
-      await clienteService.update(uid, buildUpdatePayload(payload));
+      const current = clientes.find((cliente) => cliente.uid === uid);
+      if (!current) {
+        throw new Error("No se encontró el cliente seleccionado.");
+      }
+      await clienteService.update(uid, buildUpdatePayload(payload, current));
       await loadClientes();
     } catch (error: unknown) {
       await Swal.fire({

@@ -16,6 +16,7 @@ const ProveedorModal: React.FC<Props> = ({ proveedor, onClose, onSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     nombre_empresa: proveedor?.nombre_empresa || '',
+    producto_que_provee: proveedor?.producto_que_provee || '',
     contacto_nombre: proveedor?.contacto_nombre || '',
     telefono: proveedor?.telefono || '',
     email: proveedor?.email || '',
@@ -30,6 +31,7 @@ const ProveedorModal: React.FC<Props> = ({ proveedor, onClose, onSuccess }) => {
     setSubmitError(null);
     const normalized = {
       nombre_empresa: form.nombre_empresa.trim().toUpperCase(),
+      producto_que_provee: form.producto_que_provee.trim() || null,
       contacto_nombre: form.contacto_nombre.trim(),
       telefono: form.telefono.trim(),
       email: form.email.trim().toLowerCase(),
@@ -81,6 +83,15 @@ const ProveedorModal: React.FC<Props> = ({ proveedor, onClose, onSuccess }) => {
                 className="ui-input w-full rounded-xl py-2.5 px-4 text-sm"
                 value={form.nombre_empresa}
                 onChange={e => setForm({...form, nombre_empresa: e.target.value})}
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Producto que provee</label>
+              <input
+                className="ui-input w-full rounded-xl py-2.5 px-4 text-sm"
+                placeholder="Ej: Harina de soja 47%"
+                value={form.producto_que_provee}
+                onChange={e => setForm({...form, producto_que_provee: e.target.value})}
               />
             </div>
             <div className="space-y-1">

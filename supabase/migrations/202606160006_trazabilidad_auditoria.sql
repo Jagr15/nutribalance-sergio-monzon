@@ -34,7 +34,7 @@ select
   op.fecha_creacion,
   op.updated_at as actualizada_en,
   coalesce(mp.mp_planificada, '[]'::jsonb) as mp_planificada,
-  coalesce(mp.lotes_mp_usados, '[]'::jsonb) as lotes_mp_usados,
+  coalesce(to_jsonb(mp.lotes_mp_usados), '[]'::jsonb) as lotes_mp_usados,
   coalesce(mp_mov.mp_movimientos, '[]'::jsonb) as mp_movimientos,
   coalesce(ptg.pt_generado, '[]'::jsonb) as pt_generado,
   coalesce(pts.salidas_pt, '[]'::jsonb) as salidas_pt,

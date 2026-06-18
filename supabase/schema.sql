@@ -32,6 +32,7 @@ create table if not exists public.proveedores (
   id uuid primary key default gen_random_uuid(),
   legacy_uid text unique,
   nombre_empresa text not null,
+  producto_que_provee text,
   contacto_nombre text not null,
   telefono text not null,
   email text not null,

@@ -23,6 +23,7 @@ const ProveedorPage: React.FC = () => {
   const filtered = useMemo(() => {
     return proveedores.filter(p => 
       (p.nombre_empresa ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.producto_que_provee ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.documento ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.contacto_nombre ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.email ?? '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -108,7 +109,7 @@ const ProveedorPage: React.FC = () => {
             <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
             <input 
               type="text" 
-              placeholder="Buscar por Empresa o Documento..." 
+              placeholder="Buscar por Empresa, Documento o Producto..." 
               className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-11 pr-4 text-sm text-slate-700 focus:border-blue-500/50 outline-none transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

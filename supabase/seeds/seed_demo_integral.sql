@@ -35,14 +35,15 @@ on conflict (legacy_uid) do update set
   email = excluded.email,
   esta_activo = excluded.esta_activo;
 
-insert into public.proveedores (legacy_uid, nombre_empresa, contacto_nombre, telefono, email, direccion, documento, esta_activo)
+insert into public.proveedores (legacy_uid, nombre_empresa, producto_que_provee, contacto_nombre, telefono, email, direccion, documento, esta_activo)
 values
-  ('demo-prov-01', 'Agro Maizal SA', 'Carlos Pinto', '+54 11 4000 1001', 'ventas@agromaizal.local', 'Ruta 3 km 88', '30-80000001-1', true),
-  ('demo-prov-02', 'Soja Premium SRL', 'Laura Díaz', '+54 11 4000 1002', 'contacto@sojapremium.local', 'Parque Industrial Norte', '30-80000002-2', true),
-  ('demo-prov-03', 'NutriMinerales SA', 'Néstor Ríos', '+54 11 4000 1003', 'pedidos@nutriminerales.local', 'Av. Central 225', '30-80000003-3', true),
-  ('demo-prov-04', 'Fibras del Sur', 'Pamela Suárez', '+54 11 4000 1004', 'comercial@fibrasdelsur.local', 'Ruta 8 km 144', '30-80000004-4', true)
+  ('demo-prov-01', 'Agro Maizal SA', 'Maíz molido', 'Carlos Pinto', '+54 11 4000 1001', 'ventas@agromaizal.local', 'Ruta 3 km 88', '30-80000001-1', true),
+  ('demo-prov-02', 'Soja Premium SRL', 'Harina de soja', 'Laura Díaz', '+54 11 4000 1002', 'contacto@sojapremium.local', 'Parque Industrial Norte', '30-80000002-2', true),
+  ('demo-prov-03', 'NutriMinerales SA', 'Carbonato de calcio', 'Néstor Ríos', '+54 11 4000 1003', 'pedidos@nutriminerales.local', 'Av. Central 225', '30-80000003-3', true),
+  ('demo-prov-04', 'Fibras del Sur', 'Afrecho de trigo', 'Pamela Suárez', '+54 11 4000 1004', 'comercial@fibrasdelsur.local', 'Ruta 8 km 144', '30-80000004-4', true)
 on conflict (legacy_uid) do update set
   nombre_empresa = excluded.nombre_empresa,
+  producto_que_provee = excluded.producto_que_provee,
   contacto_nombre = excluded.contacto_nombre,
   telefono = excluded.telefono,
   email = excluded.email,

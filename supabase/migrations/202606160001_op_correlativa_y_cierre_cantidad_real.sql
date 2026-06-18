@@ -287,6 +287,7 @@ declare
   v_detalle jsonb;
   v_item record;
   v_lote_id uuid;
+  v_disponible numeric;
   v_consumo_real numeric;
   v_factor numeric;
   v_consumo_planificado numeric;
