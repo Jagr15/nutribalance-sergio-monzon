@@ -40,7 +40,7 @@ export interface Factura {
   observaciones?: string;
   createdAt: string;
   source?: {
-    entidad: 'orden' | 'producto' | 'cliente' | 'finanza';
+    entidad: 'orden' | 'producto' | 'cliente' | 'finanza' | 'demo' | 'manual';
     entidadId: string;
   };
 }

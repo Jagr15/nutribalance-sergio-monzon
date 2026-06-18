@@ -9,6 +9,7 @@ export type { CondicionIva } from './domain/value-objects/CondicionIva';
 export type { EstadoFiscal } from './domain/value-objects/EstadoFiscal';
 export type { ModalidadFactura, TipoFactura } from './domain/value-objects/TipoFactura';
 export type { EmitirFacturaInput } from './application/dto/EmitirFacturaInput';
+export type { EmitirFacturaBManualInput, EmitirFacturaBManualItemInput, EmitirFacturaBManualResult } from './application/dto/EmitirFacturaBManualInput';
 export type { EmitirFacturaResult } from './application/dto/EmitirFacturaResult';
 export type { ArcaProvider } from './application/ports/ArcaProvider';
 export type { ClockPort } from './application/ports/ClockPort';
@@ -18,6 +19,7 @@ export type { ArcaFiscalEventRepositoryPort, ArcaEventoFiscalInput, ArcaEventoFi
 export type { ArcaFiscalPersistencePort, ArcaFacturaPersistida, ArcaComprobantePersistido } from './application/ports/ArcaFiscalPersistencePort';
 export type { ClienteFiscalMappingResult, MapClienteFiscalOptions } from './infrastructure/mappers/clienteFiscalMapper';
 export { emitirFactura } from './application/use-cases/EmitirFactura';
+export { emitirFacturaBManual } from './application/use-cases/EmitirFacturaBManual';
 export { simularFactura } from './application/use-cases/SimularFactura';
 export { validarFactura } from './application/use-cases/ValidarFactura';
 export { calcularFacturaBSimulada, formatSimulatedComprobanteNumero, roundMoney } from './application/utils/facturaB';

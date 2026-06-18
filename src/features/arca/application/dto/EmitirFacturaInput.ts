@@ -9,7 +9,7 @@ export interface EmitirFacturaInput {
   moneda?: 'ARS';
   observaciones?: string;
   source?: {
-    entidad: 'orden' | 'producto' | 'cliente' | 'finanza';
+    entidad: 'orden' | 'producto' | 'cliente' | 'finanza' | 'demo' | 'manual';
     entidadId: string;
   };
 }
