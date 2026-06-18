@@ -167,10 +167,19 @@ export const buildGastosPorRubro = (movimientos: FlujoCajaRubroRow[]): GastoPorR
     totals.set(rubro, (totals.get(rubro) ?? 0) + num(movimiento.monto));
   });
   const total = Math.max(1, [...totals.values()].reduce((acc, value) => acc + value, 0));
-  return rubros
+  const rows = rubros
     .map((rubro) => ({ rubro, monto: Number((totals.get(rubro) ?? 0).toFixed(2)), porcentaje: Number((((totals.get(rubro) ?? 0) / total) * 100).toFixed(2)) }))
     .filter((row) => row.monto > 0)
     .sort((a, b) => b.monto - a.monto);
+  const roundedTotal = rows.reduce((acc, row) => acc + row.porcentaje, 0);
+  if (rows.length > 0 && roundedTotal !== 100) {
+    const lastIndex = rows.length - 1;
+    rows[lastIndex] = {
+      ...rows[lastIndex],
+      porcentaje: Number((rows[lastIndex].porcentaje + (100 - roundedTotal)).toFixed(2)),
+    };
+  }
+  return rows;
 };
 
 export const buildVariacionesPorRubro = (rows: PresupuestoVsRealRubro[], sortBy: 'desviacion' | 'menor_desviacion' | 'mayor_gasto' | 'menor_gasto' = 'desviacion') => {

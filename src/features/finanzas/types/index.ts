@@ -38,6 +38,8 @@ export interface FinanzasReportes {
     importe_total: number;
     clientes_count: number;
     ultima_fecha: string | null;
+    variacion_pct?: number | null;
+    costo_referencial_kg?: number | null;
   }>;
   rentabilidad_por_formula: Array<{ id_formula: string; nombre_producto: string; costo_total: number; kg_total: number; costo_promedio_kg: number }>;
   costo_operativo_mensual: Array<{ mes: string; monto: number }>;

@@ -69,5 +69,6 @@ describe('buildTesoreriaInsights', () => {
     expect(result.chequesRecibidos).toHaveLength(1);
     expect(result.proyeccionFlujo).toHaveLength(4);
     expect(result.alertasTesoreria.length).toBeGreaterThan(0);
+    expect(result.gastosPorRubro.reduce((acc, row) => acc + row.porcentaje, 0)).toBeCloseTo(100, 2);
   });
 });
