@@ -1,6 +1,5 @@
 import {
     FiGrid,
-    FiUsers,
     FiPackage,
     FiTruck,
   } from "react-icons/fi";
@@ -9,10 +8,6 @@ import {
     {
       name: "Dashboard",
       icon: FiGrid,
-    },
-    {
-      name: "Usuarios",
-      icon: FiUsers,
     },
     {
       name: "Productos",

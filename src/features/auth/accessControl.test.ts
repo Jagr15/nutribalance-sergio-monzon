@@ -28,8 +28,18 @@ describe('access control', () => {
     expect(() => assertPermission('formulas', 'create_formula')).not.toThrow();
   });
 
+  it('permite acción autorizada para superadmin', () => {
+    setRole('superadmin');
+    expect(() => assertPermission('usuarios', 'create')).not.toThrow();
+  });
+
   it('bloquea acción no autorizada', () => {
     setRole('solo_lectura');
     expect(() => assertPermission('finanzas', 'register_financial_movement')).toThrow(/No tiene permisos/);
+  });
+
+  it('bloquea acceso a usuarios sin permiso administrativo', () => {
+    setRole('solo_lectura');
+    expect(() => assertPermission('usuarios', 'view')).toThrow(/No tiene permisos/);
   });
 });

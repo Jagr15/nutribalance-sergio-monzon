@@ -4,6 +4,7 @@ import { can, normalizeRole } from './permissions';
 describe('permissions', () => {
   it('normaliza roles', () => {
     expect(normalizeRole('ADMIN')).toBe('admin');
+    expect(normalizeRole('SUPERADMIN')).toBe('superadmin');
     expect(normalizeRole('finanzas')).toBe('finanzas');
     expect(normalizeRole('desconocido')).toBe('solo_lectura');
   });
@@ -22,6 +23,8 @@ describe('permissions', () => {
     expect(can('finanzas', 'stock_mp', 'modify_stock')).toBe(false);
     expect(can('finanzas', 'proveedores', 'view')).toBe(false);
     expect(can('finanzas', 'trazabilidad', 'view')).toBe(false);
+    expect(can('superadmin', 'usuarios', 'view')).toBe(true);
+    expect(can('superadmin', 'usuarios', 'create')).toBe(true);
     expect(can('supervisor', 'usuarios', 'view')).toBe(false);
     expect(can('supervisor', 'ordenes', 'start_order')).toBe(true);
     expect(can('solo_lectura', 'clientes', 'view')).toBe(false);

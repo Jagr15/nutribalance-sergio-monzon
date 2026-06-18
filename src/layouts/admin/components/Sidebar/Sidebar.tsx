@@ -31,7 +31,6 @@ const menuItems: SidebarGroup[] = [
     collapsible: false,
     items: [
       { name: "Dashboard", icon: FiGrid, path: ROUTES.DASHBOARD, module: "dashboard" },
-      { name: "Usuarios", icon: FiUsers, path: ROUTES.USUARIOS, module: "usuarios" },
       { name: "Clientes", icon: FiUsers, path: ROUTES.CLIENTES, module: "clientes" },
       { name: "Stock General", icon: FiPackage, path: ROUTES.STOCK, module: "stock_general" },
       { name: "Alertas", icon: FiBell, path: ROUTES.ALERTAS, module: "alertas" },
@@ -57,6 +56,13 @@ const menuItems: SidebarGroup[] = [
     items: [
       { name: "Stock Materia Prima", icon: FiInbox, path: ROUTES.STOCKMATERIAPRIMA, module: "stock_mp" },
       { name: "Stock de Productos Terminados", icon: FiPackage, path: ROUTES.PRODUCTOS, module: "productos" },
+    ],
+  },
+  {
+    section: "ADMINISTRACIÓN",
+    collapsible: false,
+    items: [
+      { name: "Usuarios", icon: FiUsers, path: ROUTES.USUARIOS, module: "usuarios" },
     ],
   },
   // ... resto de secciones (puedes añadir los paths que necesites)

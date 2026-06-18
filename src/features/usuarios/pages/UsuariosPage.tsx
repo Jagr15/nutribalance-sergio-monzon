@@ -1,41 +1,198 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FiEdit2, FiPlus, FiPower, FiUsers } from 'react-icons/fi';
 import { Card } from '../../../shared/components/card';
+import { usePermissions } from '../../auth/usePermissions';
+import { getSessionUser } from '../../auth/session';
 import { usuarioService } from '../services/usuarioService';
+import UsuarioModal from '../components/UsuarioModal';
 import type { Usuario } from '../types/usuario';
+import type { UsuarioFormValues } from '../utils/usuarioForm';
+
+const formatDate = (value?: string) => {
+  if (!value) return 'Sin fecha';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Sin fecha';
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+};
+
+const roleLabel: Record<string, string> = {
+  SUPERADMIN: 'Super Admin',
+  ADMIN: 'Admin',
+  ENCARGADO: 'Encargado',
+  OPERARIO: 'Operario',
+  FINANZAS: 'Finanzas',
+};
 
 const UsuariosPage = () => {
+  const { canAccess, user } = usePermissions();
+  const currentUser = getSessionUser();
+  const canManageUsers = canAccess('usuarios', 'create');
+
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedUsuario, setSelectedUsuario] = useState<Usuario | null>(null);
+  const [savingUser, setSavingUser] = useState(false);
+  const [actionUid, setActionUid] = useState<string | null>(null);
+
+  const refreshUsuarios = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const data = await usuarioService.findAll();
+      setUsuarios(data);
+    } catch (error: unknown) {
+      setLoadError(error instanceof Error ? error.message : 'No se pudieron cargar los usuarios.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const load = async () => {
-      setIsLoading(true);
-      setLoadError(null);
-      try {
-        const data = await usuarioService.findAll();
-        setUsuarios(data);
-      } catch (error: unknown) {
-        setLoadError(error instanceof Error ? error.message : 'No se pudieron cargar los usuarios.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    const timeoutId = window.setTimeout(() => {
+      void refreshUsuarios();
+    }, 0);
 
-    void load();
-  }, []);
+    return () => window.clearTimeout(timeoutId);
+  }, [refreshUsuarios]);
+
+  const stats = useMemo(() => {
+    const total = usuarios.length;
+    const activos = usuarios.filter((item) => item.esta_activo).length;
+    const inactivos = total - activos;
+    const administradores = usuarios.filter((item) => item.role === 'SUPERADMIN' || item.role === 'ADMIN').length;
+    return { total, activos, inactivos, administradores };
+  }, [usuarios]);
+
+  const openCreateModal = () => {
+    setSelectedUsuario(null);
+    setActionError(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (usuario: Usuario) => {
+    setSelectedUsuario(usuario);
+    setActionError(null);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    if (savingUser) return;
+    setIsModalOpen(false);
+    setSelectedUsuario(null);
+    setActionError(null);
+  };
+
+  const handleSaveUsuario = async (values: UsuarioFormValues) => {
+    if (!canManageUsers) {
+      throw new Error('No tienes permisos para administrar usuarios.');
+    }
+
+    setSavingUser(true);
+    setActionError(null);
+    try {
+      const payload = {
+        nombre_completo: values.nombre_completo,
+        username: values.username,
+        email: values.email,
+        role: values.role as Usuario['role'],
+        esta_activo: values.estado === 'activo',
+        fecha_creacion: selectedUsuario?.fecha_creacion ?? new Date().toISOString(),
+      } satisfies Omit<Usuario, 'uid'>;
+
+      if (selectedUsuario) {
+        await usuarioService.update(selectedUsuario.uid, payload);
+      } else {
+        await usuarioService.create(payload);
+      }
+      await refreshUsuarios();
+      setIsModalOpen(false);
+      setSelectedUsuario(null);
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const toggleEstado = async (usuario: Usuario) => {
+    if (!canManageUsers) return;
+    const confirmMessage = usuario.esta_activo
+      ? '¿Seguro que deseas desactivar este usuario?'
+      : '¿Seguro que deseas activar este usuario?';
+    if (!window.confirm(confirmMessage)) return;
+    setActionError(null);
+    setActionUid(usuario.uid);
+    try {
+      await usuarioService.update(usuario.uid, {
+        esta_activo: !usuario.esta_activo,
+      });
+      await refreshUsuarios();
+    } catch (error: unknown) {
+      setActionError(error instanceof Error ? error.message : 'No se pudo actualizar el estado del usuario.');
+    } finally {
+      setActionUid(null);
+    }
+  };
+
+  const currentRoleLabel = user.roleLabel;
 
   return (
     <div className="space-y-6">
-      <section>
-        <p className="text-sm uppercase tracking-widest text-blue-400">Administración</p>
-        <h1 className="text-3xl font-bold mt-2">Usuarios</h1>
+      <section className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 px-6 py-6 text-white shadow-xl shadow-slate-900/10 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-blue-200">Administración</p>
+          <h1 className="text-3xl font-semibold">Usuarios</h1>
+          <p className="max-w-2xl text-sm text-slate-300">
+            Gestiona cuentas operativas de la plataforma, asigna roles y controla el estado de acceso.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-slate-300">Sesión actual</p>
+            <p className="mt-1 font-medium">{currentRoleLabel}</p>
+          </div>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            disabled={!canManageUsers}
+            className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/10 transition hover:-translate-y-0.5 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <FiPlus />
+            Nuevo usuario
+          </button>
+        </div>
       </section>
 
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Total usuarios', value: stats.total },
+          { label: 'Usuarios activos', value: stats.activos },
+          { label: 'Usuarios inactivos', value: stats.inactivos },
+          { label: 'Administradores', value: stats.administradores },
+        ].map((item) => (
+          <Card key={item.label} className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-900">{item.value}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <FiUsers size={18} />
+            </div>
+          </Card>
+        ))}
+      </div>
+
       {loadError ? (
-        <Card className="border-red-200 bg-red-50 text-red-700">
-          {loadError}
-        </Card>
+        <Card className="border-red-200 bg-red-50 text-red-700">{loadError}</Card>
+      ) : null}
+
+      {actionError ? (
+        <Card className="border-amber-200 bg-amber-50 text-amber-800">{actionError}</Card>
       ) : null}
 
       {isLoading ? (
@@ -51,32 +208,95 @@ const UsuariosPage = () => {
       ) : null}
 
       {!isLoading && usuarios.length > 0 ? (
-        <Card>
+        <Card className="p-0">
           <div className="overflow-auto">
-            <table className="w-full min-w-[760px] text-left">
+            <table className="w-full min-w-[960px] text-left">
               <thead>
-                <tr className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
-                  <th className="py-2">Nombre</th>
-                  <th className="py-2">Usuario</th>
-                  <th className="py-2">Email</th>
-                  <th className="py-2">Rol</th>
-                  <th className="py-2">Estado</th>
+                <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-[0.24em] text-slate-500">
+                  <th className="px-6 py-4">Nombre</th>
+                  <th className="px-6 py-4">Usuario</th>
+                  <th className="px-6 py-4">Email</th>
+                  <th className="px-6 py-4">Rol</th>
+                  <th className="px-6 py-4">Estado</th>
+                  <th className="px-6 py-4">Alta</th>
+                  <th className="px-6 py-4">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {usuarios.map((u) => (
-                  <tr key={u.uid} className="border-b border-slate-100">
-                    <td className="py-2">{u.nombre_completo || 'Sin dato'}</td>
-                    <td className="py-2">{u.username || 'Sin dato'}</td>
-                    <td className="py-2">{u.email || 'Sin dato'}</td>
-                    <td className="py-2">{u.role || 'Sin dato'}</td>
-                    <td className="py-2">{u.esta_activo ? 'Activo' : 'Inactivo'}</td>
-                  </tr>
-                ))}
+                {usuarios.map((usuario) => {
+                  const isBusy = actionUid === usuario.uid || savingUser;
+                  const isProtectedSuperadmin = usuario.role === 'SUPERADMIN' && currentUser.role !== 'superadmin';
+                  const isSelfManagedUser = currentUser.managedUserUid === usuario.uid;
+                  const canEditRow = canManageUsers && !isProtectedSuperadmin;
+                  const canToggleRow = canManageUsers && !isProtectedSuperadmin && !isSelfManagedUser;
+                  return (
+                    <tr key={usuario.uid} className="border-b border-slate-100 last:border-b-0">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-slate-900">{usuario.nombre_completo || 'Sin dato'}</div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">{usuario.username || 'Sin dato'}</td>
+                      <td className="px-6 py-4 text-slate-600">{usuario.email || 'Sin dato'}</td>
+                      <td className="px-6 py-4">
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+                          {roleLabel[usuario.role] ?? usuario.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            usuario.esta_activo
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {usuario.esta_activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">{formatDate(usuario.fecha_creacion)}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={!canEditRow || isBusy}
+                            onClick={() => openEditModal(usuario)}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <FiEdit2 size={14} />
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!canToggleRow || isBusy}
+                            onClick={() => toggleEstado(usuario)}
+                            className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                              usuario.esta_activo
+                                ? 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                : 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                            }`}
+                          >
+                            <FiPower size={14} />
+                            {usuario.esta_activo ? 'Desactivar' : 'Activar'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </Card>
+      ) : null}
+
+      {isModalOpen ? (
+        <UsuarioModal
+          key={selectedUsuario?.uid ?? 'nuevo-usuario'}
+          usuario={selectedUsuario}
+          currentUser={currentUser}
+          existingUsers={usuarios}
+          onClose={closeModal}
+          onSave={handleSaveUsuario}
+        />
       ) : null}
     </div>
   );

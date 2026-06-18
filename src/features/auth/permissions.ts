@@ -1,4 +1,4 @@
-export const USER_ROLES = ['admin', 'produccion', 'inventario', 'finanzas', 'supervisor', 'solo_lectura'] as const;
+export const USER_ROLES = ['superadmin', 'admin', 'produccion', 'inventario', 'finanzas', 'supervisor', 'solo_lectura'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export type AppModule =
@@ -46,6 +46,15 @@ const emptyByModule = allModules.reduce<Record<AppModule, AppAction[]>>((acc, mo
 const uniq = (actions: AppAction[]) => [...new Set(actions)];
 
 export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> = {
+  superadmin: allModules.reduce<Record<AppModule, AppAction[]>>((acc, mod) => {
+    acc[mod] = uniq([
+      'view', 'create', 'edit', 'delete', 'approve',
+      'start_order', 'finish_order', 'register_financial_movement', 'modify_stock',
+      'create_formula', 'edit_formula', 'cancel_order',
+    ]);
+    return acc;
+  }, {} as Record<AppModule, AppAction[]>),
+
   admin: allModules.reduce<Record<AppModule, AppAction[]>>((acc, mod) => {
     acc[mod] = uniq([
       'view', 'create', 'edit', 'delete', 'approve',
@@ -133,6 +142,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
+  superadmin: 'Super Admin',
   admin: 'Admin',
   produccion: 'Producción',
   inventario: 'Inventario',
@@ -144,11 +154,12 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 export const normalizeRole = (raw?: string | null): UserRole => {
   const value = (raw ?? '').toLowerCase().trim();
   if (USER_ROLES.includes(value as UserRole)) return value as UserRole;
+  if (value.includes('superadmin')) return 'superadmin';
+  if (value.includes('super')) return 'supervisor';
   if (value.includes('admin')) return 'admin';
   if (value.includes('produ')) return 'produccion';
   if (value.includes('invent')) return 'inventario';
   if (value.includes('finan')) return 'finanzas';
-  if (value.includes('super')) return 'supervisor';
   return 'solo_lectura';
 };
 

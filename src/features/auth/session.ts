@@ -5,12 +5,14 @@ export interface SessionUser {
   role: UserRole;
   roleLabel: string;
   login: string;
+  managedUserUid?: string;
 }
 
 const AUTH_KEY = "nutribalance_auth";
 const NAME_KEY = "nutribalance_user_name";
 const ROLE_KEY = "nutribalance_user_role";
 const LOGIN_KEY = "nutribalance_user_login";
+const MANAGED_UID_KEY = "nutribalance_user_managed_uid";
 const ALERTS_SEEN_SESSION_KEY = "nutribalance_alerts_seen_session";
 
 const DEFAULT_USER: SessionUser = {
@@ -18,11 +20,14 @@ const DEFAULT_USER: SessionUser = {
   role: "admin",
   roleLabel: ROLE_LABELS.admin,
   login: "admin@nutribalance.com",
+  managedUserUid: "u-001",
 };
 
 const CREDENTIALS = [
-  { login: "admin@nutribalance.com", password: "admin123", role: "admin" as UserRole, name: "Admin" },
-  { login: "admin", password: "admin123", role: "admin" as UserRole, name: "Admin" },
+  { login: "superadmin@nutribalance.com", password: "super123", role: "superadmin" as UserRole, name: "Super Admin", managedUserUid: "u-001" },
+  { login: "superadmin", password: "super123", role: "superadmin" as UserRole, name: "Super Admin", managedUserUid: "u-001" },
+  { login: "admin@nutribalance.com", password: "admin123", role: "admin" as UserRole, name: "Admin", managedUserUid: "u-001" },
+  { login: "admin", password: "admin123", role: "admin" as UserRole, name: "Admin", managedUserUid: "u-001" },
   { login: "produccion", password: "demo123", role: "produccion" as UserRole, name: "Operador Producción" },
   { login: "inventario", password: "demo123", role: "inventario" as UserRole, name: "Operador Inventario" },
   { login: "finanzas", password: "demo123", role: "finanzas" as UserRole, name: "Analista Finanzas" },
@@ -43,6 +48,7 @@ export const authenticateDemoUser = (login: string, password: string): SessionUs
     role: credential.role,
     roleLabel: ROLE_LABELS[credential.role],
     login: loginNormalized,
+    managedUserUid: credential.managedUserUid,
   };
 };
 
@@ -51,6 +57,11 @@ export const saveSession = (user: SessionUser) => {
   localStorage.setItem(NAME_KEY, user.name);
   localStorage.setItem(ROLE_KEY, user.role);
   localStorage.setItem(LOGIN_KEY, user.login);
+  if (user.managedUserUid) {
+    localStorage.setItem(MANAGED_UID_KEY, user.managedUserUid);
+  } else {
+    localStorage.removeItem(MANAGED_UID_KEY);
+  }
 };
 
 export const clearSession = () => {
@@ -58,7 +69,10 @@ export const clearSession = () => {
   localStorage.removeItem(NAME_KEY);
   localStorage.removeItem(ROLE_KEY);
   localStorage.removeItem(LOGIN_KEY);
-  sessionStorage.removeItem(ALERTS_SEEN_SESSION_KEY);
+  localStorage.removeItem(MANAGED_UID_KEY);
+  if (typeof sessionStorage !== "undefined") {
+    sessionStorage.removeItem(ALERTS_SEEN_SESSION_KEY);
+  }
 };
 
 export const isAuthenticated = () => localStorage.getItem(AUTH_KEY) === "true";
@@ -71,5 +85,6 @@ export const getSessionUser = (): SessionUser => {
     role: normalizeRole(localStorage.getItem(ROLE_KEY) || DEFAULT_USER.role),
     roleLabel: ROLE_LABELS[normalizeRole(localStorage.getItem(ROLE_KEY) || DEFAULT_USER.role)],
     login: localStorage.getItem(LOGIN_KEY) || DEFAULT_USER.login,
+    managedUserUid: localStorage.getItem(MANAGED_UID_KEY) || DEFAULT_USER.managedUserUid,
   };
 };
