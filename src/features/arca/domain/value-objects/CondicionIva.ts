@@ -1,0 +1,14 @@
+export type CondicionIva =
+  | 'RESPONSABLE_INSCRIPTO'
+  | 'MONOTRIBUTO'
+  | 'EXENTO'
+  | 'CONSUMIDOR_FINAL'
+  | 'NO_CATEGORIZADO';
+
+export const CONDICIONES_IVA: readonly CondicionIva[] = [
+  'RESPONSABLE_INSCRIPTO',
+  'MONOTRIBUTO',
+  'EXENTO',
+  'CONSUMIDOR_FINAL',
+  'NO_CATEGORIZADO',
+];
