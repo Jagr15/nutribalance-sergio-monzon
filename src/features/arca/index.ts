@@ -10,6 +10,17 @@ export type { EstadoFiscal } from './domain/value-objects/EstadoFiscal';
 export type { ModalidadFactura, TipoFactura } from './domain/value-objects/TipoFactura';
 export type { EmitirFacturaInput } from './application/dto/EmitirFacturaInput';
 export type { EmitirFacturaBManualInput, EmitirFacturaBManualItemInput, EmitirFacturaBManualResult } from './application/dto/EmitirFacturaBManualInput';
+export type {
+  ArcaConsultaItemResult,
+  ArcaConsultaListaResult,
+  ArcaComprobanteConsulta,
+  ArcaEventoFiscalConsulta,
+  ArcaFacturaConsulta,
+  ConsultarComprobantesArcaFiltros,
+  ConsultarEventosFiscalesArcaFiltros,
+  ConsultarFacturaArcaPorIdInput,
+  ConsultarFacturasArcaFiltros,
+} from './application/dto/ArcaConsultaHistorial';
 export type { EmitirFacturaResult } from './application/dto/EmitirFacturaResult';
 export type { ArcaProvider } from './application/ports/ArcaProvider';
 export type { ClockPort } from './application/ports/ClockPort';
@@ -17,9 +28,14 @@ export type { IdGeneratorPort } from './application/ports/IdGeneratorPort';
 export type { ArcaFiscalAuditPort } from './application/ports/ArcaFiscalAuditPort';
 export type { ArcaFiscalEventRepositoryPort, ArcaEventoFiscalInput, ArcaEventoFiscalPersistido } from './application/ports/ArcaFiscalEventRepositoryPort';
 export type { ArcaFiscalPersistencePort, ArcaFacturaPersistida, ArcaComprobantePersistido } from './application/ports/ArcaFiscalPersistencePort';
+export type { ArcaConsultaRepositoryPort } from './application/ports/ArcaConsultaRepositoryPort';
 export type { ClienteFiscalMappingResult, MapClienteFiscalOptions } from './infrastructure/mappers/clienteFiscalMapper';
 export { emitirFactura } from './application/use-cases/EmitirFactura';
 export { emitirFacturaBManual } from './application/use-cases/EmitirFacturaBManual';
+export { consultarComprobantesArca } from './application/use-cases/ConsultarComprobantesArca';
+export { consultarEventosFiscalesArca } from './application/use-cases/ConsultarEventosFiscalesArca';
+export { consultarFacturaArcaPorId } from './application/use-cases/ConsultarFacturaArcaPorId';
+export { consultarFacturasArca } from './application/use-cases/ConsultarFacturasArca';
 export { simularFactura } from './application/use-cases/SimularFactura';
 export { validarFactura } from './application/use-cases/ValidarFactura';
 export { calcularFacturaBSimulada, formatSimulatedComprobanteNumero, roundMoney } from './application/utils/facturaB';
@@ -31,4 +47,5 @@ export { createArcaProvider } from './infrastructure/providers/ArcaProviderFacto
 export { ArcaFiscalAuditAdapter } from './infrastructure/audit/ArcaFiscalAuditAdapter';
 export { SupabaseArcaFiscalRepository } from './infrastructure/repositories/SupabaseArcaFiscalRepository';
 export { SupabaseArcaEventoFiscalRepository } from './infrastructure/repositories/SupabaseArcaEventoFiscalRepository';
+export { SupabaseArcaConsultaRepository } from './infrastructure/repositories/SupabaseArcaConsultaRepository';
 export { inferirCondicionIvaCliente, inferirTipoDocumentoFiscal, mapClienteToClienteFiscal } from './infrastructure/mappers/clienteFiscalMapper';
