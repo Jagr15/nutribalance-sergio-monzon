@@ -17,6 +17,7 @@ import { buildIngresosPtPorProducto } from '../utils/ingresosPtPorProducto';
 import { buildTesoreriaInsights } from '../utils/tesoreriaInsights';
 import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
+import { RUBRO_AREA_DEFAULT, RUBRO_AREA_OPTIONS } from '../utils/finanzasDashboard';
 
 export interface CrearMovimientoPayload {
   tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA';
@@ -150,7 +151,7 @@ const defaultRubros = (): RubroFinancieroCatalogo[] => [
   { id: 'cat-nomina', nombre: 'Nómina', tipo: 'EGRESO', activo: true, area: 'Administración' },
   { id: 'cat-servicios', nombre: 'Servicios', tipo: 'EGRESO', activo: true, area: 'Administración' },
   { id: 'cat-marketing', nombre: 'Marketing', tipo: 'EGRESO', activo: true, area: 'Comercial' },
-  { id: 'cat-otros', nombre: 'Otros', tipo: 'EGRESO', activo: true, area: null },
+  { id: 'cat-otros', nombre: 'Otros', tipo: 'EGRESO', activo: true, area: RUBRO_AREA_DEFAULT },
 ];
 
 const readMockRubros = (): RubroFinancieroCatalogo[] => {
@@ -336,7 +337,7 @@ export const finanzasService = {
       nombre: row.nombre,
       tipo: row.tipo_movimiento,
       activo: row.deleted_at === null,
-      area: row.area,
+      area: row.area?.trim() || RUBRO_AREA_DEFAULT,
     }));
   },
 
@@ -344,12 +345,15 @@ export const finanzasService = {
     const nombre = payload.nombre.trim();
     if (!nombre) throw new Error('El nombre del rubro es obligatorio.');
     if (!allowedTipoMovimientos.has(payload.tipo)) throw new Error('El tipo del rubro debe ser Ingreso o Egreso.');
+    const area = payload.area?.trim();
+    if (!area) throw new Error('El área del rubro es obligatoria.');
+    if (!RUBRO_AREA_OPTIONS.includes(area as (typeof RUBRO_AREA_OPTIONS)[number])) throw new Error('El área del rubro debe ser una opción válida.');
 
     if (runtimeConfig.mode === 'mock') {
       const rows = readMockRubros();
       const duplicate = rows.find((row) => normalizeName(row.nombre) === normalizeName(nombre) && row.tipo === payload.tipo && row.id !== payload.id);
       if (duplicate) throw new Error('Ya existe un rubro con ese nombre para ese tipo.');
-      const next: RubroFinancieroCatalogo = { id: payload.id ?? `cat-${Date.now()}`, nombre, tipo: payload.tipo, activo: payload.activo, area: payload.area ?? null };
+      const next: RubroFinancieroCatalogo = { id: payload.id ?? `cat-${Date.now()}`, nombre, tipo: payload.tipo, activo: payload.activo, area };
       const updated = rows.some((row) => row.id === next.id) ? rows.map((row) => (row.id === next.id ? next : row)) : [...rows, next];
       writeMockRubros(updated);
       return next;
@@ -358,13 +362,13 @@ export const finanzasService = {
     const query = payload.id
       ? supabaseClient
           .from('categorias_financieras')
-          .update({ nombre, tipo_movimiento: payload.tipo, area: payload.area ?? null, updated_at: new Date().toISOString(), deleted_at: payload.activo ? null : new Date().toISOString() })
+          .update({ nombre, tipo_movimiento: payload.tipo, area, updated_at: new Date().toISOString(), deleted_at: payload.activo ? null : new Date().toISOString() })
           .eq('id', payload.id)
           .select('id,legacy_uid,nombre,tipo_movimiento,area,deleted_at')
           .single<CategoriaFinancieraDbRow>()
       : supabaseClient
           .from('categorias_financieras')
-          .insert({ nombre, tipo_movimiento: payload.tipo, area: payload.area ?? null, deleted_at: null })
+          .insert({ nombre, tipo_movimiento: payload.tipo, area, deleted_at: null })
           .select('id,legacy_uid,nombre,tipo_movimiento,area,deleted_at')
           .single<CategoriaFinancieraDbRow>();
     const { data, error } = await query;
@@ -372,7 +376,7 @@ export const finanzasService = {
       console.error('[finanzas] rubro save failed', { action: payload.id ? 'update' : 'create', payload, error });
       throw new Error(formatDbError(payload.id ? 'actualizar el rubro' : 'guardar el rubro', error));
     }
-    return { id: data.id, nombre: data.nombre, tipo: data.tipo_movimiento, activo: data.deleted_at === null, area: data.area };
+    return { id: data.id, nombre: data.nombre, tipo: data.tipo_movimiento, activo: data.deleted_at === null, area: data.area?.trim() || RUBRO_AREA_DEFAULT };
   },
 
   async toggleRubroFinanciero(id: string, activo: boolean): Promise<void> {

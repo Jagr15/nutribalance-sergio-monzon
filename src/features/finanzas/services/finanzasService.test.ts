@@ -49,9 +49,20 @@ describe('finanzasService', () => {
     const rubro = await finanzasService.saveRubroFinanciero({ nombre: 'Gastos legales', tipo: 'EGRESO', activo: true, area: 'Administración' });
     expect(rubro.tipo).toBe('EGRESO');
     expect(rubro.nombre).toBe('Gastos legales');
+    expect(rubro.area).toBe('Administración');
+  });
+
+  it('edita área de rubro en mock', async () => {
+    const rubro = await finanzasService.saveRubroFinanciero({ id: 'rubro-1', nombre: 'Gastos legales', tipo: 'EGRESO', activo: true, area: 'Administración' });
+    const updated = await finanzasService.saveRubroFinanciero({ id: rubro.id, nombre: 'Gastos legales', tipo: 'EGRESO', activo: true, area: 'Finanzas' });
+    expect(updated.area).toBe('Finanzas');
   });
 
   it('rechaza tipo inválido al guardar rubro', async () => {
-    await expect(finanzasService.saveRubroFinanciero({ nombre: 'Rubro raro', tipo: 'MIXTO' as never, activo: true, area: null })).rejects.toThrow(/Ingreso o Egreso/);
+    await expect(finanzasService.saveRubroFinanciero({ nombre: 'Rubro raro', tipo: 'MIXTO' as never, activo: true, area: 'Finanzas' })).rejects.toThrow(/Ingreso o Egreso/);
+  });
+
+  it('rechaza rubro sin área al guardar', async () => {
+    await expect(finanzasService.saveRubroFinanciero({ nombre: 'Rubro raro', tipo: 'EGRESO', activo: true, area: '' })).rejects.toThrow(/área del rubro es obligatoria/);
   });
 });

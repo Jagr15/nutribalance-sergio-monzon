@@ -5,6 +5,7 @@ import {
   enrichIngresosPtPorProducto,
   getPresupuestoEstado,
   hasRubroFinancieroErrors,
+  loadRubrosFinancieros,
   normalizeRubroFinancieroInput,
   sortIngresosPtPorProducto,
   validateRubroFinancieroInput,
@@ -13,7 +14,7 @@ import {
 describe('finanzasDashboard', () => {
   it('valida rubros y detecta duplicados sin depender de mayúsculas', () => {
     const errors = validateRubroFinancieroInput(
-      { nombre: '  materia prima ', tipo: 'EGRESO', activo: true },
+      { nombre: '  materia prima ', tipo: 'EGRESO', activo: true, area: 'Operación' },
       [
         { id: '1', nombre: 'Materia Prima', tipo: 'VARIABLE', activo: true, editable: false, origen: 'base' },
       ],
@@ -29,21 +30,32 @@ describe('finanzasDashboard', () => {
         nombre: '  Gastos   generales ',
         tipo: 'INGRESO',
         activo: true,
+        area: 'Finanzas',
       }),
     ).toEqual({
       nombre: 'Gastos generales',
       tipo: 'INGRESO',
       activo: true,
+      area: 'Finanzas',
     });
   });
 
   it('rechaza tipos de rubro vacíos', () => {
     const errors = validateRubroFinancieroInput(
-      { nombre: 'Rubro raro', tipo: '' as never, activo: true },
+      { nombre: 'Rubro raro', tipo: '' as never, activo: true, area: 'Finanzas' },
       [],
     );
 
     expect(errors.tipo).toBe('Selecciona un tipo de rubro.');
+  });
+
+  it('rechaza rubros sin área', () => {
+    const errors = validateRubroFinancieroInput(
+      { nombre: 'Rubro raro', tipo: 'EGRESO', activo: true, area: '' },
+      [],
+    );
+
+    expect(errors.area).toBe('Selecciona un área.');
   });
 
   it('clasifica el estado del presupuesto', () => {
@@ -111,5 +123,31 @@ describe('finanzasDashboard', () => {
     expect(result.impacto_costo).toBe(500);
     expect(result.impacto_utilidad).toBe(-500);
     expect(result.margen_nuevo_pct).toBeLessThan(result.margen_actual_pct);
+  });
+
+  it('usa Finanzas como fallback si falta área en mock/local', () => {
+    const originalWindow = globalThis.window;
+    const storage = new Map<string, string>();
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value);
+          },
+        },
+      },
+    });
+
+    storage.set(
+      'nutribalance_finanzas_rubros_v1',
+      JSON.stringify([{ id: '1', nombre: 'Rubro sin área', tipo: 'VARIABLE', activo: true, editable: true, origen: 'personalizado' }]),
+    );
+
+    const rows = loadRubrosFinancieros();
+    expect(rows.find((row) => row.id === '1')?.area).toBe('Finanzas');
+
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
   });
 });

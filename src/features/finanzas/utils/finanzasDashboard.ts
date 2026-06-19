@@ -20,12 +20,13 @@ export interface RubroFinancieroFormValues {
   nombre: string;
   tipo: 'INGRESO' | 'EGRESO' | '';
   activo: boolean;
-  area?: string;
+  area: string;
 }
 
 export interface RubroFinancieroFormErrors {
   nombre?: string;
   tipo?: string;
+  area?: string;
   general?: string;
 }
 
@@ -67,6 +68,9 @@ export interface MateriaPrimaSimulationResult {
   margen_nuevo_pct: number;
 }
 
+export const RUBRO_AREA_OPTIONS = ['Finanzas', 'Producción', 'Inventario', 'Comercial', 'Administración', 'Operación'] as const;
+export const RUBRO_AREA_DEFAULT = 'Finanzas';
+
 const BASE_RUBROS: RubroFinancieroAdmin[] = [
   { id: 'base-materia-prima', nombre: 'Materia prima', tipo: 'VARIABLE', activo: true, editable: true, origen: 'base', area: 'Operaciones' },
   { id: 'base-produccion', nombre: 'Producción', tipo: 'MIXTO', activo: true, editable: true, origen: 'base', area: 'Operaciones' },
@@ -74,7 +78,7 @@ const BASE_RUBROS: RubroFinancieroAdmin[] = [
   { id: 'base-servicios', nombre: 'Servicios', tipo: 'FIJO', activo: true, editable: true, origen: 'base', area: 'Administración' },
   { id: 'base-logistica', nombre: 'Logística', tipo: 'VARIABLE', activo: true, editable: true, origen: 'base', area: 'Operaciones' },
   { id: 'base-marketing', nombre: 'Marketing', tipo: 'VARIABLE', activo: true, editable: true, origen: 'base', area: 'Comercial' },
-  { id: 'base-otros', nombre: 'Otros', tipo: 'MIXTO', activo: true, editable: true, origen: 'base', area: null },
+  { id: 'base-otros', nombre: 'Otros', tipo: 'MIXTO', activo: true, editable: true, origen: 'base', area: RUBRO_AREA_DEFAULT },
 ];
 
 const cleanText = (value: string) => value.trim().replace(/\s+/g, ' ');
@@ -101,7 +105,7 @@ const sanitizeRubro = (value: unknown, fallback: RubroFinancieroAdmin): RubroFin
     activo: typeof candidate.activo === 'boolean' ? candidate.activo : fallback.activo,
     editable: typeof candidate.editable === 'boolean' ? candidate.editable : fallback.editable,
     origen: candidate.origen === 'personalizado' ? 'personalizado' : fallback.origen,
-    area: typeof candidate.area === 'string' ? cleanText(candidate.area) : fallback.area ?? null,
+    area: typeof candidate.area === 'string' && cleanText(candidate.area) ? cleanText(candidate.area) : RUBRO_AREA_DEFAULT,
     categoria_financiera_id: typeof candidate.categoria_financiera_id === 'string' ? candidate.categoria_financiera_id : fallback.categoria_financiera_id ?? null,
   };
 };
@@ -173,6 +177,7 @@ export const normalizeRubroFinancieroInput = (input: RubroFinancieroFormValues):
   nombre: cleanText(input.nombre),
   tipo: input.tipo,
   activo: Boolean(input.activo),
+  area: cleanText(input.area),
 });
 
 export const validateRubroFinancieroInput = (
@@ -194,6 +199,12 @@ export const validateRubroFinancieroInput = (
 
   if (!tipo) {
     errors.tipo = 'Selecciona un tipo de rubro.';
+  }
+
+  if (!normalized.area) {
+    errors.area = 'Selecciona un área.';
+  } else if (!RUBRO_AREA_OPTIONS.includes(normalized.area as (typeof RUBRO_AREA_OPTIONS)[number])) {
+    errors.area = 'Selecciona un área válida.';
   }
 
   const duplicate = existingRows.find((row) => normalizeKey(row.nombre) === normalizeKey(normalized.nombre) && row.id !== editingId);
@@ -219,7 +230,7 @@ export const upsertRubroFinanciero = (
     activo: normalized.activo,
     editable: true,
     origen: 'personalizado',
-    area: normalized.area?.trim() || null,
+    area: normalized.area.trim(),
   };
 
   const validated = validateRubroFinancieroInput(normalized, existingRows, editingId);

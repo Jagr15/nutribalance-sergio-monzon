@@ -14,6 +14,8 @@ import {
   buildMateriaPrimaSimulation,
   enrichIngresosPtPorProducto,
   getPresupuestoEstado,
+  RUBRO_AREA_DEFAULT,
+  RUBRO_AREA_OPTIONS,
   normalizeRubroFinancieroInput,
   sortIngresosPtPorProducto,
   type IngresoPtSortMode,
@@ -83,7 +85,7 @@ const FinanzasPage = () => {
   const [variacionesSort, setVariacionesSort] = useState<(typeof variacionesSortOptions)[number]['value']>('desviacion');
   const [ingresosSort, setIngresosSort] = useState<IngresoPtSortMode>('venta_real');
   const [rubrosFinancieros, setRubrosFinancieros] = useState<RubroFinancieroAdmin[]>([]);
-  const [rubroForm, setRubroForm] = useState<RubroFinancieroFormValues>({ nombre: '', tipo: '', activo: true, area: '' });
+  const [rubroForm, setRubroForm] = useState<RubroFinancieroFormValues>({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
   const [editingRubroId, setEditingRubroId] = useState<string | null>(null);
   const [rubroError, setRubroError] = useState<string | null>(null);
   const [rubrosSavedMessage, setRubrosSavedMessage] = useState<string | null>(null);
@@ -201,7 +203,7 @@ const FinanzasPage = () => {
         nombre: normalized.nombre,
         tipo: normalized.tipo,
         activo: normalized.activo,
-        area: normalized.area?.trim() || null,
+        area: normalized.area,
       });
       setRubrosFinancieros((current) => {
         const row = {
@@ -217,7 +219,7 @@ const FinanzasPage = () => {
         return current.some((item) => item.id === saved.id) ? current.map((item) => (item.id === saved.id ? row : item)) : [...current, row];
       });
       setRubrosSavedMessage(editingRubroId ? 'Rubro actualizado correctamente.' : 'Rubro creado correctamente.');
-      setRubroForm({ nombre: '', tipo: '', activo: true, area: '' });
+      setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
       setEditingRubroId(null);
     } catch (error: unknown) {
       setRubroError(error instanceof Error ? error.message : 'No se pudo guardar el rubro.');
@@ -226,11 +228,11 @@ const FinanzasPage = () => {
 
   const handleEditRubro = (rubro: RubroFinancieroAdmin) => {
     setEditingRubroId(rubro.id);
-      setRubroForm({
-        nombre: rubro.nombre,
+    setRubroForm({
+      nombre: rubro.nombre,
       tipo: toFormularioTipo(rubro.tipo),
       activo: rubro.activo,
-      area: rubro.area ?? '',
+      area: rubro.area ?? RUBRO_AREA_DEFAULT,
     });
     setRubroError(null);
     setRubrosSavedMessage(null);
@@ -401,7 +403,7 @@ const FinanzasPage = () => {
               type="button"
               onClick={() => {
                 setEditingRubroId(null);
-                setRubroForm({ nombre: '', tipo: '', activo: true });
+                setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
                 setRubroError(null);
                 setRubrosSavedMessage(null);
               }}
@@ -488,7 +490,7 @@ const FinanzasPage = () => {
                   type="button"
                   onClick={() => {
                     setEditingRubroId(null);
-                    setRubroForm({ nombre: '', tipo: '', activo: true });
+                    setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
                     setRubroError(null);
                   }}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
@@ -511,8 +513,8 @@ const FinanzasPage = () => {
 
                 <label className="block">
                   <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Tipo</span>
-                    <select
-                      value={rubroForm.tipo}
+                  <select
+                    value={rubroForm.tipo}
                     onChange={(event) => setRubroForm((current) => ({ ...current, tipo: event.target.value as 'INGRESO' | 'EGRESO' | '' }))}
                     className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
                   >
@@ -520,6 +522,21 @@ const FinanzasPage = () => {
                     {rubroTipoOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Área</span>
+                  <select
+                    value={rubroForm.area}
+                    onChange={(event) => setRubroForm((current) => ({ ...current, area: event.target.value }))}
+                    className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+                  >
+                    {RUBRO_AREA_OPTIONS.map((area) => (
+                      <option key={area} value={area}>
+                        {area}
                       </option>
                     ))}
                   </select>
