@@ -7,6 +7,7 @@ import { LoadingState } from '../../../shared/components/table';
 import { ROUTES } from '../../../app/config/routes';
 import { useAlertas } from '../../alertas/hooks/useAlertas';
 import type { AlertaOperativa } from '../../alertas/types/alerta';
+import { BrandLogo } from '../../../shared/components/BrandLogo';
 import { useDashboardOperativo } from '../hooks/useDashboardOperativo';
 import { ApiService } from '../../../infrastructure/api';
 import type { Cliente } from '../../clientes/types/cliente';
@@ -415,9 +416,14 @@ export const DashboardPage = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <Card>
-        <p className="text-xs uppercase tracking-widest text-cyan-300">Dashboard Ejecutivo</p>
-        <h1 className="text-3xl font-black mt-1">Centro Ejecutivo de Dirección</h1>
-        <p className="text-sm text-slate-500 mt-2">Vista consolidada de Producción, Inventario, Finanzas y Alertas Operativas.</p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-cyan-300">Dashboard Ejecutivo</p>
+            <h1 className="text-3xl font-black mt-1">Centro Ejecutivo de Dirección</h1>
+            <p className="text-sm text-slate-500 mt-2">Vista consolidada de Producción, Inventario, Finanzas y Alertas Operativas.</p>
+          </div>
+          <BrandLogo variant="full" className="max-w-[220px] self-start md:self-center" />
+        </div>
       </Card>
 
       {dashboardErrors.length > 0 ? (

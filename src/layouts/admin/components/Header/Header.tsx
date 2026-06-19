@@ -4,6 +4,7 @@ import { getSessionUser } from "../../../../features/auth/session";
 import { useAlertas } from "../../../../features/alertas/hooks/useAlertas";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../../app/config/routes";
+import { BrandLogo } from "../../../../shared/components/BrandLogo";
 
 const getPriorityColor = (priority: string) => {
   if (priority === "critica") return "#f87171";
@@ -64,9 +65,12 @@ export const Header = () => {
 
   return (
     <header className="min-h-[72px] md:h-[80px] border-b border-slate-200 flex items-center justify-between px-4 md:px-8 py-3 bg-white gap-3">
-      <div>
-        <h2 className="text-xl md:text-2xl font-bold">Nutribalance</h2>
-        <p className="hidden md:block text-sm text-slate-500">Sistema de Producción e Inventario</p>
+      <div className="flex items-center gap-3 min-w-0">
+        <BrandLogo variant="compact" className="shrink-0" />
+        <div className="min-w-0">
+          <h2 className="text-xl md:text-2xl font-bold truncate">Nutribalance</h2>
+          <p className="hidden md:block text-sm text-slate-500">Sistema de Producción e Inventario</p>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 md:gap-5">

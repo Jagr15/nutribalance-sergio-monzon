@@ -10,6 +10,7 @@ import type { IconType } from "react-icons";
 import { clearSession, getSessionUser } from "../../../../features/auth/session";
 import { usePermissions } from "../../../../features/auth/usePermissions";
 import type { AppModule } from "../../../../features/auth/permissions";
+import { BrandLogo } from "../../../../shared/components/BrandLogo";
 
 interface SidebarItem {
   name: string;
@@ -94,11 +95,9 @@ export const Sidebar = () => {
       {/* LOGO: Se mantiene fijo arriba */}
       <div className="px-4 md:px-5 py-4 md:py-5 border-b border-slate-200 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white text-lg font-bold">
-            N
-          </div>
-          <div>
-            <h1 className="text-[15px] font-semibold text-slate-900">Nutribalance</h1>
+          <BrandLogo variant="icon" className="lg:hidden shrink-0" />
+          <BrandLogo variant="full" className="hidden lg:inline-flex max-w-[150px]" />
+          <div className="hidden lg:block">
             <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Producción e Inventario</p>
           </div>
         </div>
