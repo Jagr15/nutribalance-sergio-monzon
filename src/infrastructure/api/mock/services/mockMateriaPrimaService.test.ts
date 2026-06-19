@@ -10,7 +10,7 @@ import { mockMateriaPrimaService } from './mockMateriaPrimaService';
 describe('mockMateriaPrimaService', () => {
   it('permite lotes repetidos y consolida el resumen por insumo', async () => {
     const baseResumen = await mockMateriaPrimaService.getResumen();
-    const baseRow = baseResumen[0];
+    const baseRow = baseResumen.find((row) => row.insumo_id === 'i-4');
     expect(baseRow).toBeDefined();
 
     await mockMateriaPrimaService.create({
@@ -40,7 +40,7 @@ describe('mockMateriaPrimaService', () => {
     })).resolves.toMatchObject({ lote: 'L-TEST-REPETIDO' });
 
     const updatedResumen = await mockMateriaPrimaService.getResumen();
-    const updatedRow = updatedResumen[0];
+    const updatedRow = updatedResumen.find((row) => row.insumo_id === 'i-4');
 
     expect(updatedRow).toBeDefined();
     expect((updatedRow?.stock_actual ?? 0) - (baseRow?.stock_actual ?? 0)).toBe(20);

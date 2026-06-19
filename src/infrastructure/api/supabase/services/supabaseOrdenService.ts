@@ -43,6 +43,7 @@ interface FormulaIngredienteRow {
 interface StockLotesForFlowRow {
   id: string;
   legacy_uid: string | null;
+  insumo_id: string;
   lote: string;
   fecha_ingreso: string;
   cantidad_actual: number;
@@ -254,17 +255,18 @@ const getFormulaIngredientes = async (formulaId: string): Promise<Ingrediente[]>
 const getStockLotesForFlow = async (): Promise<StockLoteForFlow[]> => {
   const { data, error } = await supabaseClient
     .from('stock_lotes_mp')
-    .select('id,legacy_uid,lote,fecha_ingreso,cantidad_actual,cantidad_comprometida,costo_unitario,insumos(legacy_uid,nombre)')
+    .select('id,legacy_uid,insumo_id,lote,fecha_ingreso,cantidad_actual,cantidad_comprometida,costo_unitario,insumos(legacy_uid,nombre)')
     .is('deleted_at', null);
 
   if (error) throw error;
 
   return ((data ?? []) as unknown as StockLotesForFlowRow[]).map((row) => {
-    const insumo = row.insumos?.[0];
+    const insumo = Array.isArray(row.insumos) ? row.insumos[0] : row.insumos;
     return {
       id: row.id,
       legacy_uid: row.legacy_uid,
       lote: row.lote,
+      insumo_id: row.insumo_id,
       insumo_legacy_uid: insumo?.legacy_uid ?? '',
       insumo_nombre: insumo?.nombre ?? 'Insumo',
       fecha_ingreso: row.fecha_ingreso,

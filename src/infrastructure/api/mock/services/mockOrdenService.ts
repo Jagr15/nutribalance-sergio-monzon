@@ -59,6 +59,7 @@ const buildStockLotesForFlow = async (): Promise<StockLoteForFlow[]> => {
     id: lote.uid,
     legacy_uid: lote.uid,
     lote: lote.lote,
+    insumo_id: lote.id_insumo,
     insumo_legacy_uid: lote.id_insumo,
     insumo_nombre: insumoNombreById.get(lote.id_insumo) ?? lote.id_insumo,
     fecha_ingreso: new Date(lote.fecha_ingreso).toISOString(),

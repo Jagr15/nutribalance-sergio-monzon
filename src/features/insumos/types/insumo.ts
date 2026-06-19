@@ -40,6 +40,7 @@ export interface Insumo {
 
 export interface StockMateriaPrima {
     uid: string;
+    insumo_id?: string;
     id_insumo: string;
     id_proveedor: string;
     lote: string;

@@ -36,7 +36,7 @@ export const useCalculoOrden = () => {
         const lotesDelInsumo = todosLosLotes
           .filter(lote => {
             const disponible = lote.cantidad_actual - (lote.cantidad_comprometida || 0);
-            return lote.id_insumo === ingrediente.id_insumo && disponible > 0;
+            return (lote.insumo_id === ingrediente.id_insumo || lote.id_insumo === ingrediente.id_insumo) && disponible > 0;
           })
           .sort((a, b) => new Date(a.fecha_ingreso).getTime() - new Date(b.fecha_ingreso).getTime());
 

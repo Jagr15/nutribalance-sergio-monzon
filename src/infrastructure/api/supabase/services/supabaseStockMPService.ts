@@ -11,6 +11,7 @@ import { supabaseClient } from '../client';
 
 interface StockLoteRow {
   legacy_uid: string | null;
+  insumo_id: string;
   lote: string;
   remito_nro: string;
   ubicacion: string;
@@ -64,6 +65,7 @@ interface UltimoPrecioRow {
 
 const mapStock = (row: StockLoteRow): StockMateriaPrima => ({
   uid: row.legacy_uid ?? crypto.randomUUID(),
+  insumo_id: row.insumo_id,
   id_insumo: row.insumos?.legacy_uid ?? '',
   id_proveedor: row.proveedores?.legacy_uid ?? '',
   lote: row.lote,
@@ -85,7 +87,7 @@ export const supabaseStockMPService = {
     const { data, error } = await supabaseClient
       .from('stock_lotes_mp')
       .select(
-        'legacy_uid,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid),proveedores(legacy_uid),usuarios(legacy_uid)'
+        'legacy_uid,insumo_id,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid),proveedores(legacy_uid),usuarios(legacy_uid)'
       )
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
@@ -215,7 +217,7 @@ export const supabaseStockMPService = {
         id_usuario: usuario?.id ?? null,
       })
       .select(
-        'legacy_uid,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid),proveedores(legacy_uid),usuarios(legacy_uid)'
+        'legacy_uid,insumo_id,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid),proveedores(legacy_uid),usuarios(legacy_uid)'
       )
       .single();
 

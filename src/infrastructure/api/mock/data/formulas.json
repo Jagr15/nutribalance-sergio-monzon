@@ -785,5 +785,90 @@
       "Sin costo disponible para Núcleo Crianza.",
       "Sin costo disponible para Alfa."
     ]
+  },
+  {
+    "uid": "for-008",
+    "nombre_producto": "Engorde Plus",
+    "version": 3,
+    "esta_activa": true,
+    "ultima_edicion": "2026-06-18T00:00:00.000Z",
+    "id_usuario": "usr-101",
+    "author": "Sergio Monzón",
+    "createdAt": "2026-06-18T00:00:00.000Z",
+    "ingredientes": [
+      {
+        "id_insumo": "i-6",
+        "nombre_insumo": "Maíz",
+        "porcentaje": 51.5,
+        "aporte_proteina_pct": 4.12,
+        "aporte_proteina_g_kg": 41.2,
+        "costo_unitario_usado": 272,
+        "costo_contribucion_kg": 140.08,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-1",
+        "nombre_insumo": "Soja Harina HP",
+        "porcentaje": 2.5,
+        "aporte_proteina_pct": 1.225,
+        "aporte_proteina_g_kg": 12.25,
+        "costo_unitario_usado": 423.355,
+        "costo_contribucion_kg": 10.583875,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-3",
+        "nombre_insumo": "Afrechillo",
+        "porcentaje": 29.2,
+        "aporte_proteina_pct": 4.672,
+        "aporte_proteina_g_kg": 46.72,
+        "costo_unitario_usado": 215,
+        "costo_contribucion_kg": 62.78,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-4",
+        "nombre_insumo": "Sal",
+        "porcentaje": 0.6,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 79,
+        "costo_contribucion_kg": 0.474,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-5",
+        "nombre_insumo": "Núcleo",
+        "porcentaje": 0.2,
+        "aporte_proteina_pct": 0,
+        "aporte_proteina_g_kg": 0,
+        "costo_unitario_usado": 4393.5,
+        "costo_contribucion_kg": 8.787,
+        "fuente_costo": "REFERENCIA"
+      },
+      {
+        "id_insumo": "i-11",
+        "nombre_insumo": "Cáscara de Soja",
+        "porcentaje": 16.0,
+        "aporte_proteina_pct": 1.65,
+        "aporte_proteina_g_kg": 16.5,
+        "costo_unitario_usado": 0,
+        "costo_contribucion_kg": 0,
+        "fuente_costo": "SIN_COSTO"
+      }
+    ],
+    "proteina_calculada_pct": 12.667,
+    "costo_total": 222625.0,
+    "costo_por_kg": 222.625,
+    "costo_por_tonelada": 222625,
+    "advertencias_nutricionales": [
+      "Falta PB en Sal",
+      "Falta PB en Núcleo",
+      "Falta PB en Cáscara de Soja"
+    ],
+    "advertencias_costos": [
+      "Sin costo disponible para Cáscara de Soja.",
+      "Sin costo disponible para Cáscara de Soja."
+    ]
   }
 ]

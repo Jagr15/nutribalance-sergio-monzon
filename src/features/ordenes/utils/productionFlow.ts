@@ -5,6 +5,7 @@ export interface StockLoteForFlow {
   id: string;
   legacy_uid?: string | null;
   lote: string;
+  insumo_id?: string;
   insumo_legacy_uid: string;
   insumo_nombre: string;
   fecha_ingreso: string;
@@ -47,7 +48,7 @@ export const planFifoConsumption = (
     let pendiente = requerida;
 
     const lotesInsumo = lotes
-      .filter((l) => l.insumo_legacy_uid === ingrediente.id_insumo)
+      .filter((l) => l.insumo_id === ingrediente.id_insumo || l.insumo_legacy_uid === ingrediente.id_insumo)
       .sort((a, b) => new Date(a.fecha_ingreso).getTime() - new Date(b.fecha_ingreso).getTime());
 
     for (const lote of lotesInsumo) {

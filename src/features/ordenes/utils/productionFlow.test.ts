@@ -60,6 +60,41 @@ describe('productionFlow - FIFO plan', () => {
     expect(maiz[1].cantidad_usada).toBeCloseTo(100, 6);
   });
 
+  it('prioriza insumo_id UUID y mantiene fallback legacy', () => {
+    const uuidLotes: StockLoteForFlow[] = [
+      {
+        id: 'db-uuid-1',
+        legacy_uid: 'stk-uuid-1',
+        lote: 'L1',
+        insumo_id: 'i-1',
+        insumo_legacy_uid: 'legacy-maiz',
+        insumo_nombre: 'Maíz',
+        fecha_ingreso: '2026-01-01T00:00:00Z',
+        cantidad_actual: 200,
+        cantidad_comprometida: 0,
+        costo_unitario: 1,
+      },
+      {
+        id: 'db-legacy-1',
+        legacy_uid: 'stk-legacy-1',
+        lote: 'L2',
+        insumo_legacy_uid: 'i-2',
+        insumo_nombre: 'Soja',
+        fecha_ingreso: '2026-01-02T00:00:00Z',
+        cantidad_actual: 200,
+        cantidad_comprometida: 0,
+        costo_unitario: 1,
+      },
+    ];
+
+    const result = planFifoConsumption(100, ingredientes, uuidLotes);
+
+    expect(result.stockSuficiente).toBe(true);
+    expect(result.faltantes).toHaveLength(0);
+    expect(result.detalle.some((d) => d.id_insumo === 'i-1')).toBe(true);
+    expect(result.detalle.some((d) => d.id_insumo === 'i-2')).toBe(true);
+  });
+
   it('retorna error lógico por stock insuficiente', () => {
     const result = planFifoConsumption(4000, ingredientes, lotes);
 

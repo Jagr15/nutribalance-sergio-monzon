@@ -64,7 +64,10 @@ export const restoreMockStockSnapshot = (snapshot: {
 
 const findLoteIndexByReference = (reference: string) => {
   const normalized = reference.trim().toUpperCase();
-  return stockDB.findIndex((lote) => lote.uid === reference || lote.lote.toUpperCase() === normalized);
+  return stockDB.findIndex((lote) => {
+    const loteInsumoId = lote.insumo_id ?? lote.id_insumo;
+    return lote.uid === reference || lote.lote.toUpperCase() === normalized || loteInsumoId === reference;
+  });
 };
 
 const applyDetalleToStock = (
@@ -210,6 +213,7 @@ export const mockMateriaPrimaService = {
       // Creamos el lote limpio: sin operaciones de consumo iniciales
       const nuevoLote: StockMateriaPrima = {
         uid: `stk-${Math.random().toString(36).substr(2, 9)}`,
+        insumo_id: data.id_insumo,
         id_insumo: data.id_insumo,
         id_proveedor: data.id_proveedor,
         lote: data.lote.toUpperCase(),

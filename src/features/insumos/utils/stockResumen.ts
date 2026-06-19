@@ -23,9 +23,10 @@ export const buildStockMPResumen = (
   const grouped = new Map<string, StockMateriaPrima[]>();
 
   lotes.forEach((lote) => {
-    const current = grouped.get(lote.id_insumo) ?? [];
+    const insumoId = lote.insumo_id ?? lote.id_insumo;
+    const current = grouped.get(insumoId) ?? [];
     current.push(lote);
-    grouped.set(lote.id_insumo, current);
+    grouped.set(insumoId, current);
   });
 
   return [...grouped.entries()].map(([insumoId, lotesInsumo]) => {
