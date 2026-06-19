@@ -43,10 +43,9 @@ const ingresosSortOptions: Array<{ value: IngresoPtSortMode; label: string }> = 
   { value: 'alfabetico', label: 'Alfabético' },
 ];
 
-const rubroTipoOptions: Array<{ value: RubroFinancieroTipo; label: string }> = [
-  { value: 'FIJO', label: 'Fijo' },
-  { value: 'VARIABLE', label: 'Variable' },
-  { value: 'MIXTO', label: 'Mixto' },
+const rubroTipoOptions: Array<{ value: 'INGRESO' | 'EGRESO'; label: string }> = [
+  { value: 'INGRESO', label: 'Ingreso' },
+  { value: 'EGRESO', label: 'Egreso' },
 ];
 
 const toFormularioTipo = (tipo: RubroFinancieroTipo): 'INGRESO' | 'EGRESO' => (tipo === 'FIJO' ? 'INGRESO' : 'EGRESO');

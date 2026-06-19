@@ -37,6 +37,15 @@ describe('finanzasDashboard', () => {
     });
   });
 
+  it('rechaza tipos de rubro vacíos', () => {
+    const errors = validateRubroFinancieroInput(
+      { nombre: 'Rubro raro', tipo: '' as never, activo: true },
+      [],
+    );
+
+    expect(errors.tipo).toBe('Selecciona un tipo de rubro.');
+  });
+
   it('clasifica el estado del presupuesto', () => {
     expect(getPresupuestoEstado(100, 80)).toBe('OK');
     expect(getPresupuestoEstado(100, 95)).toBe('Atención');

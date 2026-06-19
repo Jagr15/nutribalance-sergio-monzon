@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockFrom } = vi.hoisted(() => ({ mockFrom: vi.fn() }));
 vi.mock('../../../infrastructure/api/supabase/client', () => ({ supabaseClient: { from: mockFrom } }));
+vi.mock('../../../infrastructure/api/runtimeConfig', () => ({ runtimeConfig: { mode: 'mock' } }));
 
 import { finanzasService } from './finanzasService';
 
@@ -42,5 +43,15 @@ describe('finanzasService', () => {
 
     const rows = await finanzasService.getCostosComparativos();
     expect(rows[0].variacion_pct).toBe(20);
+  });
+
+  it('crea rubro con tipo válido en mock', async () => {
+    const rubro = await finanzasService.saveRubroFinanciero({ nombre: 'Gastos legales', tipo: 'EGRESO', activo: true, area: 'Administración' });
+    expect(rubro.tipo).toBe('EGRESO');
+    expect(rubro.nombre).toBe('Gastos legales');
+  });
+
+  it('rechaza tipo inválido al guardar rubro', async () => {
+    await expect(finanzasService.saveRubroFinanciero({ nombre: 'Rubro raro', tipo: 'MIXTO' as never, activo: true, area: null })).rejects.toThrow(/Ingreso o Egreso/);
   });
 });

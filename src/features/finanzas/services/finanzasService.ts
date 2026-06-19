@@ -126,6 +126,22 @@ const sum = (values: number[]) => values.reduce((acc, value) => acc + value, 0);
 const num = (value: unknown) => Number(value ?? 0);
 const rubrosStorageKey = 'nutribalance_categorias_financieras_v1';
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+const allowedTipoMovimientos = new Set(['INGRESO', 'EGRESO']);
+
+const formatDbError = (action: string, error: unknown) => {
+  if (error && typeof error === 'object') {
+    const maybe = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const message = [
+      `No se pudo ${action}.`,
+      typeof maybe.message === 'string' ? maybe.message : null,
+      typeof maybe.details === 'string' ? maybe.details : null,
+      typeof maybe.hint === 'string' ? maybe.hint : null,
+      typeof maybe.code === 'string' ? `código ${maybe.code}` : null,
+    ].filter(Boolean).join(' ');
+    return message || `No se pudo ${action}.`;
+  }
+  return `No se pudo ${action}.`;
+};
 
 const defaultRubros = (): RubroFinancieroCatalogo[] => [
   { id: 'cat-materia-prima', nombre: 'Materia prima', tipo: 'EGRESO', activo: true, area: 'Operaciones' },
@@ -327,7 +343,7 @@ export const finanzasService = {
   async saveRubroFinanciero(payload: { id?: string; nombre: string; tipo: 'INGRESO' | 'EGRESO'; activo: boolean; area?: string | null }): Promise<RubroFinancieroCatalogo> {
     const nombre = payload.nombre.trim();
     if (!nombre) throw new Error('El nombre del rubro es obligatorio.');
-    if (!payload.tipo) throw new Error('El tipo del rubro es obligatorio.');
+    if (!allowedTipoMovimientos.has(payload.tipo)) throw new Error('El tipo del rubro debe ser Ingreso o Egreso.');
 
     if (runtimeConfig.mode === 'mock') {
       const rows = readMockRubros();
@@ -352,7 +368,10 @@ export const finanzasService = {
           .select('id,legacy_uid,nombre,tipo_movimiento,area,deleted_at')
           .single<CategoriaFinancieraDbRow>();
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.error('[finanzas] rubro save failed', { action: payload.id ? 'update' : 'create', payload, error });
+      throw new Error(formatDbError(payload.id ? 'actualizar el rubro' : 'guardar el rubro', error));
+    }
     return { id: data.id, nombre: data.nombre, tipo: data.tipo_movimiento, activo: data.deleted_at === null, area: data.area };
   },
 
@@ -365,7 +384,10 @@ export const finanzasService = {
       .from('categorias_financieras')
       .update({ deleted_at: activo ? null : new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', id);
-    if (error) throw error;
+    if (error) {
+      console.error('[finanzas] rubro toggle failed', { id, activo, error });
+      throw new Error(formatDbError(activo ? 'activar el rubro' : 'desactivar el rubro', error));
+    }
   },
 
   async createMovimiento(payload: CrearMovimientoPayload): Promise<void> {
