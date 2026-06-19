@@ -9,9 +9,9 @@ import type {
   PresupuestoVsRealRubro,
   ProyeccionFlujoRow,
   RubroFinanciero,
+  RubroFinancieroCatalogo,
 } from '../types';
 
-const rubros: RubroFinanciero[] = ['Compras MP', 'Producción', 'Logística', 'Nómina', 'Servicios', 'Marketing', 'Otros'];
 const num = (value: unknown) => Number(value ?? 0);
 const today = new Date();
 const currentYear = today.getFullYear();
@@ -67,6 +67,10 @@ export interface FlujoProjectionInputs {
   egresoPromedioDiario: number;
 }
 
+export interface BuildTesoreriaInputs {
+  rubros?: RubroFinancieroCatalogo[];
+}
+
 const monthKey = (isoLike: string) => {
   const d = new Date(isoLike);
   if (Number.isNaN(d.getTime())) return 'N/A';
@@ -76,6 +80,14 @@ const monthKey = (isoLike: string) => {
 const currentMonthKey = monthKey(today.toISOString());
 
 const normalize = (value: string | null | undefined) => (value ?? '').trim().toLowerCase();
+const resolveRubroNombre = (
+  row: Pick<FlujoCajaRubroRow, 'categoria' | 'centro_costo' | 'origen_operativo' | 'descripcion'>,
+  rubros: RubroFinancieroCatalogo[],
+) => {
+  const categoria = normalize(row.categoria);
+  const match = rubros.find((rubro) => normalize(rubro.nombre) === categoria && rubro.activo);
+  return match?.nombre ?? classifyRubro(row);
+};
 
 export const classifyRubro = (row: Pick<FlujoCajaRubroRow, 'categoria' | 'centro_costo' | 'origen_operativo' | 'descripcion'>): RubroFinanciero => {
   const categoria = normalize(row.categoria);
@@ -105,14 +117,15 @@ const pickClientName = (clienteId: string | null | undefined, tercero: string | 
 export const buildPresupuestoVsReal = (
   presupuestos: PresupuestoMensualRow[],
   movimientos: FlujoCajaRubroRow[],
+  rubros: RubroFinancieroCatalogo[] = [],
 ): { rows: PresupuestoVsRealRubro[]; warning: string | null } => {
   const egresos = movimientos.filter((movimiento) => movimiento.tipo === 'EGRESO');
-  const actualByRubro = new Map<RubroFinanciero, number>();
-  const historicByRubro = new Map<RubroFinanciero, number[]>();
-  const currentBudgetByRubro = new Map<RubroFinanciero, number>();
+  const actualByRubro = new Map<string, number>();
+  const historicByRubro = new Map<string, number[]>();
+  const currentBudgetByRubro = new Map<string, number>();
 
   egresos.forEach((movimiento) => {
-    const rubro = classifyRubro(movimiento);
+    const rubro = resolveRubroNombre(movimiento, rubros);
     const amount = num(movimiento.monto);
     const isCurrentMonth = monthKey(movimiento.fecha) === currentMonthKey;
     if (isCurrentMonth) {
@@ -126,26 +139,35 @@ export const buildPresupuestoVsReal = (
 
   presupuestos.forEach((row) => {
     if (row.anio !== currentYear || row.mes !== currentMonth) return;
-    const rubro = classifyRubro({
+    const rubro = resolveRubroNombre({
       categoria: row.categoria ?? null,
       centro_costo: row.centro_costo ?? null,
       origen_operativo: null,
       descripcion: row.categoria ?? row.centro_costo ?? 'presupuesto',
-    });
+    }, rubros);
     currentBudgetByRubro.set(rubro, (currentBudgetByRubro.get(rubro) ?? 0) + num(row.monto_presupuestado));
   });
 
-  const rows = rubros.map((rubro) => {
-    const presupuesto = currentBudgetByRubro.get(rubro) ?? 0;
-    const real = actualByRubro.get(rubro) ?? 0;
-    const historical = historicByRubro.get(rubro) ?? [];
+  const catalogo = rubros.length > 0 ? rubros : [
+    { id: 'Compras MP', nombre: 'Compras MP', tipo: 'EGRESO', activo: true },
+    { id: 'Producción', nombre: 'Producción', tipo: 'EGRESO', activo: true },
+    { id: 'Logística', nombre: 'Logística', tipo: 'EGRESO', activo: true },
+    { id: 'Nómina', nombre: 'Nómina', tipo: 'EGRESO', activo: true },
+    { id: 'Servicios', nombre: 'Servicios', tipo: 'EGRESO', activo: true },
+    { id: 'Marketing', nombre: 'Marketing', tipo: 'EGRESO', activo: true },
+    { id: 'Otros', nombre: 'Otros', tipo: 'EGRESO', activo: true },
+  ];
+  const rows = catalogo.map((rubro) => {
+    const presupuesto = currentBudgetByRubro.get(rubro.nombre) ?? 0;
+    const real = actualByRubro.get(rubro.nombre) ?? 0;
+    const historical = historicByRubro.get(rubro.nombre) ?? [];
     const generated = presupuesto <= 0 && historical.length > 0;
     const fallback = historical.length > 0 ? historical.reduce((acc, value) => acc + value, 0) / historical.length : 0;
     const finalBudget = presupuesto > 0 ? presupuesto : fallback;
     const variacionAbs = real - finalBudget;
     const variacionPct = finalBudget > 0 ? (variacionAbs / finalBudget) * 100 : 0;
     return {
-      rubro,
+      rubro: rubro.nombre,
       presupuesto: Number(finalBudget.toFixed(2)),
       real: Number(real.toFixed(2)),
       variacion_abs: Number(variacionAbs.toFixed(2)),
@@ -161,14 +183,14 @@ export const buildPresupuestoVsReal = (
 };
 
 export const buildGastosPorRubro = (movimientos: FlujoCajaRubroRow[]): GastoPorRubro[] => {
-  const totals = new Map<RubroFinanciero, number>();
+  const totals = new Map<string, number>();
   movimientos.filter((movimiento) => movimiento.tipo === 'EGRESO').forEach((movimiento) => {
-    const rubro = classifyRubro(movimiento);
+    const rubro = resolveRubroNombre(movimiento, []);
     totals.set(rubro, (totals.get(rubro) ?? 0) + num(movimiento.monto));
   });
   const total = Math.max(1, [...totals.values()].reduce((acc, value) => acc + value, 0));
-  const rows = rubros
-    .map((rubro) => ({ rubro, monto: Number((totals.get(rubro) ?? 0).toFixed(2)), porcentaje: Number((((totals.get(rubro) ?? 0) / total) * 100).toFixed(2)) }))
+  const rows = [...totals.entries()]
+    .map(([rubro, monto]) => ({ rubro, monto: Number(monto.toFixed(2)), porcentaje: Number(((monto / total) * 100).toFixed(2)) }))
     .filter((row) => row.monto > 0)
     .sort((a, b) => b.monto - a.monto);
   const roundedTotal = rows.reduce((acc, row) => acc + row.porcentaje, 0);
@@ -387,8 +409,9 @@ export const buildTesoreriaInsights = (
   ventasPT: MovimientoStockPT[],
   cheques: ChequeTesoreriaSourceRow[],
   saldoActual: number,
+  inputs: BuildTesoreriaInputs = {},
 ): FinanzasTesoreriaInsights => {
-  const presupuestoResult = buildPresupuestoVsReal(presupuestos, movimientos);
+  const presupuestoResult = buildPresupuestoVsReal(presupuestos, movimientos, inputs.rubros ?? []);
   const gastosPorRubro = buildGastosPorRubro(movimientos);
   const variacionesPorRubro = buildVariacionesPorRubro(presupuestoResult.rows);
   const carteraClientes = buildCarteraClientes(clientes, comprobantes, ventasPT);

@@ -46,13 +46,7 @@ export interface FinanzasReportes {
 }
 
 export type RubroFinanciero =
-  | 'Compras MP'
-  | 'Producción'
-  | 'Logística'
-  | 'Nómina'
-  | 'Servicios'
-  | 'Marketing'
-  | 'Otros';
+  string;
 
 export interface PresupuestoVsRealRubro {
   rubro: RubroFinanciero;
@@ -67,6 +61,14 @@ export interface GastoPorRubro {
   rubro: RubroFinanciero;
   monto: number;
   porcentaje: number;
+}
+
+export interface RubroFinancieroCatalogo {
+  id: string;
+  nombre: string;
+  tipo: 'INGRESO' | 'EGRESO';
+  activo: boolean;
+  area?: string | null;
 }
 
 export interface ClienteCarteraRow {

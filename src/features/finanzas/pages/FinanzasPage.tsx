@@ -14,20 +14,15 @@ import {
   buildMateriaPrimaSimulation,
   enrichIngresosPtPorProducto,
   getPresupuestoEstado,
-  hasRubroFinancieroErrors,
-  loadRubrosFinancieros,
   normalizeRubroFinancieroInput,
-  saveRubrosFinancieros,
   sortIngresosPtPorProducto,
-  toggleRubroFinanciero,
-  upsertRubroFinanciero,
-  validateRubroFinancieroInput,
   type IngresoPtSortMode,
   type MateriaPrimaSimulationResult,
   type RubroFinancieroAdmin,
   type RubroFinancieroFormValues,
   type RubroFinancieroTipo,
 } from '../utils/finanzasDashboard';
+import { finanzasService } from '../services/finanzasService';
 
 const rubroTipoLabels: Record<RubroFinancieroTipo, string> = {
   FIJO: 'Fijo',
@@ -53,6 +48,9 @@ const rubroTipoOptions: Array<{ value: RubroFinancieroTipo; label: string }> = [
   { value: 'VARIABLE', label: 'Variable' },
   { value: 'MIXTO', label: 'Mixto' },
 ];
+
+const toFormularioTipo = (tipo: RubroFinancieroTipo): 'INGRESO' | 'EGRESO' => (tipo === 'FIJO' ? 'INGRESO' : 'EGRESO');
+const toRubroTipo = (tipo: 'INGRESO' | 'EGRESO' | ''): RubroFinancieroTipo => (tipo === 'INGRESO' ? 'FIJO' : 'VARIABLE');
 
 const chartColors = ['#2563eb', '#0f766e', '#ea580c', '#7c3aed', '#d97706', '#db2777', '#64748b'];
 const PAGE_NOW = new Date().getTime();
@@ -85,8 +83,8 @@ const FinanzasPage = () => {
 
   const [variacionesSort, setVariacionesSort] = useState<(typeof variacionesSortOptions)[number]['value']>('desviacion');
   const [ingresosSort, setIngresosSort] = useState<IngresoPtSortMode>('venta_real');
-  const [rubrosFinancieros, setRubrosFinancieros] = useState<RubroFinancieroAdmin[]>(() => loadRubrosFinancieros());
-  const [rubroForm, setRubroForm] = useState<RubroFinancieroFormValues>({ nombre: '', tipo: '', activo: true });
+  const [rubrosFinancieros, setRubrosFinancieros] = useState<RubroFinancieroAdmin[]>([]);
+  const [rubroForm, setRubroForm] = useState<RubroFinancieroFormValues>({ nombre: '', tipo: '', activo: true, area: '' });
   const [editingRubroId, setEditingRubroId] = useState<string | null>(null);
   const [rubroError, setRubroError] = useState<string | null>(null);
   const [rubrosSavedMessage, setRubrosSavedMessage] = useState<string | null>(null);
@@ -97,8 +95,19 @@ const FinanzasPage = () => {
   const [simulatorError, setSimulatorError] = useState<string | null>(null);
 
   useEffect(() => {
-    saveRubrosFinancieros(rubrosFinancieros);
-  }, [rubrosFinancieros]);
+    void finanzasService.getRubrosFinancieros().then((rows) => {
+      setRubrosFinancieros(rows.map((row) => ({
+        id: row.id,
+        nombre: row.nombre,
+        tipo: row.tipo === 'INGRESO' ? 'FIJO' : 'VARIABLE',
+        activo: row.activo,
+        editable: true,
+        origen: 'personalizado',
+        area: row.area ?? null,
+        categoria_financiera_id: row.id,
+      })));
+    });
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -181,20 +190,35 @@ const FinanzasPage = () => {
     tesoreria.proyeccionFlujo.length > 0 ||
     tesoreria.alertasTesoreria.length > 0;
 
-  const handleRubroSubmit = () => {
+  const handleRubroSubmit = async () => {
     setRubroError(null);
     setRubrosSavedMessage(null);
     try {
       const normalized = normalizeRubroFinancieroInput(rubroForm);
-      const validation = validateRubroFinancieroInput(normalized, rubrosFinancieros, editingRubroId);
-      if (hasRubroFinancieroErrors(validation)) {
-        setRubroError(Object.values(validation).filter(Boolean).join(' '));
-        return;
-      }
-
-      setRubrosFinancieros((current) => upsertRubroFinanciero(current, normalized, editingRubroId));
+      if (!normalized.nombre) throw new Error('El nombre del rubro es obligatorio.');
+      if (!normalized.tipo) throw new Error('Selecciona ingreso o egreso.');
+      const saved = await finanzasService.saveRubroFinanciero({
+        id: editingRubroId ?? undefined,
+        nombre: normalized.nombre,
+        tipo: normalized.tipo,
+        activo: normalized.activo,
+        area: normalized.area?.trim() || null,
+      });
+      setRubrosFinancieros((current) => {
+        const row = {
+          id: saved.id,
+          nombre: saved.nombre,
+          tipo: toRubroTipo(saved.tipo),
+          activo: saved.activo,
+          editable: true,
+          origen: 'personalizado',
+          area: saved.area ?? null,
+          categoria_financiera_id: saved.id,
+        } satisfies RubroFinancieroAdmin;
+        return current.some((item) => item.id === saved.id) ? current.map((item) => (item.id === saved.id ? row : item)) : [...current, row];
+      });
       setRubrosSavedMessage(editingRubroId ? 'Rubro actualizado correctamente.' : 'Rubro creado correctamente.');
-      setRubroForm({ nombre: '', tipo: '', activo: true });
+      setRubroForm({ nombre: '', tipo: '', activo: true, area: '' });
       setEditingRubroId(null);
     } catch (error: unknown) {
       setRubroError(error instanceof Error ? error.message : 'No se pudo guardar el rubro.');
@@ -203,10 +227,11 @@ const FinanzasPage = () => {
 
   const handleEditRubro = (rubro: RubroFinancieroAdmin) => {
     setEditingRubroId(rubro.id);
-    setRubroForm({
-      nombre: rubro.nombre,
-      tipo: rubro.tipo,
+      setRubroForm({
+        nombre: rubro.nombre,
+      tipo: toFormularioTipo(rubro.tipo),
       activo: rubro.activo,
+      area: rubro.area ?? '',
     });
     setRubroError(null);
     setRubrosSavedMessage(null);
@@ -215,7 +240,9 @@ const FinanzasPage = () => {
   const handleToggleRubro = (rubro: RubroFinancieroAdmin) => {
     if (!rubro.activo && !window.confirm(`¿Activar el rubro ${rubro.nombre}?`)) return;
     if (rubro.activo && !window.confirm(`¿Seguro que deseas desactivar el rubro ${rubro.nombre}?`)) return;
-    setRubrosFinancieros((current) => toggleRubroFinanciero(current, rubro.id, !rubro.activo));
+    void finanzasService.toggleRubroFinanciero(rubro.id, !rubro.activo).then(() => {
+      setRubrosFinancieros((current) => current.map((item) => (item.id === rubro.id ? { ...item, activo: !rubro.activo } : item)));
+    });
     setRubrosSavedMessage(rubro.activo ? `Rubro ${rubro.nombre} desactivado.` : `Rubro ${rubro.nombre} activado.`);
   };
 
@@ -245,10 +272,17 @@ const FinanzasPage = () => {
 
       {canAccess('finanzas', 'register_financial_movement') ? (
         <Card>
-          <RegistrarMovimientoForm
-            onSubmit={async (payload) => {
-              await createMovimiento(payload);
-              await refresh();
+              <RegistrarMovimientoForm
+              rubros={rubrosFinancieros.filter((rubro) => rubro.activo).map((rubro) => ({
+                id: rubro.id,
+                nombre: rubro.nombre,
+                tipo: toFormularioTipo(rubro.tipo),
+                activo: rubro.activo,
+                area: rubro.area ?? null,
+              }))}
+              onSubmit={async (payload) => {
+                await createMovimiento(payload);
+                await refresh();
             }}
           />
         </Card>
@@ -478,9 +512,9 @@ const FinanzasPage = () => {
 
                 <label className="block">
                   <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Tipo</span>
-                  <select
-                    value={rubroForm.tipo}
-                    onChange={(event) => setRubroForm((current) => ({ ...current, tipo: event.target.value as RubroFinancieroTipo | '' }))}
+                    <select
+                      value={rubroForm.tipo}
+                    onChange={(event) => setRubroForm((current) => ({ ...current, tipo: event.target.value as 'INGRESO' | 'EGRESO' | '' }))}
                     className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
                   >
                     <option value="">Seleccionar tipo</option>

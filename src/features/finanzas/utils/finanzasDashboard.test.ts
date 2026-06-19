@@ -13,13 +13,13 @@ import {
 describe('finanzasDashboard', () => {
   it('valida rubros y detecta duplicados sin depender de mayúsculas', () => {
     const errors = validateRubroFinancieroInput(
-      { nombre: '  materia prima ', tipo: 'VARIABLE', activo: true },
+      { nombre: '  materia prima ', tipo: 'EGRESO', activo: true },
       [
         { id: '1', nombre: 'Materia Prima', tipo: 'VARIABLE', activo: true, editable: false, origen: 'base' },
       ],
     );
 
-    expect(errors.nombre).toBe('Ya existe un rubro con ese nombre.');
+    expect(errors.nombre).toBe('Ya existe un rubro con ese nombre para ese tipo.');
     expect(hasRubroFinancieroErrors(errors)).toBe(true);
   });
 
@@ -27,12 +27,12 @@ describe('finanzasDashboard', () => {
     expect(
       normalizeRubroFinancieroInput({
         nombre: '  Gastos   generales ',
-        tipo: 'FIJO',
+        tipo: 'INGRESO',
         activo: true,
       }),
     ).toEqual({
       nombre: 'Gastos generales',
-      tipo: 'FIJO',
+      tipo: 'INGRESO',
       activo: true,
     });
   });
@@ -104,4 +104,3 @@ describe('finanzasDashboard', () => {
     expect(result.margen_nuevo_pct).toBeLessThan(result.margen_actual_pct);
   });
 });
-

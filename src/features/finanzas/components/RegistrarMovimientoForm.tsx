@@ -1,14 +1,23 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { RubroFinancieroCatalogo } from '../types';
 
-export const RegistrarMovimientoForm = ({ onSubmit }: { onSubmit: (payload: { tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA'; descripcion: string; monto: number; origen_operativo: string }) => Promise<void> }) => {
+export const RegistrarMovimientoForm = ({
+  onSubmit,
+  rubros,
+}: {
+  onSubmit: (payload: { tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA'; descripcion: string; monto: number; origen_operativo: string; categoria_id?: string }) => Promise<void>;
+  rubros: RubroFinancieroCatalogo[];
+}) => {
   const isTipo = (value: string): value is 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA' =>
     value === 'INGRESO' || value === 'EGRESO' || value === 'TRANSFERENCIA';
   const [tipo, setTipo] = useState<'INGRESO' | 'EGRESO' | 'TRANSFERENCIA'>('EGRESO');
   const [descripcion, setDescripcion] = useState('');
   const [monto, setMonto] = useState('0');
   const [origen, setOrigen] = useState('MANUAL');
+  const [categoriaId, setCategoriaId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const rubrosActivos = useMemo(() => rubros.filter((rubro) => rubro.activo), [rubros]);
 
   return (
     <form
@@ -32,7 +41,7 @@ export const RegistrarMovimientoForm = ({ onSubmit }: { onSubmit: (payload: { ti
 
         try {
           setIsSubmitting(true);
-          await onSubmit({ tipo, descripcion: descripcionLimpia, monto: montoNum, origen_operativo: origen });
+          await onSubmit({ tipo, descripcion: descripcionLimpia, monto: montoNum, origen_operativo: origen, categoria_id: categoriaId || undefined });
           setDescripcion('');
           setMonto('0');
         } catch (error: unknown) {
@@ -71,6 +80,17 @@ export const RegistrarMovimientoForm = ({ onSubmit }: { onSubmit: (payload: { ti
         <option value="IMPUESTO">Impuesto</option>
         <option value="SERVICIO">Servicio</option>
       </select>
+      <select
+        value={categoriaId}
+        onChange={(e) => setCategoriaId(e.target.value)}
+        className="rounded-lg bg-white border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 md:col-span-2"
+      >
+        <option value="">{rubrosActivos.length > 0 ? 'Selecciona rubro' : 'Sin rubros activos'}</option>
+        {rubrosActivos.map((rubro) => (
+          <option key={rubro.id} value={rubro.id}>{rubro.nombre}</option>
+        ))}
+      </select>
+      {rubrosActivos.length === 0 ? <p className="md:col-span-5 text-xs text-amber-700">No hay rubros activos. El movimiento quedará sin categoría.</p> : null}
       <button type="submit" disabled={isSubmitting} className="rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-4 py-2 text-sm font-semibold md:col-span-5 transition-colors">
         {isSubmitting ? 'Registrando...' : 'Registrar movimiento'}
       </button>

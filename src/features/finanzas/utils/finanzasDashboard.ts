@@ -1,6 +1,7 @@
-import type { CostosFormulaVsReal } from '../types';
+import type { CostosFormulaVsReal, RubroFinancieroCatalogo } from '../types';
 
 const STORAGE_KEY = 'nutribalance_finanzas_rubros_v1';
+const CATALOGO_STORAGE_KEY = 'nutribalance_categorias_financieras_v1';
 
 export type RubroFinancieroTipo = 'FIJO' | 'VARIABLE' | 'MIXTO';
 
@@ -11,12 +12,15 @@ export interface RubroFinancieroAdmin {
   activo: boolean;
   editable: boolean;
   origen: 'base' | 'personalizado';
+  area?: string | null;
+  categoria_financiera_id?: string | null;
 }
 
 export interface RubroFinancieroFormValues {
   nombre: string;
-  tipo: RubroFinancieroTipo | '';
+  tipo: 'INGRESO' | 'EGRESO' | '';
   activo: boolean;
+  area?: string;
 }
 
 export interface RubroFinancieroFormErrors {
@@ -64,13 +68,13 @@ export interface MateriaPrimaSimulationResult {
 }
 
 const BASE_RUBROS: RubroFinancieroAdmin[] = [
-  { id: 'base-materia-prima', nombre: 'Materia prima', tipo: 'VARIABLE', activo: true, editable: true, origen: 'base' },
-  { id: 'base-produccion', nombre: 'Producción', tipo: 'MIXTO', activo: true, editable: true, origen: 'base' },
-  { id: 'base-nomina', nombre: 'Nómina', tipo: 'FIJO', activo: true, editable: true, origen: 'base' },
-  { id: 'base-servicios', nombre: 'Servicios', tipo: 'FIJO', activo: true, editable: true, origen: 'base' },
-  { id: 'base-logistica', nombre: 'Logística', tipo: 'VARIABLE', activo: true, editable: true, origen: 'base' },
-  { id: 'base-marketing', nombre: 'Marketing', tipo: 'VARIABLE', activo: true, editable: true, origen: 'base' },
-  { id: 'base-otros', nombre: 'Otros', tipo: 'MIXTO', activo: true, editable: true, origen: 'base' },
+  { id: 'base-materia-prima', nombre: 'Materia prima', tipo: 'VARIABLE', activo: true, editable: true, origen: 'base', area: 'Operaciones' },
+  { id: 'base-produccion', nombre: 'Producción', tipo: 'MIXTO', activo: true, editable: true, origen: 'base', area: 'Operaciones' },
+  { id: 'base-nomina', nombre: 'Nómina', tipo: 'FIJO', activo: true, editable: true, origen: 'base', area: 'Administración' },
+  { id: 'base-servicios', nombre: 'Servicios', tipo: 'FIJO', activo: true, editable: true, origen: 'base', area: 'Administración' },
+  { id: 'base-logistica', nombre: 'Logística', tipo: 'VARIABLE', activo: true, editable: true, origen: 'base', area: 'Operaciones' },
+  { id: 'base-marketing', nombre: 'Marketing', tipo: 'VARIABLE', activo: true, editable: true, origen: 'base', area: 'Comercial' },
+  { id: 'base-otros', nombre: 'Otros', tipo: 'MIXTO', activo: true, editable: true, origen: 'base', area: null },
 ];
 
 const cleanText = (value: string) => value.trim().replace(/\s+/g, ' ');
@@ -97,6 +101,8 @@ const sanitizeRubro = (value: unknown, fallback: RubroFinancieroAdmin): RubroFin
     activo: typeof candidate.activo === 'boolean' ? candidate.activo : fallback.activo,
     editable: typeof candidate.editable === 'boolean' ? candidate.editable : fallback.editable,
     origen: candidate.origen === 'personalizado' ? 'personalizado' : fallback.origen,
+    area: typeof candidate.area === 'string' ? cleanText(candidate.area) : fallback.area ?? null,
+    categoria_financiera_id: typeof candidate.categoria_financiera_id === 'string' ? candidate.categoria_financiera_id : fallback.categoria_financiera_id ?? null,
   };
 };
 
@@ -143,6 +149,26 @@ export const saveRubrosFinancieros = (rows: RubroFinancieroAdmin[]) => {
   win.localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
 };
 
+export const loadCategoriasFinancierasFallback = (): RubroFinancieroCatalogo[] => {
+  const win = safeWindow();
+  if (!win) return [];
+  try {
+    const raw = win.localStorage.getItem(CATALOGO_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((row): row is RubroFinancieroCatalogo => Boolean(row && typeof row === 'object' && 'id' in row && 'nombre' in row));
+  } catch {
+    return [];
+  }
+};
+
+export const saveCategoriasFinancierasFallback = (rows: RubroFinancieroCatalogo[]) => {
+  const win = safeWindow();
+  if (!win) return;
+  win.localStorage.setItem(CATALOGO_STORAGE_KEY, JSON.stringify(rows));
+};
+
 export const normalizeRubroFinancieroInput = (input: RubroFinancieroFormValues): RubroFinancieroFormValues => ({
   nombre: cleanText(input.nombre),
   tipo: input.tipo,
@@ -172,7 +198,7 @@ export const validateRubroFinancieroInput = (
 
   const duplicate = existingRows.find((row) => normalizeKey(row.nombre) === normalizeKey(normalized.nombre) && row.id !== editingId);
   if (duplicate) {
-    errors.nombre = 'Ya existe un rubro con ese nombre.';
+    errors.nombre = 'Ya existe un rubro con ese nombre para ese tipo.';
   }
 
   return errors;
@@ -189,10 +215,11 @@ export const upsertRubroFinanciero = (
   const nextRow: RubroFinancieroAdmin = {
     id: editingId ?? `rubro-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     nombre: normalized.nombre,
-    tipo: normalized.tipo as RubroFinancieroTipo,
+    tipo: normalized.tipo === 'INGRESO' ? 'FIJO' : 'VARIABLE',
     activo: normalized.activo,
     editable: true,
     origen: 'personalizado',
+    area: normalized.area?.trim() || null,
   };
 
   const validated = validateRubroFinancieroInput(normalized, existingRows, editingId);

@@ -1,4 +1,5 @@
 import { supabaseClient } from '../../../infrastructure/api/supabase/client';
+import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 import { ApiService } from '../../../infrastructure/api';
 import type { MovimientoStockPT } from '../../productos/types';
 import type {
@@ -8,6 +9,7 @@ import type {
   FinanzasReportes,
   FinanzasTesoreriaInsights,
   MovimientoFinanciero,
+  RubroFinancieroCatalogo,
 } from '../types';
 import { normalizeKpis } from '../utils/finanzasCalculations';
 import { buildCostosFormulaVsReal } from '../utils/costosFormulaVsReal';
@@ -66,6 +68,14 @@ type ChequeTesoreriaDbRow = {
 type CuentasBancariasSaldoRow = {
   saldo_actual: number | string | null;
 };
+type CategoriaFinancieraDbRow = {
+  id: string;
+  legacy_uid: string | null;
+  nombre: string;
+  tipo_movimiento: 'INGRESO' | 'EGRESO';
+  area: string | null;
+  deleted_at: string | null;
+};
 type FlujoCajaRubroDbRow = {
   fecha: string;
   tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA';
@@ -114,6 +124,35 @@ const emptyReportes: FinanzasReportes = {
 
 const sum = (values: number[]) => values.reduce((acc, value) => acc + value, 0);
 const num = (value: unknown) => Number(value ?? 0);
+const rubrosStorageKey = 'nutribalance_categorias_financieras_v1';
+const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+
+const defaultRubros = (): RubroFinancieroCatalogo[] => [
+  { id: 'cat-materia-prima', nombre: 'Materia prima', tipo: 'EGRESO', activo: true, area: 'Operaciones' },
+  { id: 'cat-produccion', nombre: 'Producción', tipo: 'EGRESO', activo: true, area: 'Operaciones' },
+  { id: 'cat-logistica', nombre: 'Logística', tipo: 'EGRESO', activo: true, area: 'Operaciones' },
+  { id: 'cat-nomina', nombre: 'Nómina', tipo: 'EGRESO', activo: true, area: 'Administración' },
+  { id: 'cat-servicios', nombre: 'Servicios', tipo: 'EGRESO', activo: true, area: 'Administración' },
+  { id: 'cat-marketing', nombre: 'Marketing', tipo: 'EGRESO', activo: true, area: 'Comercial' },
+  { id: 'cat-otros', nombre: 'Otros', tipo: 'EGRESO', activo: true, area: null },
+];
+
+const readMockRubros = (): RubroFinancieroCatalogo[] => {
+  if (typeof window === 'undefined') return defaultRubros();
+  try {
+    const raw = window.localStorage.getItem(rubrosStorageKey);
+    if (!raw) return defaultRubros();
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as RubroFinancieroCatalogo[]) : defaultRubros();
+  } catch {
+    return defaultRubros();
+  }
+};
+
+const writeMockRubros = (rows: RubroFinancieroCatalogo[]) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(rubrosStorageKey, JSON.stringify(rows));
+};
 
 export const finanzasService = {
   async getKPIs(): Promise<FinanzasKPIs> {
@@ -210,6 +249,7 @@ export const finanzasService = {
       ventasPt as unknown as MovimientoStockPT[],
       cheques,
       saldoActual,
+      { rubros: await finanzasService.getRubrosFinancieros() },
     );
   },
 
@@ -269,6 +309,63 @@ export const finanzasService = {
       valor_stock_pt: valorStockPt,
       valor_inventario_total: valorStockMp + valorStockPt,
     };
+  },
+
+  async getRubrosFinancieros(): Promise<RubroFinancieroCatalogo[]> {
+    if (runtimeConfig.mode === 'mock') return readMockRubros();
+    const { data, error } = await supabaseClient.from('categorias_financieras').select('id,legacy_uid,nombre,tipo_movimiento,area,deleted_at').order('nombre', { ascending: true });
+    if (error) throw error;
+    return ((data ?? []) as CategoriaFinancieraDbRow[]).map((row) => ({
+      id: row.id,
+      nombre: row.nombre,
+      tipo: row.tipo_movimiento,
+      activo: row.deleted_at === null,
+      area: row.area,
+    }));
+  },
+
+  async saveRubroFinanciero(payload: { id?: string; nombre: string; tipo: 'INGRESO' | 'EGRESO'; activo: boolean; area?: string | null }): Promise<RubroFinancieroCatalogo> {
+    const nombre = payload.nombre.trim();
+    if (!nombre) throw new Error('El nombre del rubro es obligatorio.');
+    if (!payload.tipo) throw new Error('El tipo del rubro es obligatorio.');
+
+    if (runtimeConfig.mode === 'mock') {
+      const rows = readMockRubros();
+      const duplicate = rows.find((row) => normalizeName(row.nombre) === normalizeName(nombre) && row.tipo === payload.tipo && row.id !== payload.id);
+      if (duplicate) throw new Error('Ya existe un rubro con ese nombre para ese tipo.');
+      const next: RubroFinancieroCatalogo = { id: payload.id ?? `cat-${Date.now()}`, nombre, tipo: payload.tipo, activo: payload.activo, area: payload.area ?? null };
+      const updated = rows.some((row) => row.id === next.id) ? rows.map((row) => (row.id === next.id ? next : row)) : [...rows, next];
+      writeMockRubros(updated);
+      return next;
+    }
+
+    const query = payload.id
+      ? supabaseClient
+          .from('categorias_financieras')
+          .update({ nombre, tipo_movimiento: payload.tipo, area: payload.area ?? null, updated_at: new Date().toISOString(), deleted_at: payload.activo ? null : new Date().toISOString() })
+          .eq('id', payload.id)
+          .select('id,legacy_uid,nombre,tipo_movimiento,area,deleted_at')
+          .single<CategoriaFinancieraDbRow>()
+      : supabaseClient
+          .from('categorias_financieras')
+          .insert({ nombre, tipo_movimiento: payload.tipo, area: payload.area ?? null, deleted_at: null })
+          .select('id,legacy_uid,nombre,tipo_movimiento,area,deleted_at')
+          .single<CategoriaFinancieraDbRow>();
+    const { data, error } = await query;
+    if (error) throw error;
+    return { id: data.id, nombre: data.nombre, tipo: data.tipo_movimiento, activo: data.deleted_at === null, area: data.area };
+  },
+
+  async toggleRubroFinanciero(id: string, activo: boolean): Promise<void> {
+    if (runtimeConfig.mode === 'mock') {
+      writeMockRubros(readMockRubros().map((row) => (row.id === id ? { ...row, activo } : row)));
+      return;
+    }
+    const { error } = await supabaseClient
+      .from('categorias_financieras')
+      .update({ deleted_at: activo ? null : new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
   },
 
   async createMovimiento(payload: CrearMovimientoPayload): Promise<void> {
@@ -541,6 +638,7 @@ export const finanzasService = {
         },
       ],
       0,
+      { rubros: defaultRubros() },
     );
 
     const ingresoMes = flujoCajaMensual.length > 0 ? flujoCajaMensual[flujoCajaMensual.length - 1].ingresos : 0;
