@@ -32,6 +32,7 @@ const menuItems: SidebarGroup[] = [
     collapsible: false,
     items: [
       { name: "Dashboard", icon: FiGrid, path: ROUTES.DASHBOARD, module: "dashboard" },
+      { name: "Operativo", icon: FiGrid, path: ROUTES.DASHBOARD_OPERATIVO, module: "dashboard" },
       { name: "Clientes", icon: FiUsers, path: ROUTES.CLIENTES, module: "clientes" },
       { name: "Stock General", icon: FiPackage, path: ROUTES.STOCK, module: "stock_general" },
       { name: "Alertas", icon: FiBell, path: ROUTES.ALERTAS, module: "alertas" },
@@ -46,10 +47,16 @@ const menuItems: SidebarGroup[] = [
       { name: "Insumos", icon: FiArchive, path: ROUTES.INSUMOS, module: "insumos" },
       { name: "Fórmulas", icon: FiLayers, path: ROUTES.FORMULAS, module: "formulas" },
       { name: "Órdenes", icon: FiLayers, path: ROUTES.ORDENES, module: "ordenes"},
+      { name: "Trazabilidad", icon: FiGitMerge, path: ROUTES.TRAZABILIDAD, module: "trazabilidad" },
+    ],
+  },
+  {
+    section: "FINANZAS",
+    collapsible: true,
+    items: [
       { name: "Costos", icon: FiBarChart2, path: ROUTES.COSTOS, module: "finanzas" },
       { name: "Estados financieros", icon: FiBarChart2, path: ROUTES.ESTADOS_FINANCIEROS, module: "finanzas" },
       { name: "Tesorería", icon: FiDollarSign, path: ROUTES.TESORERIA, module: "tesoreria" },
-      { name: "Trazabilidad", icon: FiGitMerge, path: ROUTES.TRAZABILIDAD, module: "trazabilidad" },
     ],
   },
   {
@@ -75,7 +82,7 @@ export const Sidebar = () => {
   const location = useLocation();
   const currentUser = getSessionUser();
   const { canAccess } = usePermissions();
-  const [openSections, setOpenSections] = useState<string[]>(["PRODUCCIÓN", "INVENTARIO"]);
+  const [openSections, setOpenSections] = useState<string[]>(["PRODUCCIÓN", "FINANZAS", "INVENTARIO"]);
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) =>

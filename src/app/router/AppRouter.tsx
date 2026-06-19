@@ -7,7 +7,8 @@ import type { AppModule } from '../../features/auth/permissions';
 import { usePermissions } from '../../features/auth/usePermissions';
 
 // Usamos importación directa para estar seguros, luego puedes volver a lazy
-import DashboardPage from '../../features/dashboard/pages/DashboardPage';
+import DashboardPage from '../../features/dashboard/pages/DashboardExecutivePage';
+import DashboardOperativoPage from '../../features/dashboard/pages/DashboardOperativoPage';
 import InsumoPage from '../../features/insumos/pages/InsumoPage';
 import ProveedorPage from '../../features/proveedores/pages/ProveedorPage';
 import StockMateriaPrimaPage from '../../features/insumos/pages/StockMateriaPrimaPage';
@@ -70,6 +71,7 @@ const AppRouter: React.FC = () => {
         >
           {/* Ruta base */}
           <Route index element={<ModuleRoute module="dashboard"><DashboardPage /></ModuleRoute>} /> 
+          <Route path={ROUTES.DASHBOARD_OPERATIVO} element={<ModuleRoute module="dashboard"><DashboardOperativoPage /></ModuleRoute>} />
           
           {/* Ruta de Insumos Real */}
           <Route path={ROUTES.INSUMOS} element={<ModuleRoute module="insumos"><InsumoPage /></ModuleRoute>} /> 

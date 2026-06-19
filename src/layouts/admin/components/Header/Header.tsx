@@ -5,16 +5,11 @@ import { useAlertas } from "../../../../features/alertas/hooks/useAlertas";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../../app/config/routes";
 import { BrandLogo } from "../../../../shared/components/BrandLogo";
-
-const getPriorityColor = (priority: string) => {
-  if (priority === "critica") return "#f87171";
-  if (priority === "media") return "#fb923c";
-  return "#60a5fa";
-};
+import { buildAlertCategoryHtml, isFinancialAlert, isProductAlert } from "../../../../features/alertas/utils/alertasClasificacion";
 
 export const Header = () => {
   const currentUser = getSessionUser();
-  const { summary } = useAlertas();
+  const { summary, alertas } = useAlertas();
   const navigate = useNavigate();
 
   const showInfo = (feature: string) => {
@@ -29,33 +24,50 @@ export const Header = () => {
   };
 
   const openAlertas = () => {
-    const top = summary.top
-      .map(
-        (alerta) => `
-          <div style="padding:10px 0; border-bottom:1px solid #e2e8f0;">
-            <p style="margin:0 0 4px; color:${getPriorityColor(alerta.prioridad)}; font-weight:700; text-transform:uppercase; font-size:11px;">${alerta.prioridad} · ${alerta.area}</p>
-            <p style="margin:0 0 6px; font-weight:700;">${alerta.titulo}</p>
-            <p style="margin:0; color:#475569; font-size:12px;">${alerta.accionRecomendada}</p>
-          </div>
-        `
-      )
-      .join("");
+    const criticalAlerts = alertas.filter((alerta) => alerta.prioridad === "critica" && alerta.estado !== "atendida" && alerta.estado !== "descartada");
+    const productAlerts = criticalAlerts.filter(isProductAlert);
+    const financialAlerts = criticalAlerts.filter(isFinancialAlert);
 
     void Swal.fire({
-      title: "Alertas operativas",
+      title: "Centro de alertas",
       html: `
-        <div style="text-align:left; color:#0f172a; font-size:14px;">
-          ${top}
-          <p style="margin:12px 0 0; color:#93c5fd;">Críticas activas: ${summary.criticas} · Pendientes: ${summary.pendientes}</p>
+        <div style="text-align:left; color:#0f172a; font-size:14px; line-height:1.55;">
+          <p style="margin:0; color:#64748b; font-size:14px;">Alertas críticas y pendientes que requieren seguimiento.</p>
+          <div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:14px;">
+            ${buildAlertCategoryHtml(
+              "Productos y operación",
+              "Incluye alertas de stock, producción, lotes, inventario, insumos, producto terminado y trazabilidad operativa.",
+              productAlerts,
+              "red",
+            )}
+            ${buildAlertCategoryHtml(
+              "Financieras",
+              "Incluye flujo de caja, tesorería, cuentas por cobrar y por pagar, costos e ingresos.",
+              financialAlerts,
+              "amber",
+            )}
+          </div>
         </div>
       `,
       background: "#ffffff",
       color: "#0f172a",
+      width: "min(1040px, calc(100vw - 24px))",
+      padding: "0",
+      showCloseButton: true,
       showCancelButton: true,
       confirmButtonText: "Ver centro de alertas",
       cancelButtonText: "Cerrar",
-      confirmButtonColor: "#2563eb",
-      cancelButtonColor: "#94a3b8",
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#e2e8f0",
+      customClass: {
+        popup: "rounded-[28px] border border-amber-200 shadow-[0_30px_90px_rgba(15,23,42,.18)] overflow-hidden",
+        htmlContainer: "mx-0 px-5 pb-5",
+        title: "pt-6 px-5 text-left text-2xl font-black text-slate-900",
+        actions: "px-5 pb-5 justify-end gap-3",
+        confirmButton: "rounded-full bg-red-600 px-4 py-2.5 text-sm font-semibold",
+        cancelButton: "rounded-full bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700",
+        closeButton: "text-slate-400 hover:text-slate-600",
+      },
     }).then((result) => {
       if (result.isConfirmed) {
         navigate(ROUTES.ALERTAS);
@@ -90,9 +102,9 @@ export const Header = () => {
           className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition flex items-center justify-center relative"
         >
           <FiBell />
-          {summary.criticas > 0 ? (
+          {summary.criticas + summary.pendientes > 0 ? (
             <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-              {summary.criticas}
+              {summary.criticas + summary.pendientes}
             </span>
           ) : null}
         </button>

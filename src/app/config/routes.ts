@@ -1,6 +1,7 @@
 export const ROUTES = {
   LOGIN: '/login',
   DASHBOARD: '/',
+  DASHBOARD_OPERATIVO: '/operativo',
   USUARIOS: '/usuarios',
   PROVEEDORES: '/proveedores',
   CLIENTES: '/clientes',

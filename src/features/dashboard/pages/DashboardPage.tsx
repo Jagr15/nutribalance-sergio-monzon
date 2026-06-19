@@ -7,6 +7,7 @@ import { LoadingState } from '../../../shared/components/table';
 import { ROUTES } from '../../../app/config/routes';
 import { useAlertas } from '../../alertas/hooks/useAlertas';
 import type { AlertaOperativa } from '../../alertas/types/alerta';
+import { buildAlertCategoryHtml, isFinancialAlert, isProductAlert } from '../../alertas/utils/alertasClasificacion';
 import { BrandLogo } from '../../../shared/components/BrandLogo';
 import { useDashboardOperativo } from '../hooks/useDashboardOperativo';
 import { ApiService } from '../../../infrastructure/api';
@@ -22,38 +23,10 @@ import {
   type DashboardPeriodo,
 } from '../utils/dashboardExecutiveInsights';
 import { buildDashboardTemporalInsights, filterAlertasByPeriodo } from '../utils/dashboardTemporalInsights';
+import { fmtARS, fmtDateTime, fmtRelativeMinutes, getTrendTone } from '../components/dashboardFormat';
+import { KPIBox } from '../components/dashboardShared';
 
-const fmtARS = (v: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v);
-const fmtDateTime = (value: Date | string | null | undefined) => {
-  if (!value) return 'Sin actualización';
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Sin actualización';
-  return new Intl.DateTimeFormat('es-AR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(date);
-};
-
-const fmtRelativeMinutes = (value: Date | null) => {
-  if (!value) return 'Sin actualización';
-  const diffMs = Date.now() - value.getTime();
-  const minutes = Math.max(1, Math.floor(diffMs / 60000));
-  if (minutes < 60) return `Actualizado hace ${minutes} minutos`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Actualizado hace ${hours} horas`;
-  const days = Math.floor(hours / 24);
-  return `Actualizado hace ${days} días`;
-};
-
-type TrendTone = 'up' | 'down' | 'flat' | 'unknown';
 type BusinessHealthLevel = 'excelente' | 'estable' | 'atencion' | 'critico';
-
-const trendMeta: Record<TrendTone, { label: string; className: string }> = {
-  up: { label: 'Tendencia al alza', className: 'text-emerald-600' },
-  down: { label: 'Tendencia a la baja', className: 'text-rose-600' },
-  flat: { label: 'Tendencia estable', className: 'text-slate-500' },
-  unknown: { label: 'Sin base histórica', className: 'text-slate-400' },
-};
 
 const healthMeta: Record<BusinessHealthLevel, { label: string; className: string; accent: string }> = {
   excelente: { label: 'Salud excelente', className: 'text-emerald-700', accent: 'from-emerald-500 to-cyan-500' },
@@ -61,39 +34,6 @@ const healthMeta: Record<BusinessHealthLevel, { label: string; className: string
   atencion: { label: 'Salud con atención', className: 'text-amber-700', accent: 'from-amber-500 to-orange-500' },
   critico: { label: 'Salud crítica', className: 'text-rose-700', accent: 'from-rose-500 to-red-500' },
 };
-
-const getTrendTone = (current: number, previous: number | null | undefined, higherIsBetter = true): TrendTone => {
-  if (previous === null || previous === undefined) return 'unknown';
-  if (Math.abs(current - previous) < 0.0001) return 'flat';
-  const improved = higherIsBetter ? current > previous : current < previous;
-  return improved ? 'up' : 'down';
-};
-
-const KPIBox = ({
-  label,
-  value,
-  trend,
-  updatedAt,
-  helper,
-  tone = 'slate',
-}: {
-  label: string;
-  value: string;
-  trend: TrendTone;
-  updatedAt: string;
-  helper?: string;
-  tone?: 'slate' | 'cyan' | 'emerald' | 'violet' | 'fuchsia' | 'orange' | 'red';
-}) => (
-  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-    <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">{label}</p>
-    <p className={`mt-2 text-3xl font-black ${tone === 'cyan' ? 'text-cyan-700' : tone === 'emerald' ? 'text-emerald-700' : tone === 'violet' ? 'text-violet-700' : tone === 'fuchsia' ? 'text-fuchsia-700' : tone === 'orange' ? 'text-orange-600' : tone === 'red' ? 'text-red-600' : 'text-slate-900'}`}>
-      {value}
-    </p>
-    <p className={`mt-2 text-xs font-semibold ${trendMeta[trend].className}`}>{trendMeta[trend].label}</p>
-    <p className="mt-1 text-[11px] text-slate-500">Actualizado: {updatedAt}</p>
-    {helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
-  </div>
-);
 
 const addPdfSectionTitle = (doc: jsPDF, title: string, y: number) => {
   doc.setTextColor(15, 23, 42);
@@ -144,6 +84,9 @@ export const DashboardPage = () => {
   const updatedAtLabel = useMemo(() => fmtDateTime(lastUpdatedAt), [lastUpdatedAt]);
   const relativeUpdatedLabel = useMemo(() => fmtRelativeMinutes(lastUpdatedAt), [lastUpdatedAt]);
   const periodoLabel = useMemo(() => getDashboardPeriodoLabel(periodo), [periodo]);
+  const criticalAlerts = useMemo(() => alertas.filter((a) => a.prioridad === 'critica' && a.estado !== 'atendida'), [alertas]);
+  const productCriticalAlerts = useMemo(() => criticalAlerts.filter(isProductAlert), [criticalAlerts]);
+  const financialCriticalAlerts = useMemo(() => criticalAlerts.filter(isFinancialAlert), [criticalAlerts]);
 
   useEffect(() => {
     void Promise.allSettled([
@@ -162,21 +105,60 @@ export const DashboardPage = () => {
   useEffect(() => {
     const seenKey = 'nutribalance_alerts_seen_session';
     if (sessionStorage.getItem(seenKey) === 'true') return;
-    const crit = alertas.filter((a) => a.prioridad === 'critica' && a.estado !== 'atendida');
-    if (crit.length === 0) return;
+    if (criticalAlerts.length === 0) return;
     sessionStorage.setItem(seenKey, 'true');
     void Swal.fire({
-      title: 'Atención operativa',
-      text: `Hay ${crit.length} alertas críticas activas.`,
+      title: 'Atención requerida',
+      html: `
+        <div style="margin-top:6px;color:#64748b;font-size:14px;line-height:1.6;">
+          Se detectaron alertas críticas que requieren seguimiento.
+        </div>
+        <div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:14px;">
+          ${buildAlertCategoryHtml(
+            'Productos y operación',
+            'Incluye stock, producción, lotes, inventario, insumos, producto terminado y trazabilidad operativa.',
+            productCriticalAlerts,
+            'red',
+          )}
+          ${buildAlertCategoryHtml(
+            'Financieras',
+            'Incluye flujo de caja, tesorería, cuentas por cobrar y pagar, costos, ingresos y finanzas.',
+            financialCriticalAlerts,
+            'amber',
+          )}
+        </div>
+      `,
       background: '#ffffff',
       color: '#0f172a',
+      width: 'min(1040px, calc(100vw - 24px))',
+      padding: '0',
+      showCloseButton: true,
       showCancelButton: true,
+      showDenyButton: true,
       confirmButtonText: 'Ver alertas operativas',
+      denyButtonText: 'Ver alertas financieras',
       cancelButtonText: 'Continuar al panel',
-      confirmButtonColor: '#2563eb',
-      cancelButtonColor: '#334155',
-    }).then((r) => r.isConfirmed && navigate(ROUTES.ALERTAS));
-  }, [alertas, navigate]);
+      customClass: {
+        popup: 'rounded-[28px] border border-amber-200 shadow-[0_30px_90px_rgba(15,23,42,.18)] overflow-hidden',
+        htmlContainer: 'mx-0 px-5 pb-5',
+        title: 'pt-6 px-5 text-left text-2xl font-black text-slate-900',
+        actions: 'px-5 pb-5 justify-end gap-3',
+        confirmButton: 'rounded-full bg-red-600 px-4 py-2.5 text-sm font-semibold',
+        denyButton: 'rounded-full bg-amber-600 px-4 py-2.5 text-sm font-semibold',
+        cancelButton: 'rounded-full bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700',
+        closeButton: 'text-slate-400 hover:text-slate-600',
+      },
+      didOpen: () => {
+        const popup = document.querySelector('.swal2-popup');
+        if (popup) {
+          popup.setAttribute('style', `${popup.getAttribute('style') ?? ''} border-top: 6px solid #ef4444;`);
+        }
+      },
+    }).then((r) => {
+      if (r.isConfirmed) navigate(ROUTES.ALERTAS);
+      if (r.isDenied) navigate(ROUTES.TESORERIA);
+    });
+  }, [criticalAlerts.length, financialCriticalAlerts, navigate, productCriticalAlerts]);
 
   const consumoTop = useMemo(() => {
     const map = new Map<string, number>();
@@ -399,6 +381,101 @@ export const DashboardPage = () => {
   const financeTrend = useMemo(() => getTrendTone(temporalInsights.ingresos - temporalInsights.costos, undefined), [temporalInsights.ingresos, temporalInsights.costos]);
   const alertsTrend = useMemo(() => getTrendTone(alertasTop.length, undefined, false), [alertasTop.length]);
   const dashboardErrors = [dashboardLoadError, alertasLoadError].filter((error): error is string => Boolean(error));
+
+  if (!loading) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <Card>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-cyan-300">Dashboard Ejecutivo</p>
+              <h1 className="text-3xl font-black mt-1">Centro Ejecutivo de Dirección</h1>
+              <p className="text-sm text-slate-500 mt-2">Respuesta rápida sobre la salud del negocio hoy, con vista resumida de producción, inventario y finanzas.</p>
+            </div>
+            <BrandLogo variant="full" className="max-w-[220px] self-start md:self-center" />
+          </div>
+        </Card>
+
+        {dashboardErrors.length > 0 ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {dashboardErrors.length === 1 ? dashboardErrors[0] : 'Algunas secciones del dashboard no pudieron actualizarse.'}
+          </div>
+        ) : null}
+
+        <Card className="overflow-hidden">
+          <div className={`h-1.5 bg-gradient-to-r ${healthMeta[businessHealth.level].accent}`} />
+          <div className="grid grid-cols-1 gap-6 p-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Salud General del Negocio</p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-900">Lectura ejecutiva automática</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-slate-500">Indicador consolidado calculado a partir de producción, inventario, finanzas y alertas operativas.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Puntaje</p>
+                  <p className={`mt-1 text-4xl font-black ${healthMeta[businessHealth.level].className}`}>{businessHealth.score}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Estado general</p>
+                  <p className={`mt-2 text-xl font-black ${healthMeta[businessHealth.level].className}`}>{healthMeta[businessHealth.level].label}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{resumenEjecutivo}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Factores de riesgo</p>
+                  <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                    <li>{businessHealth.productionRisk}</li>
+                    <li>{businessHealth.inventoryRisk}</li>
+                    <li>{businessHealth.financeRisk}</li>
+                    <li>{businessHealth.alertRisk}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <KPIBox label="Órdenes pendientes" value={`${kpis.ordenes_pendientes}`} trend={productionTrend} updatedAt={updatedAtLabel} tone="cyan" />
+              <KPIBox label="Stock crítico" value={`${kpis.stock_critico}`} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="red" />
+              <KPIBox label="Flujo de caja" value={fmtARS(temporalInsights.flujoCaja)} trend={financeTrend} updatedAt={updatedAtLabel} tone={temporalInsights.flujoCaja >= 0 ? 'cyan' : 'red'} />
+              <KPIBox label="Clientes atendidos" value={`${executiveInsights.topClientesPorVolumen.length}`} trend={alertsTrend} updatedAt={updatedAtLabel} tone="fuchsia" />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 className="font-semibold">Resumen Ejecutivo automático</h3>
+              <p className="text-xs text-slate-500">Generado localmente desde los KPIs actuales, sin servicios externos.</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-slate-600">{periodoLabel}</span>
+          </div>
+          <p className="text-sm leading-6 text-slate-700">{resumenEjecutivo}</p>
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h3 className="font-semibold">Top alertas críticas</h3>
+              <p className="text-xs text-slate-500">Alertas priorizadas por impacto operativo dentro del período seleccionado.</p>
+            </div>
+            <Link to={ROUTES.ALERTAS} className="text-sm font-semibold text-red-700 hover:text-red-800">Ir a alertas</Link>
+          </div>
+          {top5Alertas.length === 0 ? <p className="text-sm text-slate-700">No hay alertas operativas activas en este momento.</p> : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+              {top5Alertas.map((alerta, idx) => (
+                <div key={alerta.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">#{idx + 1}</p>
+                  <p className="mt-1 truncate text-sm font-bold text-slate-900">{alerta.titulo}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  }
 
   if (loading && stockResumenes.stockMateriaPrima.length === 0 && stockResumenes.stockProductoTerminado.length === 0) {
     return (
