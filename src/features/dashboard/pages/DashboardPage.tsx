@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import jsPDF from 'jspdf';
 import { Card } from '../../../shared/components/card';
+import { LoadingState } from '../../../shared/components/table';
 import { ROUTES } from '../../../app/config/routes';
 import { useAlertas } from '../../alertas/hooks/useAlertas';
+import type { AlertaOperativa } from '../../alertas/types/alerta';
 import { useDashboardOperativo } from '../hooks/useDashboardOperativo';
 import { ApiService } from '../../../infrastructure/api';
 import type { Cliente } from '../../clientes/types/cliente';
@@ -20,12 +23,116 @@ import {
 import { buildDashboardTemporalInsights, filterAlertasByPeriodo } from '../utils/dashboardTemporalInsights';
 
 const fmtARS = (v: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v);
+const fmtDateTime = (value: Date | string | null | undefined) => {
+  if (!value) return 'Sin actualización';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Sin actualización';
+  return new Intl.DateTimeFormat('es-AR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date);
+};
+
+const fmtRelativeMinutes = (value: Date | null) => {
+  if (!value) return 'Sin actualización';
+  const diffMs = Date.now() - value.getTime();
+  const minutes = Math.max(1, Math.floor(diffMs / 60000));
+  if (minutes < 60) return `Actualizado hace ${minutes} minutos`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Actualizado hace ${hours} horas`;
+  const days = Math.floor(hours / 24);
+  return `Actualizado hace ${days} días`;
+};
+
+type TrendTone = 'up' | 'down' | 'flat' | 'unknown';
+type BusinessHealthLevel = 'excelente' | 'estable' | 'atencion' | 'critico';
+
+const trendMeta: Record<TrendTone, { label: string; className: string }> = {
+  up: { label: 'Tendencia al alza', className: 'text-emerald-600' },
+  down: { label: 'Tendencia a la baja', className: 'text-rose-600' },
+  flat: { label: 'Tendencia estable', className: 'text-slate-500' },
+  unknown: { label: 'Sin base histórica', className: 'text-slate-400' },
+};
+
+const healthMeta: Record<BusinessHealthLevel, { label: string; className: string; accent: string }> = {
+  excelente: { label: 'Salud excelente', className: 'text-emerald-700', accent: 'from-emerald-500 to-cyan-500' },
+  estable: { label: 'Salud estable', className: 'text-cyan-700', accent: 'from-cyan-500 to-blue-500' },
+  atencion: { label: 'Salud con atención', className: 'text-amber-700', accent: 'from-amber-500 to-orange-500' },
+  critico: { label: 'Salud crítica', className: 'text-rose-700', accent: 'from-rose-500 to-red-500' },
+};
+
+const getTrendTone = (current: number, previous: number | null | undefined, higherIsBetter = true): TrendTone => {
+  if (previous === null || previous === undefined) return 'unknown';
+  if (Math.abs(current - previous) < 0.0001) return 'flat';
+  const improved = higherIsBetter ? current > previous : current < previous;
+  return improved ? 'up' : 'down';
+};
+
+const KPIBox = ({
+  label,
+  value,
+  trend,
+  updatedAt,
+  helper,
+  tone = 'slate',
+}: {
+  label: string;
+  value: string;
+  trend: TrendTone;
+  updatedAt: string;
+  helper?: string;
+  tone?: 'slate' | 'cyan' | 'emerald' | 'violet' | 'fuchsia' | 'orange' | 'red';
+}) => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">{label}</p>
+    <p className={`mt-2 text-3xl font-black ${tone === 'cyan' ? 'text-cyan-700' : tone === 'emerald' ? 'text-emerald-700' : tone === 'violet' ? 'text-violet-700' : tone === 'fuchsia' ? 'text-fuchsia-700' : tone === 'orange' ? 'text-orange-600' : tone === 'red' ? 'text-red-600' : 'text-slate-900'}`}>
+      {value}
+    </p>
+    <p className={`mt-2 text-xs font-semibold ${trendMeta[trend].className}`}>{trendMeta[trend].label}</p>
+    <p className="mt-1 text-[11px] text-slate-500">Actualizado: {updatedAt}</p>
+    {helper ? <p className="mt-2 text-xs text-slate-500">{helper}</p> : null}
+  </div>
+);
+
+const addPdfSectionTitle = (doc: jsPDF, title: string, y: number) => {
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(title, 14, y);
+  return y + 6;
+};
+
+const addPdfLine = (doc: jsPDF, label: string, value: string, y: number, valueX = 82) => {
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(label, 14, y);
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  const wrapped = doc.splitTextToSize(value, 110);
+  doc.text(wrapped, valueX, y);
+  return y + Math.max(6, wrapped.length * 4.5);
+};
+
+const buildAlertRanking = (alertas: AlertaOperativa[], periodo: DashboardPeriodo, now: Date, limit: number) => {
+  const priorityScore = (priority: string) => (priority === 'critica' ? 3 : priority === 'media' ? 2 : 1);
+  const stateScore = (state: string) => (state === 'pendiente' ? 3 : state === 'en seguimiento' ? 2 : state === 'atendida' ? 1 : 0);
+
+  return filterAlertasByPeriodo([...alertas], periodo, now)
+    .filter((a) => a.estado !== 'atendida' && a.estado !== 'descartada')
+    .sort((a, b) => {
+      const priorityDelta = priorityScore(b.prioridad) - priorityScore(a.prioridad);
+      if (priorityDelta !== 0) return priorityDelta;
+      return stateScore(b.estado) - stateScore(a.estado);
+    })
+    .slice(0, limit);
+};
 
 const PERIODOS: DashboardPeriodo[] = ['HOY', 'SEMANA', 'MES'];
 
 export const DashboardPage = () => {
-  const { summary, alertas } = useAlertas();
-  const { kpis, consumoMensual, stockResumenes, ptInsights, expedicionInsights, loading, reload } = useDashboardOperativo();
+  const { summary, alertas, loadError: alertasLoadError } = useAlertas();
+  const { kpis, consumoMensual, stockResumenes, ptInsights, expedicionInsights, loading, reload, lastUpdatedAt, loadError: dashboardLoadError } = useDashboardOperativo();
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [movimientosPT, setMovimientosPT] = useState<MovimientoStockPT[]>([]);
@@ -33,6 +140,9 @@ export const DashboardPage = () => {
   const [isExpedicionOpen, setIsExpedicionOpen] = useState(false);
   const navigate = useNavigate();
   const dashboardNow = useMemo(() => new Date(), []);
+  const updatedAtLabel = useMemo(() => fmtDateTime(lastUpdatedAt), [lastUpdatedAt]);
+  const relativeUpdatedLabel = useMemo(() => fmtRelativeMinutes(lastUpdatedAt), [lastUpdatedAt]);
+  const periodoLabel = useMemo(() => getDashboardPeriodoLabel(periodo), [periodo]);
 
   useEffect(() => {
     void Promise.allSettled([
@@ -142,50 +252,130 @@ export const DashboardPage = () => {
   );
 
   const handleExportPdf = () => {
-    const lines = [
-      `Dashboard ejecutivo - ${getDashboardPeriodoLabel(periodo)}`,
-      `Ventas por producto terminado: ${executiveInsights.ventasPorProducto.map((item) => `${item.producto_nombre} (${item.kg.toLocaleString('es-AR')} kg / ${fmtARS(item.importe)})`).join(' | ') || 'Sin datos'}`,
-      `Kg despachados por producto: ${executiveInsights.kgDespachadosPorProducto.map((item) => `${item.producto_nombre} (${item.kg.toLocaleString('es-AR')} kg)`).join(' | ') || 'Sin datos'}`,
-      `Clientes atendidos: ${executiveInsights.clientesAtendidos}`,
-      `Top clientes: ${executiveInsights.topClientesPorVolumen.map((item) => `${item.cliente_nombre} (${item.kg.toLocaleString('es-AR')} kg)`).join(' | ') || 'Sin datos'}`,
-    ];
-    const popup = window.open('', '_blank', 'width=1200,height=900');
-    if (!popup) return;
-    popup.document.write(`
-      <html>
-        <head>
-          <title>Dashboard ejecutivo</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
-            h1 { margin: 0 0 12px; }
-            p { margin: 0 0 8px; line-height: 1.5; }
-            .muted { color: #64748b; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <h1>Dashboard ejecutivo - ${getDashboardPeriodoLabel(periodo)}</h1>
-          ${lines.map((line) => `<p>${line}</p>`).join('')}
-          <p class="muted">Usá la opción de imprimir/guardar como PDF del navegador.</p>
-          <script>window.onload = () => setTimeout(() => { window.print(); }, 250);</script>
-        </body>
-      </html>
-    `);
-    popup.document.close();
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const width = doc.internal.pageSize.getWidth();
+    const height = doc.internal.pageSize.getHeight();
+    let cursorY = 16;
+    const addPageIfNeeded = (needed = 12) => {
+      if (cursorY + needed < height - 12) return;
+      doc.addPage();
+      cursorY = 16;
+    };
+    const advance = (nextY: number) => {
+      cursorY = nextY;
+      return cursorY;
+    };
+    const writeSectionTitle = (title: string) => {
+      cursorY = addPdfSectionTitle(doc, title, cursorY);
+    };
+    const writeLine = (label: string, value: string, valueX?: number) => {
+      cursorY = addPdfLine(doc, label, value, cursorY, valueX);
+    };
+
+    doc.setFillColor(14, 165, 233);
+    doc.rect(0, 0, width, 24, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('NutriBalance', 14, 14);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text('Dashboard Ejecutivo', 14, 20);
+    doc.text(`Generado: ${new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date())}`, width - 14, 20, { align: 'right' });
+
+    cursorY = 32;
+    addPageIfNeeded(36);
+    writeSectionTitle('Producción');
+    writeLine('Órdenes pendientes', `${kpis.ordenes_pendientes}`);
+    writeLine('Órdenes en proceso', `${kpis.ordenes_en_proceso}`);
+    writeLine('Órdenes finalizadas', `${kpis.ordenes_finalizadas}`);
+    writeLine('Producción total', `${kpis.produccion_total.toLocaleString('es-AR')} kg`);
+    writeLine('Merma total', `${kpis.merma_total.toLocaleString('es-AR')} kg`);
+
+    cursorY = advance(cursorY + 2);
+    addPageIfNeeded(30);
+    writeSectionTitle('Inventario');
+    writeLine('Stock físico MP', `${kpis.stock_total_mp.toLocaleString('es-AR')} kg`);
+    writeLine('Stock comprometido MP', `${kpis.stock_comprometido_mp.toLocaleString('es-AR')} kg`);
+    writeLine('Stock disponible MP', `${kpis.stock_disponible_mp.toLocaleString('es-AR')} kg`);
+    writeLine('Lotes críticos', `${kpis.stock_critico}`);
+    writeLine('Stock PT total', `${kpis.stock_total_pt.toLocaleString('es-AR')} kg`);
+    writeLine('Valor inventario PT', valorInventarioPtLabel);
+
+    cursorY = advance(cursorY + 2);
+    addPageIfNeeded(30);
+    writeSectionTitle('Finanzas');
+    writeLine('Costos', fmtARS(temporalInsights.costos));
+    writeLine('Ingresos', fmtARS(temporalInsights.ingresos));
+    writeLine('Flujo de caja', fmtARS(temporalInsights.flujoCaja));
+    writeLine('Proteína promedio fórmula', `${kpis.proteina_promedio_formula.toFixed(2)}%`);
+
+    cursorY = advance(cursorY + 2);
+    addPageIfNeeded(30);
+    writeSectionTitle('Alertas Operativas');
+    writeLine('Alertas activas', `${temporalInsights.alertas.length}`);
+    writeLine('Pendientes', `${summary.pendientes}`);
+    writeLine('Críticas activas', `${summary.criticas}`);
+    writeLine('En seguimiento', `${summary.seguimiento}`);
+
+    cursorY = advance(cursorY + 2);
+    addPageIfNeeded(24);
+    writeSectionTitle('Periodo y actualización');
+    writeLine('Periodo actual', periodoLabel);
+    writeLine('Última actualización', updatedAtLabel);
+    writeLine('Antigüedad', relativeUpdatedLabel);
+
+    doc.save(`dashboard-ejecutivo-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
-  const alertasTop = useMemo(() => {
-    const priorityScore = (priority: string) => (priority === 'critica' ? 3 : priority === 'media' ? 2 : 1);
-    const stateScore = (state: string) => (state === 'pendiente' ? 3 : state === 'en seguimiento' ? 2 : state === 'atendida' ? 1 : 0);
+  const alertasTop = useMemo(() => buildAlertRanking(alertas, periodo, dashboardNow, 3), [alertas, dashboardNow, periodo]);
 
-    return filterAlertasByPeriodo([...alertas], periodo, dashboardNow)
-      .filter((a) => a.estado !== 'atendida' && a.estado !== 'descartada')
-      .sort((a, b) => {
-        const priorityDelta = priorityScore(b.prioridad) - priorityScore(a.prioridad);
-        if (priorityDelta !== 0) return priorityDelta;
-        return stateScore(b.estado) - stateScore(a.estado);
-      })
-      .slice(0, 3);
-  }, [alertas, dashboardNow, periodo]);
+  const top5Alertas = useMemo(() => buildAlertRanking(alertas, periodo, dashboardNow, 5), [alertas, dashboardNow, periodo]);
+
+  const businessHealth = useMemo(() => {
+    const scoreParts = [
+      kpis.ordenes_pendientes === 0 ? 18 : Math.max(0, 18 - kpis.ordenes_pendientes * 3),
+      kpis.stock_critico === 0 ? 18 : Math.max(0, 18 - kpis.stock_critico * 4),
+      temporalInsights.flujoCaja >= 0 ? 22 : Math.max(0, 22 + Math.max(-22, temporalInsights.flujoCaja / 100000)),
+      summary.criticas === 0 ? 20 : Math.max(0, 20 - summary.criticas * 4),
+      summary.pendientes === 0 ? 12 : Math.max(0, 12 - summary.pendientes * 2),
+      kpis.proteina_promedio_formula >= 18 ? 10 : Math.max(0, (kpis.proteina_promedio_formula / 18) * 10),
+    ];
+    const score = Math.max(0, Math.min(100, Math.round(scoreParts.reduce((acc, item) => acc + item, 0))));
+    const level: BusinessHealthLevel = score >= 82 ? 'excelente' : score >= 65 ? 'estable' : score >= 45 ? 'atencion' : 'critico';
+    return {
+      score,
+      level,
+      alerts: top5Alertas.length,
+      productionRisk: kpis.ordenes_pendientes > kpis.ordenes_finalizadas ? 'Producción con más pendiente que cierre reciente.' : 'Producción bajo control relativo.',
+      inventoryRisk: kpis.stock_critico > 0 ? `${kpis.stock_critico} lotes en condición crítica.` : 'Inventario sin lotes críticos activos.',
+      financeRisk: temporalInsights.flujoCaja < 0 ? 'Flujo de caja negativo en el período actual.' : 'Flujo de caja positivo o balanceado.',
+      alertRisk: summary.criticas > 0 ? `${summary.criticas} alertas críticas requieren atención.` : 'Sin alertas críticas activas.',
+    };
+  }, [kpis.ordenes_finalizadas, kpis.ordenes_pendientes, kpis.proteina_promedio_formula, kpis.stock_critico, summary.criticas, summary.pendientes, temporalInsights.flujoCaja, top5Alertas.length]);
+
+  const resumenEjecutivo = useMemo(() => {
+    const statements: string[] = [];
+    statements.push(
+      `Salud general ${healthMeta[businessHealth.level].label.toLowerCase()} con ${businessHealth.score}/100 puntos.`,
+    );
+    if (temporalInsights.flujoCaja >= 0) {
+      statements.push(`El flujo de caja se mantiene positivo en ${fmtARS(Math.abs(temporalInsights.flujoCaja))}.`);
+    } else {
+      statements.push(`El flujo de caja está por debajo de cero en ${fmtARS(Math.abs(temporalInsights.flujoCaja))}.`);
+    }
+    if (kpis.stock_critico > 0) {
+      statements.push(`Hay ${kpis.stock_critico} lotes críticos que pueden afectar continuidad operativa.`);
+    } else {
+      statements.push('No se observan lotes críticos en el inventario de materia prima.');
+    }
+    if (summary.criticas > 0) {
+      statements.push(`Se detectaron ${summary.criticas} alertas críticas abiertas.`);
+    } else {
+      statements.push('No hay alertas críticas abiertas en el período vigente.');
+    }
+    return statements.join(' ');
+  }, [businessHealth.level, businessHealth.score, kpis.stock_critico, summary.criticas, temporalInsights.flujoCaja]);
 
   const formatDatoAsociado = (dato: Record<string, unknown>) => {
     const parts: string[] = [];
@@ -203,12 +393,131 @@ export const DashboardPage = () => {
     ? (kpis.valor_inventario_pt > 0 ? fmtARS(kpis.valor_inventario_pt) : 'Sin costo confiable')
     : 'Sin stock PT';
 
+  const productionTrend = useMemo(() => getTrendTone(kpis.produccion_total, undefined), [kpis.produccion_total]);
+  const inventoryTrend = useMemo(() => getTrendTone(kpis.stock_total_mp + kpis.stock_total_pt, undefined), [kpis.stock_total_mp, kpis.stock_total_pt]);
+  const financeTrend = useMemo(() => getTrendTone(temporalInsights.ingresos - temporalInsights.costos, undefined), [temporalInsights.ingresos, temporalInsights.costos]);
+  const alertsTrend = useMemo(() => getTrendTone(alertasTop.length, undefined, false), [alertasTop.length]);
+  const dashboardErrors = [dashboardLoadError, alertasLoadError].filter((error): error is string => Boolean(error));
+
+  if (loading && stockResumenes.stockMateriaPrima.length === 0 && stockResumenes.stockProductoTerminado.length === 0) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <p className="text-xs uppercase tracking-widest text-cyan-300">Dashboard Ejecutivo</p>
+          <h1 className="text-3xl font-black mt-1">Centro Ejecutivo de Dirección</h1>
+          <p className="text-sm text-slate-500 mt-2">Consolidado de Producción, Inventario, Finanzas y Alertas Operativas.</p>
+        </Card>
+        <LoadingState label="Cargando dashboard consolidado..." />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <Card>
-        <p className="text-xs uppercase tracking-widest text-cyan-300">Dashboard Operativo</p>
-        <h1 className="text-3xl font-black mt-1">Centro Ejecutivo de Producción</h1>
-        <p className="text-sm text-slate-500 mt-2">Métricas reales de stock, producción, costos y trazabilidad.</p>
+        <p className="text-xs uppercase tracking-widest text-cyan-300">Dashboard Ejecutivo</p>
+        <h1 className="text-3xl font-black mt-1">Centro Ejecutivo de Dirección</h1>
+        <p className="text-sm text-slate-500 mt-2">Vista consolidada de Producción, Inventario, Finanzas y Alertas Operativas.</p>
+      </Card>
+
+      {dashboardErrors.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {dashboardErrors.length === 1 ? dashboardErrors[0] : 'Algunas secciones del dashboard no pudieron actualizarse.'}
+        </div>
+      ) : null}
+
+      <Card className="overflow-hidden">
+        <div className={`h-1.5 bg-gradient-to-r ${healthMeta[businessHealth.level].accent}`} />
+        <div className="grid grid-cols-1 gap-6 p-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Salud General del Negocio</p>
+                <h2 className="mt-1 text-2xl font-black text-slate-900">Lectura ejecutiva automática</h2>
+                <p className="mt-2 max-w-2xl text-sm text-slate-500">
+                  Indicador consolidado calculado a partir de producción, inventario, finanzas y alertas operativas.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Puntaje</p>
+                <p className={`mt-1 text-4xl font-black ${healthMeta[businessHealth.level].className}`}>{businessHealth.score}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">sobre 100</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Estado general</p>
+                <p className={`mt-2 text-xl font-black ${healthMeta[businessHealth.level].className}`}>{healthMeta[businessHealth.level].label}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{resumenEjecutivo}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Factores de riesgo</p>
+                <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                  <li>{businessHealth.productionRisk}</li>
+                  <li>{businessHealth.inventoryRisk}</li>
+                  <li>{businessHealth.financeRisk}</li>
+                  <li>{businessHealth.alertRisk}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <KPIBox label="Órdenes pendientes" value={`${kpis.ordenes_pendientes}`} trend={productionTrend} updatedAt={updatedAtLabel} tone="cyan" />
+            <KPIBox label="Stock crítico" value={`${kpis.stock_critico}`} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="red" />
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-semibold">Resumen Ejecutivo automático</h3>
+            <p className="text-xs text-slate-500">Generado localmente desde los KPIs actuales, sin servicios externos.</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-slate-600">
+            {periodoLabel}
+          </span>
+        </div>
+        <p className="text-sm leading-6 text-slate-700">{resumenEjecutivo}</p>
+      </Card>
+
+      <Card>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-semibold">Top 5 Alertas</h3>
+            <p className="text-xs text-slate-500">Alertas priorizadas por impacto operativo dentro del período seleccionado.</p>
+          </div>
+          <Link to={ROUTES.ALERTAS} className="text-sm font-semibold text-red-700 hover:text-red-800">
+            Ir a alertas
+          </Link>
+        </div>
+        {top5Alertas.length === 0 ? (
+          <p className="text-sm text-slate-700">No hay alertas operativas activas en este momento.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {top5Alertas.map((alerta, idx) => (
+              <div key={alerta.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">#{idx + 1}</p>
+                    <p className="mt-1 truncate text-sm font-bold text-slate-900">{alerta.titulo}</p>
+                    <p className="mt-1 text-xs text-slate-500">{alerta.area.toUpperCase()} · {alerta.estado}</p>
+                  </div>
+                  <span className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-widest ${
+                    alerta.prioridad === 'critica'
+                      ? 'bg-red-100 text-red-700'
+                      : alerta.prioridad === 'media'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {alerta.prioridad}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-slate-600">{formatDatoAsociado(alerta.datoAsociado as Record<string, unknown>)}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <section>
@@ -241,139 +550,134 @@ export const DashboardPage = () => {
               Exportar PDF
             </button>
           </div>
-        </div>
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-          <Card>
-            <h3 className="font-semibold mb-3">Ventas por producto terminado</h3>
-            <p className="text-xs text-slate-500 mb-3">Monto y kg vendidos en {executiveInsights.periodoLabel.toLowerCase()}.</p>
-            {executiveInsights.ventasPorProducto.length === 0 ? (
-              <p className="text-sm text-slate-500">Sin ventas de producto terminado.</p>
-            ) : (
-              <div className="space-y-3">
-                {executiveInsights.ventasPorProducto.map((item, idx) => {
-                  const max = Math.max(1, executiveInsights.ventasPorProducto[0]?.importe ?? 1);
-                  const width = Math.max(8, (item.importe / max) * 100);
-                  return (
-                    <div key={`${item.producto_id ?? item.producto_nombre}-${idx}`} className="space-y-1.5">
-                      <div className="flex items-start justify-between gap-3 text-xs">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 truncate">{item.producto_nombre}</p>
-                          <p className="text-slate-500">{item.kg.toLocaleString('es-AR')} kg · {item.clientes_atendidos} clientes</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-semibold text-emerald-700">{fmtARS(item.importe)}</p>
-                          <p className="text-slate-500">{item.movimientos} movimientos</p>
-                        </div>
-                      </div>
-                      <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500" style={{ width: `${width}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
-          <Card>
-            <h3 className="font-semibold mb-3">Kg despachados por producto</h3>
-            <p className="text-xs text-slate-500 mb-3">Volumen total de salidas de PT en el período.</p>
-            {executiveInsights.kgDespachadosPorProducto.length === 0 ? (
-              <p className="text-sm text-slate-500">Sin despachos de producto terminado.</p>
-            ) : (
-              <div className="space-y-3">
-                {executiveInsights.kgDespachadosPorProducto.map((item, idx) => {
-                  const max = Math.max(1, executiveInsights.kgDespachadosPorProducto[0]?.kg ?? 1);
-                  const width = Math.max(8, (item.kg / max) * 100);
-                  return (
-                    <div key={`${item.producto_id ?? item.producto_nombre}-${idx}`} className="space-y-1.5">
-                      <div className="flex items-start justify-between gap-3 text-xs">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 truncate">{item.producto_nombre}</p>
-                          <p className="text-slate-500">{item.movimientos} salidas · Último {item.ultima_fecha ? new Date(item.ultima_fecha).toLocaleDateString('es-AR') : 'Sin dato'}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-semibold text-cyan-700">{item.kg.toLocaleString('es-AR')} kg</p>
-                          <p className="text-slate-500">{fmtARS(item.importe)}</p>
-                        </div>
-                      </div>
-                      <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-600" style={{ width: `${width}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
-          <Card>
-            <h3 className="font-semibold mb-3">Clientes atendidos</h3>
-            <p className="text-xs text-slate-500 mb-3">Clientes con salidas de PT durante el período seleccionado.</p>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-widest text-slate-500">Clientes únicos</p>
-              <p className="text-3xl font-black text-violet-700 mt-2">{executiveInsights.clientesAtendidos}</p>
-              <p className="mt-3 text-sm text-slate-600">Kg totales: <strong>{executiveInsights.totalKgDespachados.toLocaleString('es-AR')}</strong></p>
-              <p className="text-sm text-slate-600">Importe estimado: <strong>{fmtARS(executiveInsights.totalImporte)}</strong></p>
+          <div className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Periodo actual</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">{periodoLabel}</p>
             </div>
-            <div className="mt-4 space-y-2">
-              {executiveInsights.topClientesPorVolumen.slice(0, 3).map((item) => (
-                <div key={`${item.cliente_nombre}-${item.ultima_fecha ?? 'sin-fecha'}`} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-slate-900">{item.cliente_nombre}</p>
-                    <p className="truncate text-xs text-slate-500">{item.movimientos} movimientos · {item.importe > 0 ? fmtARS(item.importe) : 'Sin importe'}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-violet-700">{item.kg.toLocaleString('es-AR')} kg</p>
-                    <p className="text-[10px] uppercase tracking-widest text-slate-400">{item.ultima_fecha ? new Date(item.ultima_fecha).toLocaleDateString('es-AR') : 'Sin fecha'}</p>
-                  </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Última actualización</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">{updatedAtLabel}</p>
+              <p className="mt-1 text-xs text-slate-500">{relativeUpdatedLabel}</p>
+            </div>
+          </div>
+        </div>
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 mb-1">Producción</h2>
+            <p className="text-sm text-slate-500">Fabricación, despachos y movimiento operativo del período.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <KPIBox label="Órdenes pendientes" value={`${kpis.ordenes_pendientes}`} trend={productionTrend} updatedAt={updatedAtLabel} tone="cyan" />
+            <KPIBox label="Órdenes en proceso" value={`${kpis.ordenes_en_proceso}`} trend={productionTrend} updatedAt={updatedAtLabel} tone="cyan" />
+            <KPIBox label="Órdenes finalizadas" value={`${kpis.ordenes_finalizadas}`} trend={productionTrend} updatedAt={updatedAtLabel} tone="emerald" />
+            <KPIBox label="Producción total" value={`${kpis.produccion_total.toLocaleString('es-AR')} kg`} trend={productionTrend} updatedAt={updatedAtLabel} tone="emerald" helper={`Merma total: ${kpis.merma_total.toLocaleString('es-AR')} kg`} />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <Card>
+              <h3 className="font-semibold mb-3">Ventas por producto terminado</h3>
+              <p className="text-xs text-slate-500 mb-3">Monto y kg vendidos en {executiveInsights.periodoLabel.toLowerCase()}.</p>
+              {executiveInsights.ventasPorProducto.length === 0 ? (
+                <p className="text-sm text-slate-500">Sin ventas de producto terminado.</p>
+              ) : (
+                <div className="space-y-3">
+                  {executiveInsights.ventasPorProducto.map((item, idx) => {
+                    const max = Math.max(1, executiveInsights.ventasPorProducto[0]?.importe ?? 1);
+                    const width = Math.max(8, (item.importe / max) * 100);
+                    return (
+                      <div key={`${item.producto_id ?? item.producto_nombre}-${idx}`} className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-3 text-xs">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.producto_nombre}</p>
+                            <p className="text-slate-500">{item.kg.toLocaleString('es-AR')} kg · {item.clientes_atendidos} clientes</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-semibold text-emerald-700">{fmtARS(item.importe)}</p>
+                            <p className="text-slate-500">{item.movimientos} movimientos</p>
+                          </div>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500" style={{ width: `${width}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-              {executiveInsights.topClientesPorVolumen.length === 0 ? (
-                <p className="text-sm text-slate-500">Sin clientes atendidos en el período.</p>
-              ) : null}
-            </div>
-          </Card>
+              )}
+            </Card>
 
-          <Card>
-            <h3 className="font-semibold mb-3">Top clientes por volumen</h3>
-            <p className="text-xs text-slate-500 mb-3">Ranking de clientes por kg despachados.</p>
-            {executiveInsights.topClientesPorVolumen.length === 0 ? (
-              <p className="text-sm text-slate-500">Sin volumen para mostrar.</p>
-            ) : (
-              <div className="space-y-2">
-                {executiveInsights.topClientesPorVolumen.map((item, idx) => {
-                  const max = Math.max(1, executiveInsights.topClientesPorVolumen[0]?.kg ?? 1);
-                  const width = Math.max(8, (item.kg / max) * 100);
-                  return (
-                    <div key={`${item.cliente_id ?? item.cliente_nombre}-${idx}`} className="space-y-1.5">
-                      <div className="flex items-start justify-between gap-3 text-xs">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 truncate">{item.cliente_nombre}</p>
-                          <p className="text-slate-500">{item.movimientos} salidas · {fmtARS(item.importe)}</p>
+            <Card>
+              <h3 className="font-semibold mb-3">Kg despachados por producto</h3>
+              <p className="text-xs text-slate-500 mb-3">Volumen total de salidas de PT en el período.</p>
+              {executiveInsights.kgDespachadosPorProducto.length === 0 ? (
+                <p className="text-sm text-slate-500">Sin despachos de producto terminado.</p>
+              ) : (
+                <div className="space-y-3">
+                  {executiveInsights.kgDespachadosPorProducto.map((item, idx) => {
+                    const max = Math.max(1, executiveInsights.kgDespachadosPorProducto[0]?.kg ?? 1);
+                    const width = Math.max(8, (item.kg / max) * 100);
+                    return (
+                      <div key={`${item.producto_id ?? item.producto_nombre}-${idx}`} className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-3 text-xs">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.producto_nombre}</p>
+                            <p className="text-slate-500">{item.movimientos} salidas · Último {item.ultima_fecha ? new Date(item.ultima_fecha).toLocaleDateString('es-AR') : 'Sin dato'}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-semibold text-cyan-700">{item.kg.toLocaleString('es-AR')} kg</p>
+                            <p className="text-slate-500">{fmtARS(item.importe)}</p>
+                          </div>
                         </div>
-                        <p className="font-semibold text-fuchsia-700 shrink-0">{item.kg.toLocaleString('es-AR')} kg</p>
+                        <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-600" style={{ width: `${width}%` }} />
+                        </div>
                       </div>
-                      <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-fuchsia-500 to-pink-500" style={{ width: `${width}%` }} />
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+
+            <Card>
+              <h3 className="font-semibold mb-3">Top clientes por volumen</h3>
+              <p className="text-xs text-slate-500 mb-3">Ranking de clientes por kg despachados.</p>
+              {executiveInsights.topClientesPorVolumen.length === 0 ? (
+                <p className="text-sm text-slate-500">Sin volumen para mostrar.</p>
+              ) : (
+                <div className="space-y-2">
+                  {executiveInsights.topClientesPorVolumen.map((item, idx) => {
+                    const max = Math.max(1, executiveInsights.topClientesPorVolumen[0]?.kg ?? 1);
+                    const width = Math.max(8, (item.kg / max) * 100);
+                    return (
+                      <div key={`${item.cliente_id ?? item.cliente_nombre}-${idx}`} className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-3 text-xs">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{item.cliente_nombre}</p>
+                            <p className="text-slate-500">{item.movimientos} salidas · {fmtARS(item.importe)}</p>
+                          </div>
+                          <p className="font-semibold text-fuchsia-700 shrink-0">{item.kg.toLocaleString('es-AR')} kg</p>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-fuchsia-500 to-pink-500" style={{ width: `${width}%` }} />
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-        </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </div>
+        </section>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card>
             <p className="text-xs uppercase tracking-widest text-slate-500">Costos</p>
             <p className="mt-2 text-3xl font-black text-orange-500">{fmtARS(temporalInsights.costos)}</p>
-            <p className="mt-2 text-xs text-slate-500">Costos de órdenes finalizadas en {getDashboardPeriodoLabel(periodo).toLowerCase()}.</p>
+            <p className="mt-2 text-xs text-slate-500">Costos de órdenes finalizadas en {periodoLabel.toLowerCase()}.</p>
           </Card>
           <Card>
             <p className="text-xs uppercase tracking-widest text-slate-500">Ingresos</p>
             <p className="mt-2 text-3xl font-black text-emerald-500">{fmtARS(temporalInsights.ingresos)}</p>
-            <p className="mt-2 text-xs text-slate-500">Ventas PT con cliente en {getDashboardPeriodoLabel(periodo).toLowerCase()}.</p>
+            <p className="mt-2 text-xs text-slate-500">Ventas PT con cliente en {periodoLabel.toLowerCase()}.</p>
           </Card>
           <Card>
             <p className="text-xs uppercase tracking-widest text-slate-500">Flujo de caja</p>
@@ -385,18 +689,89 @@ export const DashboardPage = () => {
           <Card>
             <p className="text-xs uppercase tracking-widest text-slate-500">Alertas</p>
             <p className="mt-2 text-3xl font-black text-fuchsia-600">{temporalInsights.alertas.length}</p>
-            <p className="mt-2 text-xs text-slate-500">Alertas operativas dentro de {getDashboardPeriodoLabel(periodo).toLowerCase()}.</p>
+            <p className="mt-2 text-xs text-slate-500">Alertas operativas dentro de {periodoLabel.toLowerCase()}.</p>
           </Card>
         </div>
       </section>
 
-      <section>
-        <h2 className="text-lg font-bold text-slate-900 mb-3">Materia Prima</h2>
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 mb-1">Inventario</h2>
+          <p className="text-sm text-slate-500">Materia prima y producto terminado con consolidado operativo.</p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <Card><p className="text-xs text-slate-500">Stock físico MP</p><p className="text-3xl font-black mt-2 text-cyan-300">{kpis.stock_total_mp.toLocaleString('es-AR')} kg</p></Card>
-          <Card><p className="text-xs text-slate-500">Stock comprometido MP</p><p className="text-3xl font-black mt-2 text-orange-300">{kpis.stock_comprometido_mp.toLocaleString('es-AR')} kg</p></Card>
-          <Card><p className="text-xs text-slate-500">Stock disponible MP</p><p className="text-3xl font-black mt-2 text-emerald-300">{kpis.stock_disponible_mp.toLocaleString('es-AR')} kg</p></Card>
-          <Card><p className="text-xs text-slate-500">Lotes críticos</p><p className="text-3xl font-black mt-2 text-red-300">{kpis.stock_critico}</p></Card>
+          <KPIBox label="Stock físico MP" value={`${kpis.stock_total_mp.toLocaleString('es-AR')} kg`} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="cyan" />
+          <KPIBox label="Stock comprometido MP" value={`${kpis.stock_comprometido_mp.toLocaleString('es-AR')} kg`} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="orange" />
+          <KPIBox label="Stock disponible MP" value={`${kpis.stock_disponible_mp.toLocaleString('es-AR')} kg`} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="emerald" />
+          <KPIBox label="Lotes críticos" value={`${kpis.stock_critico}`} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="red" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <KPIBox label="Stock PT total" value={`${kpis.stock_total_pt.toLocaleString('es-AR')} kg`} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="fuchsia" />
+          <KPIBox label="Valor inventario PT" value={valorInventarioPtLabel} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="violet" helper="Base estimada desde órdenes finalizadas con costo real disponible." />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card>
+            <h3 className="font-semibold mb-3">Stock real por materia prima</h3>
+            <p className="text-xs text-slate-500 mb-3">Top insumos por stock físico real, consolidado desde `stock_mp_resumen`.</p>
+            {stockMpTop.length === 0 ? (
+              <div className="h-48 flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+                Sin stock de materia prima disponible todavía.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {stockMpTop.map((item, idx) => {
+                  const width = Math.max(8, (item.stock_actual / stockMpMax) * 100);
+                  return (
+                    <div key={item.insumo_id} className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800 truncate">{item.nombre_insumo}</p>
+                          <p className="text-slate-500">
+                            Disponible {item.stock_disponible.toLocaleString('es-AR')} kg · Comprometido {item.stock_comprometido.toLocaleString('es-AR')} kg
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-semibold text-cyan-700">{item.stock_actual.toLocaleString('es-AR')} kg</p>
+                          <p className="text-slate-400 uppercase tracking-widest text-[10px]">#{idx + 1}</p>
+                        </div>
+                      </div>
+                      <div className="h-3 rounded-full bg-slate-200 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 transition-all duration-300"
+                          style={{ width: `${width}%` }}
+                          title={`${item.nombre_insumo}: ${item.stock_actual.toLocaleString('es-AR')} kg`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+          <Card>
+            <h3 className="font-semibold mb-3">Consumo mensual por insumo</h3>
+            {consumoTop.length === 0 ? <p className="text-sm text-slate-700">Sin consumo mensual disponible todavía.</p> : (
+            <div className="space-y-2">
+              {consumoTop.map((c) => (
+                <div key={c.insumo}>
+                  <div className="flex justify-between text-xs"><span>{c.insumo}</span><span>{c.total.toLocaleString('es-AR')} kg</span></div>
+                  <div className="h-2 bg-slate-200 rounded-full"><div className="h-2 bg-cyan-500 rounded-full transition-all duration-300 ease-out" style={{ width: `${c.pct}%` }} /></div>
+                </div>
+              ))}
+            </div>)}
+          </Card>
+          <Card>
+            <h3 className="font-semibold mb-3">Consumo mensual total de MP</h3>
+            {consumoLine.length === 0 ? <p className="text-sm text-slate-700">Sin histórico suficiente para graficar consumo.</p> : (
+            <div className="flex items-end gap-2 h-44">
+              {consumoLine.map((p) => (
+                <div key={p.mes} className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full max-w-8 bg-emerald-500/70 rounded-t" style={{ height: `${Math.max(8, p.value / Math.max(1, Math.max(...consumoLine.map((x) => x.value))) * 140)}px` }} />
+                  <span className="text-[10px] text-slate-500">{p.mes.slice(5)}</span>
+                </div>
+              ))}
+            </div>)}
+          </Card>
         </div>
       </section>
 
@@ -501,6 +876,32 @@ export const DashboardPage = () => {
             ) : null}
           </div>
         </Card>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 mb-1">Finanzas</h2>
+          <p className="text-sm text-slate-500">Ingresos, costos y flujo estimado del período seleccionado.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <KPIBox label="Costos" value={fmtARS(temporalInsights.costos)} trend={financeTrend} updatedAt={updatedAtLabel} tone="orange" />
+          <KPIBox label="Ingresos" value={fmtARS(temporalInsights.ingresos)} trend={financeTrend} updatedAt={updatedAtLabel} tone="emerald" />
+          <KPIBox label="Flujo de caja" value={fmtARS(temporalInsights.flujoCaja)} trend={financeTrend} updatedAt={updatedAtLabel} tone={temporalInsights.flujoCaja >= 0 ? 'cyan' : 'red'} />
+          <KPIBox label="Proteína promedio fórmula" value={`${kpis.proteina_promedio_formula.toFixed(2)}%`} trend={financeTrend} updatedAt={updatedAtLabel} tone="violet" />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 mb-1">Alertas Operativas</h2>
+          <p className="text-sm text-slate-500">Señales críticas y seguimiento de problemas operativos.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <KPIBox label="Alertas activas" value={`${temporalInsights.alertas.length}`} trend={alertsTrend} updatedAt={updatedAtLabel} tone="fuchsia" />
+          <KPIBox label="Pendientes" value={`${summary.pendientes}`} trend={alertsTrend} updatedAt={updatedAtLabel} tone="red" />
+          <KPIBox label="Críticas activas" value={`${summary.criticas}`} trend={alertsTrend} updatedAt={updatedAtLabel} tone="red" />
+          <KPIBox label="En seguimiento" value={`${summary.seguimiento}`} trend={alertsTrend} updatedAt={updatedAtLabel} tone="orange" />
+        </div>
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">

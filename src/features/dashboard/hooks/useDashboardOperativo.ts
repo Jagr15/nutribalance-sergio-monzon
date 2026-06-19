@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { dashboardOperativoService } from '../services/dashboardOperativoService';
 import type {
   ConsumoMensualInsumo,
@@ -58,10 +58,16 @@ export const useDashboardOperativo = () => {
   const [ptInsights, setPtInsights] = useState<DashboardProductoTerminadoInsights>(EMPTY_PT_INSIGHTS);
   const [expedicionInsights, setExpedicionInsights] = useState<DashboardExpedicionInsights>(EMPTY_EXPEDICION_INSIGHTS);
   const [loading, setLoading] = useState(true);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
 
   const reload = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       setLoading(true);
+      setLoadError(null);
       const [kpiData, extra, resumenes, ptInsightsData, expedicionInsightsData] = await Promise.all([
         dashboardOperativoService.getKPIs(),
         dashboardOperativoService.getComposicionYConsumo(),
@@ -75,10 +81,13 @@ export const useDashboardOperativo = () => {
       setStockResumenes(resumenes);
       setPtInsights(ptInsightsData);
       setExpedicionInsights(expedicionInsightsData);
+      setLastUpdatedAt(new Date());
     } catch (error) {
       console.error('Error cargando dashboard operativo:', error);
+      setLoadError('No se pudo cargar el dashboard ejecutivo.');
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
   }, []);
 
@@ -89,5 +98,21 @@ export const useDashboardOperativo = () => {
     return () => window.clearTimeout(timer);
   }, [reload]);
 
-  return { kpis, formulas, consumoMensual, stockResumenes, ptInsights, expedicionInsights, loading, reload };
+  useEffect(() => {
+    const handleAlertasUpdated = () => {
+      void reload();
+    };
+
+    const interval = window.setInterval(() => {
+      void reload();
+    }, 120000);
+
+    window.addEventListener('alertas-updated', handleAlertasUpdated);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('alertas-updated', handleAlertasUpdated);
+    };
+  }, [reload]);
+
+  return { kpis, formulas, consumoMensual, stockResumenes, ptInsights, expedicionInsights, loading, reload, lastUpdatedAt, loadError };
 };
