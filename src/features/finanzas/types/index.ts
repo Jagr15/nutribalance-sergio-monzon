@@ -91,6 +91,7 @@ export interface ChequeTesoreriaRow {
   importe: number;
   fecha_emision: string;
   fecha_vencimiento: string;
+  fecha_acreditacion?: string | null;
   estado: EstadoChequeTesoreria;
   cliente_id: string | null;
   cliente_nombre: string | null;

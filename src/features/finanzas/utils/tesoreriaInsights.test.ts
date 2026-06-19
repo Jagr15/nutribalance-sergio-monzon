@@ -71,4 +71,42 @@ describe('buildTesoreriaInsights', () => {
     expect(result.alertasTesoreria.length).toBeGreaterThan(0);
     expect(result.gastosPorRubro.reduce((acc, row) => acc + row.porcentaje, 0)).toBeCloseTo(100, 2);
   });
+
+  it('genera alerta crítica por descubierto cuando un cheque emitido no tendrá fondos', () => {
+    const result = buildTesoreriaInsights(
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [
+        {
+          id: 'chq-1',
+          numero: '000123',
+          tipo: 'EMITIDO',
+          tercero: 'Proveedor Riesgo SA',
+          importe: 120000,
+          fecha_emision: '2026-06-10',
+          fecha_vencimiento: '2026-06-20',
+          estado: 'PENDIENTE',
+          cliente_id: null,
+          cliente_nombre: null,
+        },
+      ] as never,
+      10000,
+    );
+
+    const alerta = result.alertasTesoreria.find((item) => item.tipo === 'Riesgo de descubierto por cheque');
+    expect(alerta).toBeDefined();
+    expect(alerta?.prioridad).toBe('critica');
+    expect(alerta?.titulo).toContain('000123');
+    expect(alerta?.dato_asociado).toMatchObject({
+      cheque: '000123',
+      tercero: 'Proveedor Riesgo SA',
+      importe: 120000,
+      vence: '2026-06-20',
+    });
+    expect(typeof alerta?.dato_asociado.saldo_proyectado).toBe('number');
+    expect((alerta?.dato_asociado.saldo_proyectado as number)).toBeLessThan(0);
+  });
 });

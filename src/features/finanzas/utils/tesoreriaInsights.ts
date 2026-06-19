@@ -312,6 +312,7 @@ export const buildProyeccionFlujo = (inputs: FlujoProjectionInputs): ProyeccionF
 };
 
 export const buildAlertasTesoreria = (inputs: {
+  saldoActual: number;
   cartera: ClienteCarteraRow[];
   chequesEmitidos: ChequeTesoreriaRow[];
   chequesRecibidos: ChequeTesoreriaRow[];
@@ -319,28 +320,65 @@ export const buildAlertasTesoreria = (inputs: {
 }): AlertaTesoreriaRaw[] => {
   const alerts: AlertaTesoreriaRaw[] = [];
   const todayTime = today.getTime();
+  const pendingChequesEmitidos = inputs.chequesEmitidos.filter((cheque) => cheque.estado === 'PENDIENTE');
+  const pendingChequesRecibidos = inputs.chequesRecibidos.filter((cheque) => cheque.estado === 'PENDIENTE');
   const within = (date: string, days: number) => {
     const diff = Math.ceil((new Date(date).getTime() - todayTime) / (1000 * 60 * 60 * 24));
     return diff >= 0 && diff <= days;
   };
 
-  inputs.chequesEmitidos
-    .filter((cheque) => cheque.estado === 'PENDIENTE' && within(cheque.fecha_vencimiento, 7))
+  const saldoProyectadoAlVencimiento = (cheque: ChequeTesoreriaRow) => {
+    const vencimiento = new Date(cheque.fecha_vencimiento).getTime();
+    const saldoCxc = inputs.cartera
+      .filter((row) => row.proximo_vencimiento && row.saldo_pendiente > 0 && new Date(row.proximo_vencimiento).getTime() <= vencimiento)
+      .reduce((acc, row) => acc + row.saldo_pendiente, 0);
+    const recibidosHastaVencimiento = pendingChequesRecibidos
+      .filter((row) => new Date(row.fecha_vencimiento).getTime() <= vencimiento)
+      .reduce((acc, row) => acc + row.importe, 0);
+    const emitidosHastaVencimiento = pendingChequesEmitidos
+      .filter((row) => row.id !== cheque.id && new Date(row.fecha_vencimiento).getTime() <= vencimiento)
+      .reduce((acc, row) => acc + row.importe, 0);
+    return inputs.saldoActual + saldoCxc + recibidosHastaVencimiento - emitidosHastaVencimiento - cheque.importe;
+  };
+
+  pendingChequesEmitidos
     .forEach((cheque) => {
-      alerts.push({
-        alerta_id: `tes-cheque-emitido-${cheque.id}`,
-        tipo: 'Cheque emitido próximo a vencer',
-        prioridad: 'media',
-        area: 'tesoreria',
-        titulo: `Cheque emitido ${cheque.numero} vence pronto`,
-        dato_asociado: {
-          cheque: cheque.numero,
-          tercero: cheque.tercero,
-          importe: cheque.importe,
-          vence: cheque.fecha_vencimiento,
-        },
-        fecha_evento: cheque.fecha_vencimiento,
-      });
+      const saldoProyectado = saldoProyectadoAlVencimiento(cheque);
+      if (saldoProyectado < 0) {
+        alerts.push({
+          alerta_id: `tes-cheque-descubierto-${cheque.id}`,
+          tipo: 'Riesgo de descubierto por cheque',
+          prioridad: 'critica',
+          area: 'tesoreria',
+          titulo: `Cheque emitido ${cheque.numero} podría vencer sin fondos`,
+          dato_asociado: {
+            cheque: cheque.numero,
+            tercero: cheque.tercero,
+            importe: cheque.importe,
+            vence: cheque.fecha_vencimiento,
+            saldo_proyectado: Number(saldoProyectado.toFixed(2)),
+          },
+          fecha_evento: cheque.fecha_vencimiento,
+        });
+        return;
+      }
+
+      if (within(cheque.fecha_vencimiento, 7)) {
+        alerts.push({
+          alerta_id: `tes-cheque-emitido-${cheque.id}`,
+          tipo: 'Cheque emitido próximo a vencer',
+          prioridad: 'media',
+          area: 'tesoreria',
+          titulo: `Cheque emitido ${cheque.numero} vence pronto`,
+          dato_asociado: {
+            cheque: cheque.numero,
+            tercero: cheque.tercero,
+            importe: cheque.importe,
+            vence: cheque.fecha_vencimiento,
+          },
+          fecha_evento: cheque.fecha_vencimiento,
+        });
+      }
     });
 
   inputs.chequesRecibidos
@@ -435,6 +473,7 @@ export const buildTesoreriaInsights = (
     chequesRecibidos: recibidos,
     proyeccionFlujo,
     alertasTesoreria: buildAlertasTesoreria({
+      saldoActual,
       cartera: carteraClientes,
       chequesEmitidos: emitidos,
       chequesRecibidos: recibidos,
