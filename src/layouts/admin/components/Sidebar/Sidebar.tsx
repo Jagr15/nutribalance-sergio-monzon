@@ -46,6 +46,7 @@ const menuItems: SidebarGroup[] = [
       { name: "Fórmulas", icon: FiLayers, path: ROUTES.FORMULAS, module: "formulas" },
       { name: "Órdenes", icon: FiLayers, path: ROUTES.ORDENES, module: "ordenes"},
       { name: "Costos", icon: FiBarChart2, path: ROUTES.COSTOS, module: "finanzas" },
+      { name: "Estados financieros", icon: FiBarChart2, path: ROUTES.ESTADOS_FINANCIEROS, module: "finanzas" },
       { name: "Tesorería", icon: FiDollarSign, path: ROUTES.TESORERIA, module: "tesoreria" },
       { name: "Trazabilidad", icon: FiGitMerge, path: ROUTES.TRAZABILIDAD, module: "trazabilidad" },
     ],

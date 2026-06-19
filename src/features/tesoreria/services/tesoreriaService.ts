@@ -1,6 +1,7 @@
 import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 import { supabaseClient } from '../../../infrastructure/api/supabase/client';
 import type { EstadoChequeTesoreria, TipoChequeTesoreria, ChequeTesoreriaRow } from '../../finanzas/types';
+import { contabilidadOperativaService } from '../../finanzas/services/contabilidadOperativaService';
 
 export interface ChequeTesoreriaFormValues {
   numero: string;
@@ -196,10 +197,54 @@ export const tesoreriaService = {
       writeMockCheques(nextRows);
       const updated = nextRows.find((row) => row.id === id);
       if (!updated) throw new Error(`Cheque ${id} no encontrado`);
+      if (estado === 'COBRADO' && updated.tipo === 'RECIBIDO') {
+        await contabilidadOperativaService.registrarCobranzaComprobante({
+          comprobante_legacy_uid: `chq-${updated.id}`,
+          fecha: new Date().toISOString(),
+          tercero: updated.tercero,
+          monto: updated.importe,
+          cliente: updated.cliente_nombre ?? null,
+          referencia: `Cobranza por cheque ${updated.numero}`,
+        });
+      }
+      if ((estado === 'DEPOSITADO' || estado === 'COBRADO') && updated.tipo === 'EMITIDO') {
+        await contabilidadOperativaService.registrarPagoComprobante({
+          comprobante_legacy_uid: `chq-${updated.id}`,
+          fecha: new Date().toISOString(),
+          tercero: updated.tercero,
+          monto: updated.importe,
+          referencia: `Pago por cheque ${updated.numero}`,
+        });
+      }
       return normalizeCheque(updated);
     }
+    const { data: current, error: currentError } = await supabaseClient
+      .from('tesoreria_cheques')
+      .select('id,numero,tipo,tercero,importe,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre')
+      .eq('id', id)
+      .maybeSingle<ChequeTesoreriaDbRow>();
+    if (currentError) throw currentError;
     const { data, error } = await supabaseClient.from('tesoreria_cheques').update({ estado }).eq('id', id).select('id,numero,tipo,tercero,importe,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre').single<ChequeTesoreriaDbRow>();
     if (error) throw new Error(formatDbError('actualizar el estado del cheque', error));
+    if (current && estado === 'COBRADO' && current.tipo === 'RECIBIDO') {
+      await contabilidadOperativaService.registrarCobranzaComprobante({
+        comprobante_legacy_uid: `chq-${current.id}`,
+        fecha: new Date().toISOString(),
+        tercero: current.tercero,
+        monto: Number(current.importe ?? 0),
+        cliente: current.cliente_nombre ?? null,
+        referencia: `Cobranza por cheque ${current.numero}`,
+      });
+    }
+    if (current && (estado === 'DEPOSITADO' || estado === 'COBRADO') && current.tipo === 'EMITIDO') {
+      await contabilidadOperativaService.registrarPagoComprobante({
+        comprobante_legacy_uid: `chq-${current.id}`,
+        fecha: new Date().toISOString(),
+        tercero: current.tercero,
+        monto: Number(current.importe ?? 0),
+        referencia: `Pago por cheque ${current.numero}`,
+      });
+    }
     return normalizeCheque(data);
   },
 };

@@ -15,12 +15,13 @@ import { normalizeKpis } from '../utils/finanzasCalculations';
 import { buildCostosFormulaVsReal } from '../utils/costosFormulaVsReal';
 import { buildIngresosPtPorProducto } from '../utils/ingresosPtPorProducto';
 import { buildTesoreriaInsights } from '../utils/tesoreriaInsights';
+import { contabilidadOperativaService } from './contabilidadOperativaService';
 import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
 import { RUBRO_AREA_DEFAULT, RUBRO_AREA_OPTIONS } from '../utils/finanzasDashboard';
 
 export interface CrearMovimientoPayload {
-  tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA';
+  tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA' | 'COBRANZA' | 'PAGO';
   descripcion: string;
   monto: number;
   origen_operativo?: string;
@@ -128,6 +129,12 @@ const num = (value: unknown) => Number(value ?? 0);
 const rubrosStorageKey = 'nutribalance_categorias_financieras_v1';
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 const allowedTipoMovimientos = new Set(['INGRESO', 'EGRESO']);
+const hashText = (value: string) => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  return `mov-${Math.abs(hash)}`;
+};
+const fechaDia = (value: string) => new Date(value).toISOString().slice(0, 10);
 
 const formatDbError = (action: string, error: unknown) => {
   if (error && typeof error === 'object') {
@@ -403,27 +410,35 @@ export const finanzasService = {
     if (!Number.isFinite(payload.monto) || payload.monto <= 0) {
       throw new Error('El monto debe ser mayor a 0.');
     }
-    if (!['INGRESO', 'EGRESO', 'TRANSFERENCIA'].includes(payload.tipo)) {
+    if (!['INGRESO', 'EGRESO', 'TRANSFERENCIA', 'COBRANZA', 'PAGO'].includes(payload.tipo)) {
       throw new Error('Tipo de movimiento inválido.');
     }
-    const uniqueId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? `fin-${crypto.randomUUID()}`
-      : `fin-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const tipoContable = payload.tipo === 'COBRANZA' ? 'INGRESO' : payload.tipo === 'PAGO' ? 'EGRESO' : payload.tipo;
+    const origenOperativo = payload.origen_operativo?.trim() || (payload.tipo === 'COBRANZA' || payload.tipo === 'INGRESO' ? 'COBRANZA_MANUAL' : payload.tipo === 'PAGO' || payload.tipo === 'EGRESO' ? 'PAGO_MANUAL' : 'AJUSTE_MANUAL');
+    const uniqueId = hashText([
+      fechaDia(new Date().toISOString()),
+      tipoContable,
+      descripcion,
+      payload.monto.toFixed(2),
+      origenOperativo,
+      payload.categoria_id ?? '',
+      payload.centro_costo_id ?? '',
+    ].join('|'));
 
-    const { error } = await supabaseClient.from('flujo_caja_movimientos').insert({
+    await contabilidadOperativaService.ensureMovimiento({
       legacy_uid: uniqueId,
       fecha: new Date().toISOString(),
-      tipo: payload.tipo,
+      tipo: tipoContable,
       descripcion,
       monto: payload.monto,
-      origen_operativo: payload.origen_operativo ?? 'MANUAL',
-      categoria_id: payload.categoria_id ?? null,
-      centro_costo_id: payload.centro_costo_id ?? null,
+      origen_operativo: origenOperativo,
+      categoria_id: payload.categoria_id ?? undefined,
+      centro_costo_id: payload.centro_costo_id ?? undefined,
       estado: payload.estado ?? 'CONFIRMADO',
-      metadata: {},
+      metadata: {
+        origen: 'manual',
+      },
     });
-
-    if (error) throw error;
     await auditAction({
       modulo: 'finanzas',
       accion: 'register_financial_movement',
@@ -432,7 +447,7 @@ export const finanzasService = {
         tipo: payload.tipo,
         descripcion,
         monto: payload.monto,
-        origen_operativo: payload.origen_operativo ?? 'MANUAL',
+        origen_operativo: origenOperativo,
       },
     });
   },

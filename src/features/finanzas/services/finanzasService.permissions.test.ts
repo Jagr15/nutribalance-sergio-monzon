@@ -25,7 +25,10 @@ describe('finanzasService permisos', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    fromMock.mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) });
+    fromMock.mockReturnValue({
+      insert: vi.fn().mockResolvedValue({ error: null }),
+      upsert: vi.fn().mockResolvedValue({ error: null }),
+    });
   });
 
   it('bloquea register_financial_movement sin permiso', async () => {
