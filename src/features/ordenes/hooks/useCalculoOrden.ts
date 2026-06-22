@@ -5,6 +5,7 @@ import type { Formula } from '../../formulas/types';
 import type { StockMateriaPrima } from '../../insumos/types'; // Asegúrate de importar la interfaz
 import type { DetalleInsumoLote } from '../types/orden';
 import { TipoUnidad } from '../../../shared/types/global.interface';
+import { buildStockRequirementRows, type StockLoteForFlow } from '../utils/productionFlow';
 
 export interface CalculoOrdenResultado {
   inversionTotal: number;
@@ -12,6 +13,12 @@ export interface CalculoOrdenResultado {
   lotesInvolucrados: DetalleInsumoLote[];
   stockSuficiente: boolean;
   ingredientesFaltantes: string[];
+  resumenInsumos: Array<{
+    nombre_insumo: string;
+    disponible: number;
+    requerida: number;
+    faltante: number;
+  }>;
 }
 
 export const useCalculoOrden = () => {
@@ -23,6 +30,18 @@ export const useCalculoOrden = () => {
     setIsCalculando(true);
     try {
       const todosLosLotes: StockMateriaPrima[] = await stockMateriaPrimaService.findAll();
+      const lotesFlow: StockLoteForFlow[] = todosLosLotes.map((lote) => ({
+        id: lote.uid,
+        legacy_uid: lote.uid,
+        lote: lote.lote,
+        insumo_id: lote.id_insumo,
+        insumo_legacy_uid: lote.id_insumo,
+        insumo_nombre: lote.id_insumo,
+        fecha_ingreso: lote.fecha_ingreso.toISOString(),
+        cantidad_actual: lote.cantidad_actual,
+        cantidad_comprometida: lote.cantidad_comprometida,
+        costo_unitario: lote.costo_unitario,
+      }));
       let inversionTotal = 0;
       const lotesInvolucrados: DetalleInsumoLote[] = [];
       const ingredientesFaltantes: string[] = []; 
@@ -76,7 +95,8 @@ export const useCalculoOrden = () => {
         costoPorKg: inversionTotal / cantidadObjetivo,
         lotesInvolucrados,
         stockSuficiente: stockSuficienteGlobal,
-        ingredientesFaltantes 
+        ingredientesFaltantes,
+        resumenInsumos: buildStockRequirementRows(cantidadObjetivo, formula.ingredientes, lotesFlow),
       };
     } catch (error) {
       console.error("Error en el cálculo FIFO con stock comprometido:", error);

@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
+import { FiAlertTriangle, FiBell, FiDollarSign, FiPackage, FiSettings } from 'react-icons/fi';
 import Swal from 'sweetalert2';
 import { Card } from '../../../shared/components/card';
 import { StatusBadge, TableActionButton, TableActions } from '../../../shared/components/table';
 import { useAlertas } from '../hooks/useAlertas';
 import type { AlertaOperativa, EstadoAlerta, PrioridadAlerta } from '../types/alerta';
+import { getAlertCategory } from '../utils/alertasClasificacion';
 
 const priorityLabel: Record<PrioridadAlerta, string> = {
   critica: 'Crítica',
@@ -30,6 +32,33 @@ const statusScore: Record<EstadoAlerta, number> = {
   atendida: 0,
   descartada: 0,
 };
+
+const categoryMeta = {
+  financiera: {
+    title: 'Alertas Financieras',
+    description: 'Tesorería, cheques, flujo de caja, cuentas y costos bajo control.',
+    icon: FiDollarSign,
+    accent: 'from-amber-400 to-yellow-500',
+    iconBg: 'bg-amber-100 text-amber-700',
+    border: 'border-amber-200',
+    glow: 'shadow-[0_18px_40px_rgba(245,158,11,.12)]',
+    empty: 'No hay alertas financieras activas.',
+    shortLabel: 'Financieras',
+    pillClass: 'bg-amber-100 text-amber-800',
+  },
+  produccion: {
+    title: 'Alertas de Producción',
+    description: 'Órdenes, stock, insumos, fórmulas, lotes y trazabilidad operativa.',
+    icon: FiSettings,
+    accent: 'from-blue-500 to-cyan-500',
+    iconBg: 'bg-blue-100 text-blue-700',
+    border: 'border-blue-200',
+    glow: 'shadow-[0_18px_40px_rgba(59,130,246,.12)]',
+    empty: 'No hay alertas de producción activas.',
+    shortLabel: 'Producción',
+    pillClass: 'bg-blue-100 text-blue-800',
+  },
+} as const;
 
 const escapeHtml = (value: unknown) =>
   String(value)
@@ -65,13 +94,15 @@ const getOrigenDetalle = (alerta: AlertaOperativa) => {
   return `Producto: ${alerta.datoAsociado.producto || 'Sin dato'} · Rotación y cobertura comercial por debajo de objetivo.`;
 };
 
+const isActiveAlert = (alerta: AlertaOperativa) => alerta.estado !== 'atendida' && alerta.estado !== 'descartada';
+
 const AlertasPage = () => {
-  const { alertas, summary, updateEstado, isLoading, loadError } = useAlertas();
+  const { alertas, updateEstado, isLoading, loadError } = useAlertas();
   const [priorityFilter, setPriorityFilter] = useState<'todas' | PrioridadAlerta>('todas');
   const [statusFilter, setStatusFilter] = useState<'todos' | EstadoAlerta>('todos');
 
   const filtered = useMemo(() => {
-    const rows = alertas
+    return alertas
       .filter((alerta) => {
         const byPriority = priorityFilter === 'todas' || alerta.prioridad === priorityFilter;
         const byStatus = statusFilter === 'todos' || alerta.estado === statusFilter;
@@ -84,14 +115,36 @@ const AlertasPage = () => {
         if (prioDiff !== 0) return prioDiff;
         return statusScore[b.estado] - statusScore[a.estado];
       });
-    return rows;
   }, [alertas, priorityFilter, statusFilter]);
+
+  const groupedAlerts = useMemo(() => {
+    const activeAlerts = alertas.filter(isActiveAlert);
+    const activeFinancial = activeAlerts.filter((alerta) => getAlertCategory(alerta) === 'financiera');
+    const activeProduction = activeAlerts.filter((alerta) => getAlertCategory(alerta) === 'produccion');
+    const currentFinancial = filtered.filter((alerta) => getAlertCategory(alerta) === 'financiera');
+    const currentProduction = filtered.filter((alerta) => getAlertCategory(alerta) === 'produccion');
+
+    return {
+      financial: {
+        active: activeFinancial,
+        current: currentFinancial,
+      },
+      production: {
+        active: activeProduction,
+        current: currentProduction,
+      },
+    };
+  }, [alertas, filtered]);
 
   const openDetalle = (alerta: AlertaOperativa) => {
     void Swal.fire({
       title: alerta.titulo,
       html: `<div style="text-align:left; color:#0f172a; font-size:14px;"><p style="margin:0 0 8px;"><strong>Impacto operativo:</strong> ${escapeHtml(alerta.impactoOperativo)}</p><div style="margin:0 0 8px;"><strong>Dato asociado:</strong>${formatDatoAsociadoHtml(alerta.datoAsociado)}</div><p style="margin:0 0 8px;"><strong>Acción recomendada:</strong> ${escapeHtml(alerta.accionRecomendada)}</p><p style="margin:0 0 8px;"><strong>Prioridad:</strong> ${priorityLabel[alerta.prioridad]}</p><p style="margin:0 0 8px;"><strong>Estado:</strong> ${estadoLabel[alerta.estado]}</p><p style="margin:0;"><strong>Fecha:</strong> ${escapeHtml(alerta.fechaRelativa)}</p></div>`,
-      background: '#ffffff', color: '#0f172a', confirmButtonColor: '#2563eb', confirmButtonText: 'Cerrar', width: 760,
+      background: '#ffffff',
+      color: '#0f172a',
+      confirmButtonColor: '#2563eb',
+      confirmButtonText: 'Cerrar',
+      width: 760,
     });
   };
 
@@ -99,7 +152,10 @@ const AlertasPage = () => {
     void Swal.fire({
       title: `Origen · ${alerta.area}`,
       html: `<div style="text-align:left; color:#0f172a; font-size:14px;"><p style="margin:0 0 8px;">${getOrigenDetalle(alerta)}</p><p style="margin:0;"><strong>Referencia:</strong> ${alerta.descripcion}</p></div>`,
-      background: '#ffffff', color: '#0f172a', confirmButtonColor: '#2563eb', confirmButtonText: 'Cerrar',
+      background: '#ffffff',
+      color: '#0f172a',
+      confirmButtonColor: '#2563eb',
+      confirmButtonText: 'Cerrar',
     });
   };
 
@@ -124,23 +180,87 @@ const AlertasPage = () => {
     <div className="space-y-6">
       <section>
         <p className="text-sm uppercase tracking-widest text-blue-400">Centro de alertas</p>
-        <h1 className="text-3xl font-bold mt-2">Alertas Operativas</h1>
-        <p className="text-slate-500 mt-2">Situaciones activas que requieren seguimiento para mantener continuidad operativa.</p>
+        <h1 className="text-3xl font-bold mt-2">Alertas del sistema</h1>
+        <p className="text-slate-500 mt-2">Separadas por impacto financiero y operativo para priorizar la respuesta.</p>
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card><p className="text-xs uppercase tracking-widest text-slate-500">Pendientes</p><h2 className="text-3xl font-black mt-2 text-red-300">{summary.pendientes}</h2></Card>
-        <Card><p className="text-xs uppercase tracking-widest text-slate-500">Críticas activas</p><h2 className="text-3xl font-black mt-2 text-red-300">{summary.criticas}</h2></Card>
-        <Card><p className="text-xs uppercase tracking-widest text-slate-500">En seguimiento</p><h2 className="text-3xl font-black mt-2 text-orange-300">{summary.seguimiento}</h2></Card>
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {(
+          [
+            { key: 'financiera', groupedKey: 'financial' },
+            { key: 'produccion', groupedKey: 'production' },
+          ] as const
+        ).map(({ key, groupedKey }) => {
+          const meta = categoryMeta[key];
+          const alerts = groupedAlerts[groupedKey].active;
+          const criticalCount = alerts.filter((alerta) => alerta.prioridad === 'critica').length;
+          const Icon = meta.icon;
+
+          return (
+            <Card key={key} className={`relative overflow-hidden border ${meta.border} ${meta.glow} bg-white`}>
+              <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${meta.accent}`} />
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className={`relative flex h-14 w-14 items-center justify-center rounded-2xl ${meta.iconBg}`}>
+                    <Icon className="h-7 w-7" />
+                    {key === 'financiera' ? <FiBell className="absolute bottom-0 right-0 h-4 w-4 translate-x-1 translate-y-1 rounded-full bg-white p-0.5 text-amber-500 shadow-sm" /> : null}
+                    {key === 'produccion' ? <FiPackage className="absolute bottom-0 right-0 h-4 w-4 translate-x-1 translate-y-1 rounded-full bg-white p-0.5 text-blue-600 shadow-sm" /> : null}
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{meta.title}</p>
+                    <h2 className="mt-1 text-xl font-black text-slate-900">{alerts.length}</h2>
+                    <p className="mt-1 text-sm text-slate-600">{meta.description}</p>
+                  </div>
+                </div>
+                <div className="min-w-[92px] rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Activas</p>
+                  <p className="mt-1 text-2xl font-black text-slate-900">{alerts.length}</p>
+                  <p className="text-[11px] text-slate-500">{criticalCount > 0 ? `${criticalCount} críticas` : 'Sin críticas'}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  {key === 'financiera' ? 'Tesorería y cuentas' : 'Producción y stock'}
+                </span>
+                {criticalCount > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
+                    <FiAlertTriangle className="h-3.5 w-3.5" />
+                    {criticalCount} críticas
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                    Operación controlada
+                  </span>
+                )}
+              </div>
+            </Card>
+          );
+        })}
       </section>
 
       <Card>
         <div className="flex flex-wrap gap-3 items-center mb-4">
-          <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as 'todas' | PrioridadAlerta)} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm">
-            <option value="todas">Todas las prioridades</option><option value="critica">Críticas</option><option value="media">Medias</option><option value="informativa">Informativas</option>
+          <select
+            value={priorityFilter}
+            onChange={(event) => setPriorityFilter(event.target.value as 'todas' | PrioridadAlerta)}
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm"
+          >
+            <option value="todas">Todas las prioridades</option>
+            <option value="critica">Críticas</option>
+            <option value="media">Medias</option>
+            <option value="informativa">Informativas</option>
           </select>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'todos' | EstadoAlerta)} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm">
-            <option value="todos">Todos los estados</option><option value="pendiente">Pendiente</option><option value="en seguimiento">En seguimiento</option><option value="atendida">Atendida</option><option value="descartada">Descartada</option>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as 'todos' | EstadoAlerta)}
+            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm"
+          >
+            <option value="todos">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="en seguimiento">En seguimiento</option>
+            <option value="atendida">Atendida</option>
+            <option value="descartada">Descartada</option>
           </select>
         </div>
 
@@ -153,30 +273,86 @@ const AlertasPage = () => {
           <div className="text-sm text-slate-500 py-8 text-center">No hay alertas para los filtros seleccionados.</div>
         ) : null}
 
-        <div className="space-y-3">
-          {filtered.map((alerta) => (
-            <div key={alerta.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 hover:bg-slate-50 transition-colors">
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {(
+            [
+              {
+                key: 'financiera',
+                title: 'Alertas financieras recientes',
+                alerts: groupedAlerts.financial.current,
+                empty: categoryMeta.financiera.empty,
+                pillClass: categoryMeta.financiera.pillClass,
+                helper: 'Tesorería, cheques, flujo de caja, costos y estados financieros.',
+              },
+              {
+                key: 'production',
+                title: 'Alertas de producción recientes',
+                alerts: groupedAlerts.production.current,
+                empty: categoryMeta.produccion.empty,
+                pillClass: categoryMeta.produccion.pillClass,
+                helper: 'Órdenes, stock, insumos, lotes críticos, fórmulas y trazabilidad.',
+              },
+            ] as const
+          ).map((section) => (
+            <div key={section.key} className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="flex items-start justify-between gap-3 mb-4">
                 <div>
-                  <h3 className="font-semibold text-slate-900">{alerta.titulo}</h3>
-                  <p className="text-sm text-slate-500 mt-1">{alerta.descripcion}</p>
-                  <p className="text-xs text-slate-500 mt-2">{alerta.fechaRelativa} · Área {alerta.area}</p>
+                  <h2 className="text-lg font-bold text-slate-900">{section.title}</h2>
+                  <p className="text-sm text-slate-500 mt-1">{section.helper}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <StatusBadge value={priorityLabel[alerta.prioridad]} />
-                  <StatusBadge value={estadoLabel[alerta.estado]} />
-                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${section.pillClass}`}>
+                  {section.alerts.length}
+                </span>
               </div>
 
-              <div className="mt-4">
-                <TableActions className="justify-start">
-                  <TableActionButton label="Detalle" tone="secondary" onClick={() => openDetalle(alerta)} />
-                  <TableActionButton label="Origen" tone="secondary" onClick={() => openOrigen(alerta)} />
-                  {alerta.estado === 'pendiente' ? <TableActionButton label="Seguimiento" tone="secondary" onClick={() => void updateEstado(alerta.id, 'en seguimiento')} /> : null}
-                  {alerta.estado !== 'atendida' && alerta.estado !== 'descartada' ? <TableActionButton label="Finalizar" tone="success" onClick={() => void handleFinalizar(alerta)} /> : null}
-                  {alerta.estado === 'atendida' ? <TableActionButton label="Reabrir" tone="secondary" onClick={() => void updateEstado(alerta.id, 'pendiente')} /> : null}
-                </TableActions>
-              </div>
+              {section.alerts.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
+                  {section.empty}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {section.alerts.map((alerta) => (
+                    <div
+                      key={alerta.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:bg-slate-50"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <h3 className="font-semibold text-slate-900">{alerta.titulo}</h3>
+                          <p className="mt-1 text-sm text-slate-500">{alerta.descripcion}</p>
+                          <p className="mt-2 text-xs text-slate-500">
+                            {alerta.fechaRelativa} · Área {alerta.area}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <StatusBadge value={priorityLabel[alerta.prioridad]} />
+                          <StatusBadge value={estadoLabel[alerta.estado]} />
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <TableActions className="justify-start">
+                          <TableActionButton label="Detalle" tone="secondary" onClick={() => openDetalle(alerta)} />
+                          <TableActionButton label="Origen" tone="secondary" onClick={() => openOrigen(alerta)} />
+                          {alerta.estado === 'pendiente' ? (
+                            <TableActionButton
+                              label="Seguimiento"
+                              tone="secondary"
+                              onClick={() => void updateEstado(alerta.id, 'en seguimiento')}
+                            />
+                          ) : null}
+                          {alerta.estado !== 'atendida' && alerta.estado !== 'descartada' ? (
+                            <TableActionButton label="Finalizar" tone="success" onClick={() => void handleFinalizar(alerta)} />
+                          ) : null}
+                          {alerta.estado === 'atendida' ? (
+                            <TableActionButton label="Reabrir" tone="secondary" onClick={() => void updateEstado(alerta.id, 'pendiente')} />
+                          ) : null}
+                        </TableActions>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

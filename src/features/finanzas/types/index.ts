@@ -57,6 +57,17 @@ export interface PresupuestoVsRealRubro {
   generado: boolean;
 }
 
+export interface PresupuestoMensualGestionRow {
+  id: string;
+  rubro_id: string;
+  rubro_nombre: string;
+  mes: number;
+  anio: number;
+  presupuesto: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface GastoPorRubro {
   rubro: RubroFinanciero;
   monto: number;
@@ -81,7 +92,7 @@ export interface ClienteCarteraRow {
 }
 
 export type TipoChequeTesoreria = 'EMITIDO' | 'RECIBIDO';
-export type EstadoChequeTesoreria = 'PENDIENTE' | 'DEPOSITADO' | 'COBRADO' | 'RECHAZADO' | 'VENCIDO';
+export type EstadoChequeTesoreria = 'PENDIENTE' | 'A_DEPOSITAR' | 'DEPOSITADO' | 'COBRADO' | 'RECHAZADO' | 'ENDOSADO' | 'VENCIDO';
 
 export interface ChequeTesoreriaRow {
   id: string;

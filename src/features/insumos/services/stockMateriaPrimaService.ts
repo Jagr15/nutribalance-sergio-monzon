@@ -4,6 +4,7 @@ import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
 import { contabilidadOperativaService } from '../../finanzas/services/contabilidadOperativaService';
 import { calcularCostoIngresoMP, type UnidadPrecioMP } from '../utils/costoIngreso';
+import type { Silo } from '../../silos/types';
 
 export interface NewStockEntryData {
   id_insumo: string;
@@ -46,6 +47,17 @@ export const stockMateriaPrimaService = {
 
     const lote = data.lote.trim().toUpperCase();
     const remito = data.remito_nro?.trim() ?? '';
+    const silosService = (ApiService as typeof ApiService & { silos?: { getAll: () => Promise<Silo[]> } }).silos;
+    if (silosService?.getAll) {
+      const silos = await silosService.getAll();
+      const siloSeleccionado = silos.find((silo) => silo.nombre === data.ubicacion.trim());
+      if (!siloSeleccionado) {
+        throw new Error('El silo seleccionado no existe.');
+      }
+      if (siloSeleccionado.tipo_uso !== 'MATERIA_PRIMA') {
+        throw new Error('Solo se pueden ingresar materias primas en silos de Materia Prima.');
+      }
+    }
 
     const created = await ApiService.stockMP.create({
       id_insumo: data.id_insumo,

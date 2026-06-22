@@ -2,7 +2,10 @@ import type{ Silo } from '../../../../features/silos/types';
 import initialData from '../data/silo.json';
 
 // Simulamos una base de datos local para el mock
-let silosDb: Silo[] = [...initialData];
+let silosDb: Silo[] = (initialData as Silo[]).map((silo) => ({
+  ...silo,
+  tipo_uso: silo.tipo_uso ?? 'MATERIA_PRIMA',
+}));
 
 export const mockSiloService = {
   /**
@@ -31,6 +34,7 @@ export const mockSiloService = {
     return new Promise((resolve) => {
       const nuevoSilo: Silo = {
         ...data,
+        tipo_uso: data.tipo_uso ?? 'MATERIA_PRIMA',
         uid: `silo-${Math.random().toString(36).substr(2, 9)}` // Generación de UID temporal
       };
       silosDb.push(nuevoSilo);

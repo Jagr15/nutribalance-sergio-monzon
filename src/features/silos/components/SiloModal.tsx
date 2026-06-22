@@ -5,6 +5,11 @@ import { useSilos } from '../hooks/useSilos';
 import type { Silo } from '../types/silo';
 import Swal from 'sweetalert2';
 
+const tipoLabels: Record<Silo['tipo_uso'], string> = {
+  MATERIA_PRIMA: 'Materia Prima',
+  PRODUCTO_TERMINADO: 'Producto Terminado',
+};
+
 interface Props {
   silo?: Silo;
   existingSilos: Silo[];
@@ -18,7 +23,8 @@ const SiloModal: React.FC<Props> = ({ silo, existingSilos, onClose, onSuccess })
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     nombre: silo?.nombre || '',
-    descripcion: silo?.descripcion || ''
+    descripcion: silo?.descripcion || '',
+    tipo_uso: silo?.tipo_uso || 'MATERIA_PRIMA' as Silo['tipo_uso'],
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,6 +35,7 @@ const SiloModal: React.FC<Props> = ({ silo, existingSilos, onClose, onSuccess })
     const normalized = {
       nombre: formData.nombre.trim().toUpperCase(),
       descripcion: formData.descripcion.trim(),
+      tipo_uso: formData.tipo_uso,
     };
     if (!normalized.nombre) {
       setSubmitError('El nombre del silo es obligatorio.');
@@ -113,6 +120,19 @@ const SiloModal: React.FC<Props> = ({ silo, existingSilos, onClose, onSuccess })
                 placeholder="Detalles de ubicación o capacidad..."
                 className="ui-input w-full rounded-lg py-2.5 px-3 text-sm text-slate-700 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-100 outline-none transition-all duration-200 ease-out resize-none"
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Tipo de silo</label>
+              <select
+                value={formData.tipo_uso}
+                onChange={(e) => setFormData({ ...formData, tipo_uso: e.target.value as Silo['tipo_uso'] })}
+                className="ui-input w-full rounded-lg py-2.5 px-3 text-sm text-slate-700 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-100 outline-none transition-all duration-200 ease-out"
+              >
+                {Object.entries(tipoLabels).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
             </div>
           </div>
 

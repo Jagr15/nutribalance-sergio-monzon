@@ -22,7 +22,7 @@ type ChequeTesoreriaDbRow = ChequeTesoreriaRow & {
 };
 
 const STORAGE_KEY = 'nutribalance_tesoreria_cheques_v1';
-const ESTADOS_VALIDOS = new Set<EstadoChequeTesoreria>(['PENDIENTE', 'DEPOSITADO', 'COBRADO', 'RECHAZADO', 'VENCIDO']);
+const ESTADOS_VALIDOS = new Set<EstadoChequeTesoreria>(['PENDIENTE', 'A_DEPOSITAR', 'DEPOSITADO', 'COBRADO', 'RECHAZADO', 'ENDOSADO', 'VENCIDO']);
 
 const cleanText = (value: string) => value.trim().replace(/\s+/g, ' ');
 

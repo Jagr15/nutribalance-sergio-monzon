@@ -40,7 +40,7 @@ const badgeLabel = (value: number | null, positive: string, negative: string) =>
 
 const isValidPercentage = (value: number) => Number.isFinite(value) && value > 0;
 
-const getDraftSaveError = (draft: FormulaDraftState, summary: Formula) => {
+const getDraftSaveError = (draft: FormulaDraftState) => {
   if (!draft.nombre_producto.trim()) {
     return 'El nombre de la fórmula es obligatorio.';
   }
@@ -56,11 +56,7 @@ const getDraftSaveError = (draft: FormulaDraftState, summary: Formula) => {
 
   const sumaIngredientes = validIngredients.reduce((acc, ingredient) => acc + (Number(ingredient.porcentaje) || 0), 0);
   if (Math.abs(sumaIngredientes - 100) > 0.01) {
-    return `La suma de ingredientes debe ser 100%. Actualmente es ${sumaIngredientes.toFixed(2)}%.`;
-  }
-
-  if (summary.advertencias_costos?.some((warning) => warning.toLowerCase().includes('sin costo disponible'))) {
-    return 'Hay ingredientes sin precio disponible. Complete el costo antes de guardar.';
+    return 'La suma de ingredientes debe ser 100%.';
   }
 
   return null;
@@ -290,12 +286,6 @@ const DraftEditor: React.FC<DraftEditorProps> = ({ draft, onChange, maestroInsum
             <div className="text-slate-700">Cantidad ingredientes: <span className="font-bold text-slate-900">{summary.ingredientes.length}</span></div>
           </div>
 
-          {(summary.advertencias_nutricionales?.length || summary.advertencias_costos?.length) ? (
-            <div className="space-y-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] text-rose-700">
-              {summary.advertencias_nutricionales?.slice(0, 2).map((warning) => <p key={`n-${warning}`}>• {warning}</p>)}
-              {summary.advertencias_costos?.slice(0, 2).map((warning) => <p key={`c-${warning}`}>• {warning}</p>)}
-            </div>
-          ) : null}
         </div>
       </div>
     </section>
@@ -351,8 +341,8 @@ const FormulaComparisonBuilder: React.FC<Props> = ({ onClose, onSuccess }) => {
     [draftA, draftB, environment]
   );
 
-  const canSaveA = getDraftSaveError(draftA, snapshotA) === null;
-  const canSaveB = getDraftSaveError(draftB, snapshotB) === null;
+  const canSaveA = getDraftSaveError(draftA) === null;
+  const canSaveB = getDraftSaveError(draftB) === null;
   const canSaveBoth = canSaveA && canSaveB;
 
   const Toast = useMemo(() => Swal.mixin({
@@ -386,8 +376,7 @@ const FormulaComparisonBuilder: React.FC<Props> = ({ onClose, onSuccess }) => {
     try {
       if (target === 'a' || target === 'b') {
         const draft = target === 'a' ? draftA : draftB;
-        const summary = target === 'a' ? snapshotA : snapshotB;
-        const validationError = getDraftSaveError(draft, summary);
+        const validationError = getDraftSaveError(draft);
         if (validationError) {
           setSubmitError(validationError);
           return;
@@ -399,13 +388,13 @@ const FormulaComparisonBuilder: React.FC<Props> = ({ onClose, onSuccess }) => {
         return;
       }
 
-      const validationErrorA = getDraftSaveError(draftA, snapshotA);
+      const validationErrorA = getDraftSaveError(draftA);
       if (validationErrorA) {
         setSubmitError(`Fórmula A: ${validationErrorA}`);
         return;
       }
 
-      const validationErrorB = getDraftSaveError(draftB, snapshotB);
+      const validationErrorB = getDraftSaveError(draftB);
       if (validationErrorB) {
         setSubmitError(`Fórmula B: ${validationErrorB}`);
         return;

@@ -289,6 +289,28 @@ const getOrdenByLegacy = async (legacyUid: string) => {
   return data;
 };
 
+const normalizeRpcError = (error: unknown, fallback: string) => {
+  if (!error || typeof error !== 'object') return new Error(fallback);
+
+  const candidate = error as {
+    message?: string;
+    details?: string;
+    hint?: string;
+    code?: string;
+  };
+
+  const message = candidate.message?.trim();
+  const details = candidate.details?.trim();
+  const hint = candidate.hint?.trim();
+  const code = candidate.code?.trim();
+
+  const parts = [message, details, hint].filter((part): part is string => Boolean(part));
+  const finalMessage = parts.length > 0 ? parts.join(' | ') : fallback;
+  const normalized = new Error(finalMessage);
+  if (code) normalized.name = `SupabaseError:${code}`;
+  return normalized;
+};
+
 export const supabaseOrdenService = {
   async getAll(): Promise<OrdenProduccion[]> {
     const { data, error } = await supabaseClient
@@ -422,7 +444,9 @@ export const supabaseOrdenService = {
         p_lote_salida: extra.lote_salida,
       });
 
-      if (finalizeError) throw finalizeError;
+      if (finalizeError) {
+        throw normalizeRpcError(finalizeError, 'No se pudo finalizar la orden.');
+      }
 
       const updatedRow = Array.isArray(updated) ? updated[0] : updated;
       if (!updatedRow) throw new Error('No se pudo recuperar la orden finalizada.');

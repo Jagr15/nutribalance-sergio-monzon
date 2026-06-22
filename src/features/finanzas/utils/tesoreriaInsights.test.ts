@@ -96,7 +96,7 @@ describe('buildTesoreriaInsights', () => {
       10000,
     );
 
-    const alerta = result.alertasTesoreria.find((item) => item.tipo === 'Riesgo de descubierto por cheque');
+    const alerta = result.alertasTesoreria.find((item) => item.tipo === 'Cheque emitido que vence hoy' || item.tipo === 'Riesgo de descubierto por cheque');
     expect(alerta).toBeDefined();
     expect(alerta?.prioridad).toBe('critica');
     expect(alerta?.titulo).toContain('000123');

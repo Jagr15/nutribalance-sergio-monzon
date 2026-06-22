@@ -8,9 +8,11 @@ const tipoOptions: Array<{ value: TipoChequeTesoreria; label: string }> = [
 
 const estadoOptions: Array<{ value: EstadoChequeTesoreria; label: string }> = [
   { value: 'PENDIENTE', label: 'Pendiente' },
+  { value: 'A_DEPOSITAR', label: 'A depositar' },
   { value: 'DEPOSITADO', label: 'Depositado' },
   { value: 'COBRADO', label: 'Cobrado' },
   { value: 'RECHAZADO', label: 'Rechazado' },
+  { value: 'ENDOSADO', label: 'Endosado' },
   { value: 'VENCIDO', label: 'Vencido' },
 ];
 
@@ -23,6 +25,7 @@ export const ChequeForm = ({
   error,
   title,
   submitLabel,
+  showAcreditacion = false,
 }: {
   value: ChequeTesoreriaFormValues;
   onChange: (next: ChequeTesoreriaFormValues) => void;
@@ -32,6 +35,7 @@ export const ChequeForm = ({
   error?: string | null;
   title: string;
   submitLabel: string;
+  showAcreditacion?: boolean;
 }) => (
   <form
     className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
@@ -85,15 +89,17 @@ export const ChequeForm = ({
         <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Fecha de vencimiento</span>
         <input required type="date" className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" value={value.fecha_vencimiento} onChange={(event) => onChange({ ...value, fecha_vencimiento: event.target.value })} />
       </label>
-      <label className="block">
-        <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Fecha de acreditación</span>
-        <input
-          type="date"
-          className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
-          value={value.fecha_acreditacion ?? ''}
-          onChange={(event) => onChange({ ...value, fecha_acreditacion: event.target.value })}
-        />
-      </label>
+      {showAcreditacion ? (
+        <label className="block">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Fecha de acreditación</span>
+          <input
+            type="date"
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+            value={value.fecha_acreditacion ?? ''}
+            onChange={(event) => onChange({ ...value, fecha_acreditacion: event.target.value })}
+          />
+        </label>
+      ) : null}
     </div>
 
     <div className="mt-6 flex flex-wrap justify-end gap-3">

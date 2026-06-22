@@ -76,6 +76,11 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     }
   }, [formData.cantidad, formData.unidad_entrada, formData.precio_unitario, formData.unidad_precio, formData.costo_total]);
 
+  const silosMateriaPrima = useMemo(
+    () => silos.filter((silo) => silo.tipo_uso === 'MATERIA_PRIMA'),
+    [silos]
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -205,12 +210,17 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
               />
               {activeDropdown === 'silo' && (
                 <div className="absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl z-50 max-h-40 overflow-y-auto shadow-xl mt-1">
-                  {silos.map(s => (
+                  {silosMateriaPrima.map(s => (
                     <div key={s.uid} onClick={() => { setFormData({ ...formData, ubicacion: s.nombre }); setActiveDropdown(null); }}
                       className="px-4 py-2 text-[11px] text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 cursor-pointer transition-colors">{s.nombre}</div>
                   ))}
                 </div>
               )}
+              {activeDropdown === 'silo' && silosMateriaPrima.length === 0 ? (
+                <div className="absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl z-50 shadow-xl mt-1 px-4 py-3 text-xs text-slate-500">
+                  No hay silos de Materia Prima disponibles.
+                </div>
+              ) : null}
             </div>
           </div>
 

@@ -9,6 +9,7 @@ import type {
   FinanzasReportes,
   FinanzasTesoreriaInsights,
   MovimientoFinanciero,
+  PresupuestoMensualGestionRow,
   RubroFinancieroCatalogo,
 } from '../types';
 import { normalizeKpis } from '../utils/finanzasCalculations';
@@ -97,11 +98,15 @@ type ComprobanteCarteraDbRow = {
   tipo: string;
 };
 type PresupuestoDbRow = {
+  id: string;
   anio: number;
   mes: number;
   monto_presupuestado: number | string | null;
+  categoria_id?: string | null;
   categorias_financieras?: { nombre: string | null } | null;
   centros_costo?: { nombre: string | null } | null;
+  created_at?: string;
+  updated_at?: string;
 };
 type StockPTMovimientoVentaRow = {
   cliente_id: string | null;
@@ -275,6 +280,100 @@ export const finanzasService = {
       saldoActual,
       { rubros: await finanzasService.getRubrosFinancieros() },
     );
+  },
+
+  async getPresupuestosMensuales(): Promise<PresupuestoMensualGestionRow[]> {
+    if (runtimeConfig.mode === 'mock') {
+      return [];
+    }
+
+    const { data, error } = await supabaseClient
+      .from('presupuestos_mensuales')
+      .select('id,categoria_id,anio,mes,monto_presupuestado,created_at,updated_at,categorias_financieras(nombre)')
+      .is('deleted_at', null)
+      .order('anio', { ascending: false })
+      .order('mes', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return ((data ?? []) as unknown as PresupuestoDbRow[]).map((row) => ({
+      id: row.id,
+      rubro_id: row.categoria_id ?? '',
+      rubro_nombre: row.categorias_financieras?.nombre ?? 'Sin rubro',
+      mes: row.mes,
+      anio: row.anio,
+      presupuesto: Number(row.monto_presupuestado ?? 0),
+      created_at: row.created_at ?? new Date().toISOString(),
+      updated_at: row.updated_at ?? new Date().toISOString(),
+    }));
+  },
+
+  async savePresupuestoMensual(payload: { id?: string; rubro_id: string; mes: number; anio: number; presupuesto: number }): Promise<PresupuestoMensualGestionRow> {
+    if (!payload.rubro_id) throw new Error('El rubro es obligatorio.');
+    if (!Number.isInteger(payload.mes) || payload.mes < 1 || payload.mes > 12) throw new Error('El mes es inválido.');
+    if (!Number.isInteger(payload.anio) || payload.anio < 2000) throw new Error('El año es inválido.');
+    if (!Number.isFinite(payload.presupuesto) || payload.presupuesto < 0) throw new Error('El presupuesto debe ser mayor o igual a 0.');
+
+    const queryBase = supabaseClient
+      .from('presupuestos_mensuales')
+      .select('id,categoria_id,anio,mes,monto_presupuestado,created_at,updated_at,categorias_financieras(nombre)')
+      .is('deleted_at', null);
+
+    const existingByPeriod = payload.id
+      ? null
+      : await queryBase
+          .eq('categoria_id', payload.rubro_id)
+          .eq('mes', payload.mes)
+          .eq('anio', payload.anio)
+          .maybeSingle<PresupuestoDbRow>();
+
+    if (existingByPeriod?.error) throw existingByPeriod.error;
+
+    const mutation = payload.id || existingByPeriod?.data
+      ? supabaseClient
+          .from('presupuestos_mensuales')
+          .update({
+            categoria_id: payload.rubro_id,
+            mes: payload.mes,
+            anio: payload.anio,
+            monto_presupuestado: payload.presupuesto,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', payload.id ?? existingByPeriod?.data?.id ?? '')
+          .select('id,categoria_id,anio,mes,monto_presupuestado,created_at,updated_at,categorias_financieras(nombre)')
+          .single<PresupuestoDbRow>()
+      : supabaseClient
+          .from('presupuestos_mensuales')
+          .insert({
+            legacy_uid: `pre-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            categoria_id: payload.rubro_id,
+            mes: payload.mes,
+            anio: payload.anio,
+            monto_presupuestado: payload.presupuesto,
+          })
+          .select('id,categoria_id,anio,mes,monto_presupuestado,created_at,updated_at,categorias_financieras(nombre)')
+          .single<PresupuestoDbRow>();
+
+    const { data, error } = await mutation;
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      rubro_id: data.categoria_id ?? payload.rubro_id,
+      rubro_nombre: data.categorias_financieras?.nombre ?? 'Sin rubro',
+      mes: data.mes,
+      anio: data.anio,
+      presupuesto: Number(data.monto_presupuestado ?? 0),
+      created_at: data.created_at ?? new Date().toISOString(),
+      updated_at: data.updated_at ?? new Date().toISOString(),
+    };
+  },
+
+  async deletePresupuestoMensual(id: string): Promise<void> {
+    if (!id) throw new Error('El presupuesto es obligatorio.');
+    const { error } = await supabaseClient.from('presupuestos_mensuales').delete().eq('id', id);
+    if (error) throw error;
   },
 
   async getMovimientos(): Promise<MovimientoFinanciero[]> {

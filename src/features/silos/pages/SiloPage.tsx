@@ -91,6 +91,16 @@ const SiloPage: React.FC = () => {
     );
   }, [searchTerm, silos]);
 
+  const silosMateriaPrima = useMemo(
+    () => silos.filter((silo) => silo.tipo_uso === 'MATERIA_PRIMA'),
+    [silos]
+  );
+
+  const silosProductoTerminado = useMemo(
+    () => silos.filter((silo) => silo.tipo_uso === 'PRODUCTO_TERMINADO'),
+    [silos]
+  );
+
   return (
     <main className="main animate-fade-in p-6">
       {/* Header de la Página - Estilo IAWAREPERU */}
@@ -123,6 +133,24 @@ const SiloPage: React.FC = () => {
           <div>
             <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Silos Registrados</p>
             <h4 className="text-xl font-bold text-slate-900">{silos.length}</h4>
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 p-6 rounded-2xl flex items-center gap-4">
+          <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-600">
+            <FiDatabase size={20} />
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Materia Prima</p>
+            <h4 className="text-xl font-bold text-slate-900">{silosMateriaPrima.length}</h4>
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 p-6 rounded-2xl flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-600">
+            <FiDatabase size={20} />
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Producto Terminado</p>
+            <h4 className="text-xl font-bold text-slate-900">{silosProductoTerminado.length}</h4>
           </div>
         </div>
       </section>

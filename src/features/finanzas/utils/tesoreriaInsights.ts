@@ -54,7 +54,8 @@ export interface ChequeTesoreriaSourceRow {
   importe: number | string | null;
   fecha_emision: string;
   fecha_vencimiento: string;
-  estado: 'PENDIENTE' | 'DEPOSITADO' | 'COBRADO' | 'RECHAZADO' | 'VENCIDO';
+  estado: 'PENDIENTE' | 'A_DEPOSITAR' | 'DEPOSITADO' | 'COBRADO' | 'RECHAZADO' | 'ENDOSADO' | 'VENCIDO';
+  fecha_acreditacion?: string | null;
   cliente_id: string | null;
   cliente_nombre: string | null;
 }
@@ -269,6 +270,7 @@ export const buildChequesTesoreria = (rows: ChequeTesoreriaSourceRow[]): { emiti
     importe: num(row.importe),
     fecha_emision: row.fecha_emision,
     fecha_vencimiento: row.fecha_vencimiento,
+    fecha_acreditacion: row.fecha_acreditacion ?? null,
     estado: row.estado,
     cliente_id: row.cliente_id,
     cliente_nombre: row.cliente_nombre,
@@ -320,12 +322,13 @@ export const buildAlertasTesoreria = (inputs: {
 }): AlertaTesoreriaRaw[] => {
   const alerts: AlertaTesoreriaRaw[] = [];
   const todayTime = today.getTime();
-  const pendingChequesEmitidos = inputs.chequesEmitidos.filter((cheque) => cheque.estado === 'PENDIENTE');
-  const pendingChequesRecibidos = inputs.chequesRecibidos.filter((cheque) => cheque.estado === 'PENDIENTE');
+  const pendingChequesEmitidos = inputs.chequesEmitidos.filter((cheque) => cheque.estado === 'PENDIENTE' || cheque.estado === 'A_DEPOSITAR');
+  const pendingChequesRecibidos = inputs.chequesRecibidos.filter((cheque) => cheque.estado === 'PENDIENTE' || cheque.estado === 'A_DEPOSITAR');
   const within = (date: string, days: number) => {
     const diff = Math.ceil((new Date(date).getTime() - todayTime) / (1000 * 60 * 60 * 24));
     return diff >= 0 && diff <= days;
   };
+  const isToday = (date: string) => new Date(date).toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
 
   const saldoProyectadoAlVencimiento = (cheque: ChequeTesoreriaRow) => {
     const vencimiento = new Date(cheque.fecha_vencimiento).getTime();
@@ -350,7 +353,28 @@ export const buildAlertasTesoreria = (inputs: {
           tipo: 'Riesgo de descubierto por cheque',
           prioridad: 'critica',
           area: 'tesoreria',
-          titulo: `Cheque emitido ${cheque.numero} podría vencer sin fondos`,
+          titulo: isToday(cheque.fecha_vencimiento)
+            ? 'Hoy hay un cheque que cubrir'
+            : `Cheque emitido ${cheque.numero} vence pronto`,
+          dato_asociado: {
+            cheque: cheque.numero,
+            tercero: cheque.tercero,
+            importe: cheque.importe,
+            vence: cheque.fecha_vencimiento,
+            saldo_proyectado: Number(saldoProyectado.toFixed(2)),
+          },
+          fecha_evento: cheque.fecha_vencimiento,
+        });
+        return;
+      }
+
+      if (isToday(cheque.fecha_vencimiento)) {
+        alerts.push({
+          alerta_id: `tes-cheque-emitido-hoy-${cheque.id}`,
+          tipo: 'Cheque emitido que vence hoy',
+          prioridad: 'critica',
+          area: 'tesoreria',
+          titulo: `Hoy hay un cheque que cubrir`,
           dato_asociado: {
             cheque: cheque.numero,
             tercero: cheque.tercero,
@@ -382,14 +406,15 @@ export const buildAlertasTesoreria = (inputs: {
     });
 
   inputs.chequesRecibidos
-    .filter((cheque) => cheque.estado === 'PENDIENTE' && within(cheque.fecha_vencimiento, 7))
+    .filter((cheque) => (cheque.estado === 'PENDIENTE' || cheque.estado === 'A_DEPOSITAR') && within(cheque.fecha_vencimiento, 7))
     .forEach((cheque) => {
+      const readyToDeposit = cheque.estado === 'A_DEPOSITAR' || isToday(cheque.fecha_vencimiento);
       alerts.push({
         alerta_id: `tes-cheque-recibido-${cheque.id}`,
-        tipo: 'Cheque recibido próximo a cobrar',
+        tipo: readyToDeposit ? 'Cheque recibido listo para depositar' : 'Cheque recibido próximo a cobrar',
         prioridad: 'media',
         area: 'tesoreria',
-        titulo: `Cheque recibido ${cheque.numero} vence pronto`,
+        titulo: readyToDeposit ? `Cheque recibido ${cheque.numero} listo para depositar` : `Cheque recibido ${cheque.numero} vence pronto`,
         dato_asociado: {
           cheque: cheque.numero,
           tercero: cheque.tercero,

@@ -21,6 +21,7 @@ import {
   type RubroFinancieroTipo,
 } from '../utils/finanzasDashboard';
 import { finanzasService } from '../services/finanzasService';
+import type { PresupuestoMensualGestionRow } from '../types';
 
 const rubroTipoLabels: Record<RubroFinancieroTipo, string> = {
   FIJO: 'Fijo',
@@ -113,6 +114,17 @@ const FinanzasPage = () => {
   const [rubrosSavedMessage, setRubrosSavedMessage] = useState<string | null>(null);
   const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false);
   const [isRubrosModalOpen, setIsRubrosModalOpen] = useState(false);
+  const [isPresupuestoModalOpen, setIsPresupuestoModalOpen] = useState(false);
+  const [presupuestosMensuales, setPresupuestosMensuales] = useState<PresupuestoMensualGestionRow[]>([]);
+  const [budgetError, setBudgetError] = useState<string | null>(null);
+  const [budgetMessage, setBudgetMessage] = useState<string | null>(null);
+  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
+  const [budgetForm, setBudgetForm] = useState<{ mes: number; anio: number; rubro_id: string; presupuesto: string }>({
+    mes: new Date().getMonth() + 1,
+    anio: new Date().getFullYear(),
+    rubro_id: '',
+    presupuesto: '',
+  });
 
   useEffect(() => {
     void finanzasService.getRubrosFinancieros().then((rows) => {
@@ -126,6 +138,9 @@ const FinanzasPage = () => {
         area: row.area ?? null,
         categoria_financiera_id: row.id,
       })));
+    });
+    void finanzasService.getPresupuestosMensuales().then(setPresupuestosMensuales).catch((error) => {
+      console.error(error);
     });
   }, []);
 
@@ -168,6 +183,26 @@ const FinanzasPage = () => {
       .filter((row) => row.presupuesto !== 0 || row.real !== 0)
       .sort((a, b) => Math.abs(b.variacion_abs) - Math.abs(a.variacion_abs))
   ), [presupuestoRows]);
+  const presupuestoPeriodoActual = useMemo(() => {
+    const now = new Date();
+    return {
+      mes: now.getMonth() + 1,
+      anio: now.getFullYear(),
+    };
+  }, []);
+  const presupuestosGestionVisibles = useMemo(() => (
+    presupuestosMensuales.filter((row) => row.mes === budgetForm.mes && row.anio === budgetForm.anio)
+  ), [budgetForm.anio, budgetForm.mes, presupuestosMensuales]);
+  const presupuestoRowsGestion = useMemo(() => (
+    presupuestoRowsVisibles.map((row) => ({
+      rubro: row.rubro,
+      presupuesto: row.presupuesto,
+      ejecutado: row.real,
+      disponible: row.presupuesto - row.real,
+      porcentaje: row.presupuesto > 0 ? (row.real / row.presupuesto) * 100 : 0,
+      estado: presupuestoEstadoCustom(row.real, row.presupuesto) as 'En control' | 'Atención' | 'Excedido',
+    }))
+  ), [presupuestoRowsVisibles]);
   const gastosPorRubroVisibles = useMemo(
     () => tesoreria.gastosPorRubro.filter((row) => isRubrorVisible(row.rubro)),
     [tesoreria.gastosPorRubro],
@@ -300,6 +335,61 @@ const FinanzasPage = () => {
       setRubrosFinancieros((current) => current.map((item) => (item.id === rubro.id ? { ...item, activo: !rubro.activo } : item)));
     });
     setRubrosSavedMessage(rubro.activo ? `Rubro ${rubro.nombre} desactivado.` : `Rubro ${rubro.nombre} activado.`);
+  };
+
+  const handleEditBudget = (row?: PresupuestoMensualGestionRow) => {
+    if (row) {
+      setEditingBudgetId(row.id);
+      setBudgetForm({ mes: row.mes, anio: row.anio, rubro_id: row.rubro_id, presupuesto: String(row.presupuesto) });
+    } else {
+      setEditingBudgetId(null);
+      setBudgetForm({
+        mes: presupuestoPeriodoActual.mes,
+        anio: presupuestoPeriodoActual.anio,
+        rubro_id: '',
+        presupuesto: '',
+      });
+    }
+    setBudgetError(null);
+    setBudgetMessage(null);
+    setIsPresupuestoModalOpen(true);
+  };
+
+  const handleDeleteBudget = async (id: string) => {
+    setBudgetError(null);
+    if (!window.confirm('¿Eliminar este presupuesto mensual?')) return;
+    try {
+      await finanzasService.deletePresupuestoMensual(id);
+      setPresupuestosMensuales((current) => current.filter((row) => row.id !== id));
+      setBudgetMessage('Presupuesto eliminado correctamente.');
+    } catch (error: unknown) {
+      setBudgetError(error instanceof Error ? error.message : 'No se pudo eliminar el presupuesto.');
+    }
+  };
+
+  const handleSaveBudget = async () => {
+    setBudgetError(null);
+    setBudgetMessage(null);
+    try {
+      const presupuesto = Number(budgetForm.presupuesto);
+      if (!budgetForm.rubro_id) throw new Error('Selecciona un rubro.');
+      if (!Number.isFinite(presupuesto) || presupuesto < 0) throw new Error('El presupuesto debe ser mayor o igual a 0.');
+      const saved = await finanzasService.savePresupuestoMensual({
+        id: editingBudgetId ?? undefined,
+        rubro_id: budgetForm.rubro_id,
+        mes: budgetForm.mes,
+        anio: budgetForm.anio,
+        presupuesto,
+      });
+      setPresupuestosMensuales((current) => {
+        const next = current.filter((row) => row.id !== saved.id);
+        return [saved, ...next].sort((a, b) => b.anio - a.anio || b.mes - a.mes || a.rubro_nombre.localeCompare(b.rubro_nombre, 'es'));
+      });
+      setBudgetMessage(editingBudgetId ? 'Presupuesto actualizado correctamente.' : 'Presupuesto creado correctamente.');
+      setEditingBudgetId(saved.id);
+    } catch (error: unknown) {
+      setBudgetError(error instanceof Error ? error.message : 'No se pudo guardar el presupuesto.');
+    }
   };
 
   const ingresosPtMax = Math.max(1, ...ingresosPtPorProducto.map((row) => row.importe_total));
@@ -557,6 +647,13 @@ const FinanzasPage = () => {
                 </button>
                 <button
                   type="button"
+                  onClick={() => handleEditBudget()}
+                  className="inline-flex items-center gap-2 rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                >
+                  Editar presupuesto
+                </button>
+                <button
+                  type="button"
                   onClick={() => setIsMovimientoModalOpen(true)}
                   className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
                 >
@@ -591,6 +688,110 @@ const FinanzasPage = () => {
               <MovimientosTable movimientos={movimientosQuick} limit={10} />
             </div>
           </Card>
+        </div>
+      ) : null}
+
+      {isPresupuestoModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6" onClick={() => setIsPresupuestoModalOpen(false)} role="presentation">
+          <div
+            className="w-full max-w-5xl max-h-[calc(100vh-3rem)] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="editar-presupuesto-title"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Control presupuestal</p>
+                <h3 id="editar-presupuesto-title" className="mt-1 text-xl font-semibold text-slate-900">Editar presupuesto</h3>
+                <p className="mt-1 text-sm text-slate-500">Gestión mensual por rubro con límite máximo editable.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPresupuestoModalOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <FiX size={16} />
+              </button>
+            </div>
+
+            {budgetError ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{budgetError}</div> : null}
+            {budgetMessage ? <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{budgetMessage}</div> : null}
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+              <form className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4" onSubmit={(event) => { event.preventDefault(); void handleSaveBudget(); }}>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Mes</span>
+                    <select value={budgetForm.mes} onChange={(event) => setBudgetForm((current) => ({ ...current, mes: Number(event.target.value) }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm">
+                      {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => <option key={month} value={month}>{month}</option>)}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Año</span>
+                    <input type="number" value={budgetForm.anio} onChange={(event) => setBudgetForm((current) => ({ ...current, anio: Number(event.target.value) }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Rubro</span>
+                  <select value={budgetForm.rubro_id} onChange={(event) => setBudgetForm((current) => ({ ...current, rubro_id: event.target.value }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm">
+                    <option value="">Seleccionar rubro</option>
+                    {rubrosFinancierosVisibles.map((rubro) => <option key={rubro.id} value={rubro.id}>{rubro.nombre}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Presupuesto mensual máximo</span>
+                  <input type="number" step="0.01" value={budgetForm.presupuesto} onChange={(event) => setBudgetForm((current) => ({ ...current, presupuesto: event.target.value }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" placeholder="Ej: 250000" />
+                </label>
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={() => setIsPresupuestoModalOpen(false)} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700">Cancelar</button>
+                  <button type="submit" className="rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20">Guardar presupuesto</button>
+                </div>
+              </form>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-base font-semibold text-slate-900">Presupuestos del período</h4>
+                    <p className="text-sm text-slate-500">{budgetForm.mes}/{budgetForm.anio}</p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{presupuestosGestionVisibles.length} rubros</span>
+                </div>
+                <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3 text-left">Rubro</th>
+                        <th className="px-4 py-3 text-right">Presupuesto</th>
+                        <th className="px-4 py-3 text-right">Editar</th>
+                        <th className="px-4 py-3 text-right">Eliminar</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {presupuestosGestionVisibles.map((row) => (
+                        <tr key={row.id} className="hover:bg-slate-50/70">
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-slate-900">{row.rubro_nombre}</div>
+                            <div className="text-xs text-slate-500">{row.mes}/{row.anio}</div>
+                          </td>
+                          <td className="px-4 py-3 text-right text-slate-700">{formatCurrency(row.presupuesto)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <button type="button" onClick={() => handleEditBudget(row)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">Editar</button>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Eliminar</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {presupuestosGestionVisibles.length === 0 ? (
+                        <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">Aún no hay presupuestos cargados para este período.</td></tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -671,12 +872,34 @@ const FinanzasPage = () => {
               <h3 className="text-lg font-semibold">Control presupuestal</h3>
               <p className="text-sm text-slate-500">Compara el presupuesto estimado contra lo realmente ejecutado por rubro.</p>
             </div>
-            {presupuestosGenerados ? (
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700">
-                Presupuesto estimado
-              </span>
-            ) : null}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {presupuestosGenerados ? (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700">
+                  Presupuesto estimado
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => handleEditBudget()}
+                className="inline-flex items-center gap-2 rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+              >
+                <FiEdit2 size={14} />
+                Editar presupuesto
+              </button>
+            </div>
           </div>
+          {presupuestoRowsGestion.some((row) => row.estado !== 'En control') ? (
+            <div className="mb-4 space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">Alertas presupuestarias</p>
+              <ul className="space-y-1 text-sm">
+                {presupuestoRowsGestion.filter((row) => row.estado !== 'En control').map((row) => (
+                  <li key={`alert-${row.rubro}`}>
+                    {row.rubro}: {row.estado === 'Excedido' ? 'supera el presupuesto mensual' : 'supera el 80% del presupuesto'}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-sm">
               <thead className="border-b border-slate-200 text-slate-500">
@@ -684,50 +907,59 @@ const FinanzasPage = () => {
                   <th className="py-2 text-left font-semibold">Rubro</th>
                   <th className="py-2 text-right font-semibold">Presupuesto</th>
                   <th className="py-2 text-right font-semibold">Ejecutado</th>
-                  <th className="py-2 text-right font-semibold">Diferencia</th>
+                  <th className="py-2 text-right font-semibold">Disponible</th>
                   <th className="py-2 text-right font-semibold">Avance %</th>
                   <th className="py-2 text-right font-semibold">Estado</th>
+                  <th className="py-2 text-right font-semibold">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {presupuestoRowsVisibles.map((row) => {
-                  const estado = presupuestoEstadoCustom(row.real, row.presupuesto);
-                  const avancePct = row.presupuesto > 0 ? Math.min(100, (row.real / row.presupuesto) * 100) : 0;
+                {presupuestoRowsGestion.map((row) => {
+                  const avancePct = row.porcentaje;
                   return (
                     <tr key={row.rubro} className="align-top">
                       <td className="py-2 font-medium text-slate-900">{row.rubro}</td>
                       <td className="py-2 text-right text-slate-700">{formatCurrency(row.presupuesto)}</td>
-                      <td className="py-2 text-right text-slate-700">{formatCurrency(row.real)}</td>
-                      <td className={`py-2 text-right font-semibold ${row.variacion_abs > 0 ? 'text-red-600' : row.variacion_abs < 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
-                        {formatCurrency(row.variacion_abs)}
+                      <td className="py-2 text-right text-slate-700">{formatCurrency(row.ejecutado)}</td>
+                      <td className={`py-2 text-right font-semibold ${row.disponible < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {formatCurrency(row.disponible)}
                       </td>
                       <td className="py-2 text-right font-semibold text-slate-700">
                         {formatPct(avancePct)}
                       </td>
                       <td className="py-2 text-right">
-                        <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClassByPresupuesto(estado)}`}>
-                          {estado}
+                        <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClassByPresupuesto(row.estado)}`}>
+                          {row.estado}
                         </span>
+                      </td>
+                      <td className="py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleEditBudget(presupuestosMensuales.find((item) => item.mes === budgetForm.mes && item.anio === budgetForm.anio && item.rubro_nombre === row.rubro))}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Editar
+                        </button>
                       </td>
                     </tr>
                   );
                 })}
-                {presupuestoRowsVisibles.length === 0 ? (
+                {presupuestoRowsGestion.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-6 text-center text-slate-500">Sin datos de presupuesto.</td>
+                    <td colSpan={7} className="py-6 text-center text-slate-500">Sin datos de presupuesto.</td>
                   </tr>
                 ) : null}
               </tbody>
             </table>
           </div>
           <div className="mt-4 space-y-3">
-            {presupuestoRowsVisibles.map((row) => {
-              const progresso = row.presupuesto > 0 ? Math.min(100, (row.real / row.presupuesto) * 100) : 0;
+            {presupuestoRowsGestion.map((row) => {
+              const progresso = row.porcentaje;
               return (
                 <div key={`bar-${row.rubro}`}>
                   <div className="flex justify-between text-xs text-slate-600">
                     <span>{row.rubro}</span>
-                    <span>{formatCurrency(row.presupuesto)} vs {formatCurrency(row.real)}</span>
+                    <span>{formatCurrency(row.presupuesto)} vs {formatCurrency(row.ejecutado)}</span>
                   </div>
                   <div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div

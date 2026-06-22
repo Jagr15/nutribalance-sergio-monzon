@@ -5,19 +5,21 @@ interface SiloRow {
   legacy_uid: string | null;
   nombre: string;
   descripcion: string;
+  tipo_uso: 'MATERIA_PRIMA' | 'PRODUCTO_TERMINADO' | null;
 }
 
 const mapSilo = (row: SiloRow): Silo => ({
   uid: row.legacy_uid ?? crypto.randomUUID(),
   nombre: row.nombre,
   descripcion: row.descripcion,
+  tipo_uso: row.tipo_uso ?? 'MATERIA_PRIMA',
 });
 
 export const supabaseSiloService = {
   async getAll(): Promise<Silo[]> {
     const { data, error } = await supabaseClient
       .from('silos')
-      .select('legacy_uid,nombre,descripcion')
+      .select('legacy_uid,nombre,descripcion,tipo_uso')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
@@ -28,7 +30,7 @@ export const supabaseSiloService = {
   async getById(uid: string): Promise<Silo | undefined> {
     const { data, error } = await supabaseClient
       .from('silos')
-      .select('legacy_uid,nombre,descripcion')
+      .select('legacy_uid,nombre,descripcion,tipo_uso')
       .eq('legacy_uid', uid)
       .is('deleted_at', null)
       .maybeSingle<SiloRow>();
@@ -45,8 +47,9 @@ export const supabaseSiloService = {
         legacy_uid: legacyUid,
         nombre: payload.nombre,
         descripcion: payload.descripcion,
+        tipo_uso: payload.tipo_uso,
       })
-      .select('legacy_uid,nombre,descripcion')
+      .select('legacy_uid,nombre,descripcion,tipo_uso')
       .single<SiloRow>();
 
     if (error) throw error;
@@ -56,9 +59,9 @@ export const supabaseSiloService = {
   async update(uid: string, payload: Partial<Silo>): Promise<Silo> {
     const { data, error } = await supabaseClient
       .from('silos')
-      .update({ nombre: payload.nombre, descripcion: payload.descripcion })
+      .update({ nombre: payload.nombre, descripcion: payload.descripcion, tipo_uso: payload.tipo_uso })
       .eq('legacy_uid', uid)
-      .select('legacy_uid,nombre,descripcion')
+      .select('legacy_uid,nombre,descripcion,tipo_uso')
       .single<SiloRow>();
 
     if (error) throw error;

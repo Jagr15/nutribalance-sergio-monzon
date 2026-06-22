@@ -15,6 +15,7 @@ const SiloTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) =>
       <TableHeader>
         <tr>
           <TableCell header>Identificación del Silo</TableCell>
+          <TableCell header>Tipo</TableCell>
           <TableCell header>Descripción / Ubicación</TableCell>
           <TableCell header className="text-right">Acciones</TableCell>
         </tr>
@@ -28,6 +29,15 @@ const SiloTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) =>
                 <span className="text-[10px] font-mono text-slate-500">{silo.uid}</span>
               </div>
             </TableCell>
+            <TableCell>
+              <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${
+                silo.tipo_uso === 'PRODUCTO_TERMINADO'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+              }`}>
+                {silo.tipo_uso === 'PRODUCTO_TERMINADO' ? 'Producto Terminado' : 'Materia Prima'}
+              </span>
+            </TableCell>
             <TableCell className="text-slate-500">{silo.descripcion || 'Sin descripción'}</TableCell>
             <TableCell className="text-right">
               <TableActions>
@@ -37,7 +47,7 @@ const SiloTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) =>
             </TableCell>
           </TableRow>
         ))}
-        {data.length === 0 ? <EmptyState colSpan={3} message={emptyMessage || "No hay silos registrados en el sistema."} /> : null}
+        {data.length === 0 ? <EmptyState colSpan={4} message={emptyMessage || "No hay silos registrados en el sistema."} /> : null}
       </TableBody>
     </DataTable>
   );

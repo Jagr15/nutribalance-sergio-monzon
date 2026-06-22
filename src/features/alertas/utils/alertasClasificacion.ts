@@ -1,6 +1,7 @@
 import type { AlertaOperativa } from '../types/alerta';
 
 export type AlertCategoryTone = 'red' | 'amber';
+export type AlertCategoryKey = 'financiera' | 'produccion' | 'general';
 
 const escapeHtml = (value: string) =>
   value
@@ -22,6 +23,12 @@ export const isFinancialAlert = (alerta: AlertaOperativa) => {
     .filter((value): value is string => typeof value === 'string')
     .some((value) => /flujo de caja|tesorer[ií]a|cuentas por cobrar|cuentas por pagar|descubierto|costos|ingresos|finanzas|margen|caja/i.test(value));
   return alerta.area === 'costos' || alerta.area === 'tesoreria' || hayEnTituloODesc;
+};
+
+export const getAlertCategory = (alerta: AlertaOperativa): AlertCategoryKey => {
+  if (isFinancialAlert(alerta)) return 'financiera';
+  if (isProductAlert(alerta)) return 'produccion';
+  return 'general';
 };
 
 export const buildAlertExample = (alerta: AlertaOperativa) => {

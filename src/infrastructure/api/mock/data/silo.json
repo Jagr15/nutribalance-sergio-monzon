@@ -2,21 +2,25 @@
   {
     "uid": "silo-001",
     "nombre": "Silo Maíz",
-    "descripcion": "Silo principal para grano de maíz de alta rotación."
+    "descripcion": "Silo principal para grano de maíz de alta rotación.",
+    "tipo_uso": "MATERIA_PRIMA"
   },
   {
     "uid": "silo-002",
     "nombre": "Silo Soja",
-    "descripcion": "Silo dedicado a harina y expeller de soja."
+    "descripcion": "Silo dedicado a harina y expeller de soja.",
+    "tipo_uso": "MATERIA_PRIMA"
   },
   {
     "uid": "silo-003",
     "nombre": "Silo Lechera",
-    "descripcion": "Destino de producto terminado para línea lechera."
+    "descripcion": "Destino de producto terminado para línea lechera.",
+    "tipo_uso": "PRODUCTO_TERMINADO"
   },
   {
     "uid": "silo-004",
     "nombre": "Silo Cerdo",
-    "descripcion": "Destino de producto terminado para línea porcina."
+    "descripcion": "Destino de producto terminado para línea porcina.",
+    "tipo_uso": "PRODUCTO_TERMINADO"
   }
 ]

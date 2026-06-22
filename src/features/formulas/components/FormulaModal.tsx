@@ -150,8 +150,8 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
       costo_total: cost.costo_total_formula,
       costo_por_kg: cost.costo_por_kg,
       costo_por_tonelada: cost.costo_por_tonelada,
-      advertencias_nutricionales: nutrition.warnings,
-      advertencias_costos: cost.warnings,
+      advertencias_nutricionales: [],
+      advertencias_costos: [],
       ingredientes: validIngredients,
     };
   }, [formula, nombre, estaActiva, currentUser.id, currentUser.name, ingredientesValidos, nutrition, cost]);
@@ -236,6 +236,10 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
       setSubmitError('Debe agregar al menos un ingrediente.');
       return;
     }
+    if (!isSumaValida) {
+      setSubmitError('La suma de ingredientes debe ser 100%.');
+      return;
+    }
     if (catalogError) {
       setSubmitError(catalogError);
       return;
@@ -272,8 +276,8 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
           costo_total: cost.costo_total_formula,
           costo_por_kg: cost.costo_por_kg,
           costo_por_tonelada: cost.costo_por_tonelada,
-          advertencias_nutricionales: nutrition.warnings,
-          advertencias_costos: cost.warnings,
+          advertencias_nutricionales: [],
+          advertencias_costos: [],
         });
         Toast.fire({ icon: 'success', title: formula ? `Versión V${nuevaVersion} generada` : 'Fórmula guardada' });
       } else if (hasStatusChanged && formula?.uid) {
@@ -469,12 +473,6 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
               <div className="text-slate-700">Costo/kg: <span className="text-emerald-300 font-bold">{cost.costo_por_kg.toFixed(4)}</span></div>
               <div className="text-slate-700">Costo/ton: <span className="text-emerald-300 font-bold">{cost.costo_por_tonelada.toFixed(2)}</span></div>
             </div>
-            {(nutrition.warnings.length > 0 || cost.warnings.length > 0) && (
-              <div className="space-y-1 rounded-xl border border-red-200 bg-[#fef2f2] px-3 py-2 text-[9px] text-red-800">
-                {nutrition.warnings.slice(0, 2).map((w) => <p key={`n-${w}`}>• {w}</p>)}
-                {cost.warnings.slice(0, 2).map((w) => <p key={`c-${w}`}>• {w}</p>)}
-              </div>
-            )}
           </div>
 
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">

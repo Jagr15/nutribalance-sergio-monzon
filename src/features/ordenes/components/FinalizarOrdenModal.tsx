@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { 
   FiX, FiActivity, FiLayers, FiCheck, 
@@ -7,6 +8,11 @@ import {
 import type { OrdenProduccion } from '../types/orden';
 import { ApiService } from '../../../infrastructure/api';
 import type { Silo } from '../../silos/types';
+import {
+  buildFinalizationStockCheck,
+  type FinalizationStockCheckResult,
+  type StockLoteForFlow,
+} from '../utils/productionFlow';
 
 interface Props {
   orden: OrdenProduccion;
@@ -24,21 +30,69 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
   const [cantidadReal, setCantidadReal] = useState<number>(orden.cantidad_real ?? orden.cantidad_objetivo);
   const [destinoSilo, setDestinoSilo] = useState("");
   const [silos, setSilos] = useState<Silo[]>([]);
+  const [stockLotes, setStockLotes] = useState<StockLoteForFlow[]>([]);
+  const [isStockLoading, setIsStockLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const loteSalida = `${orden.lote}-PT`;
 
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (error && typeof error === 'object') {
+      const candidate = error as { message?: string; details?: string; hint?: string };
+      return [candidate.message, candidate.details, candidate.hint].filter(Boolean).join(' | ') || fallback;
+    }
+    return fallback;
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
-        const silosData = await ApiService.silos.getAll();
+        const [silosData, lotesData] = await Promise.all([
+          ApiService.silos.getAll(),
+          ApiService.stockMP.getAllLotes(),
+        ]);
         setSilos(silosData);
+        setStockLotes(
+          lotesData.map((lote) => ({
+            id: lote.uid,
+            legacy_uid: lote.uid,
+            lote: lote.lote,
+            insumo_id: lote.insumo_id,
+            insumo_legacy_uid: lote.id_insumo,
+            insumo_nombre: lote.id_insumo,
+            fecha_ingreso: lote.fecha_ingreso.toISOString(),
+            cantidad_actual: lote.cantidad_actual,
+            cantidad_comprometida: lote.cantidad_comprometida,
+            costo_unitario: lote.costo_unitario,
+          }))
+        );
       } catch (error) {
         console.error('Error cargando selectores de finalización:', error);
+      } finally {
+        setIsStockLoading(false);
       }
     };
     void load();
   }, []);
+
+  const stockCheck = useMemo<FinalizationStockCheckResult | null>(() => {
+    if (!orden.detalle_insumos || orden.detalle_insumos.length === 0 || stockLotes.length === 0) {
+      return null;
+    }
+
+    return buildFinalizationStockCheck(
+      orden.cantidad_objetivo,
+      cantidadReal,
+      orden.detalle_insumos,
+      stockLotes
+    );
+  }, [cantidadReal, orden.cantidad_objetivo, orden.detalle_insumos, stockLotes]);
+
+  const silosProductoTerminado = useMemo(
+    () => silos.filter((silo) => silo.tipo_uso === 'PRODUCTO_TERMINADO'),
+    [silos]
+  );
 
   const handleConfirm = () => {
     if (isSubmitting) return;
@@ -64,6 +118,14 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
       setSubmitError('La merma no puede superar la cantidad planificada.');
       return;
     }
+    if (isStockLoading) {
+      setSubmitError('Validando stock disponible, por favor espera un momento.');
+      return;
+    }
+    if (stockCheck && !stockCheck.stockSuficiente) {
+      setSubmitError(stockCheck.mensaje || 'No puedes finalizar esta orden porque faltan insumos para producirla.');
+      return;
+    }
     setIsSubmitting(true);
     Promise.resolve(onConfirm({
       lote_salida: loteNormalizado,
@@ -72,7 +134,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
       destino_silo: destinoSilo
     }))
       .catch((error: unknown) => {
-        setSubmitError(error instanceof Error ? error.message : 'No se pudo finalizar la orden.');
+        setSubmitError(getErrorMessage(error, 'No se pudo finalizar la orden.'));
       })
       .finally(() => setIsSubmitting(false));
   };
@@ -96,6 +158,39 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
           {submitError ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {submitError}
+            </div>
+          ) : null}
+
+          {stockCheck && !stockCheck.stockSuficiente ? (
+            <div className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+              <div className="overflow-hidden rounded-xl border border-red-200 bg-white">
+                <table className="w-full text-sm">
+                  <thead className="bg-red-50 text-red-700">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Insumo</th>
+                      <th className="px-3 py-2 text-right">Disponible</th>
+                      <th className="px-3 py-2 text-right">Requerido</th>
+                      <th className="px-3 py-2 text-right">Faltante</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-red-100">
+                    {stockCheck.faltantes.map((row) => (
+                      <tr key={`${row.id_lote}-${row.nombre_insumo}`}>
+                        <td className="px-3 py-2 font-medium text-slate-900">{row.nombre_insumo}</td>
+                        <td className="px-3 py-2 text-right text-slate-700">{row.disponible.toLocaleString('es-AR', { maximumFractionDigits: 3 })} kg</td>
+                        <td className="px-3 py-2 text-right text-slate-700">{row.requerida.toLocaleString('es-AR', { maximumFractionDigits: 3 })} kg</td>
+                        <td className="px-3 py-2 text-right font-semibold text-red-700">{row.faltante.toLocaleString('es-AR', { maximumFractionDigits: 3 })} kg</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Link
+                to="/stock-materia-prima"
+                className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+              >
+                Ver stock de materia prima
+              </Link>
             </div>
           ) : null}
 
@@ -134,7 +229,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
                 className="ui-input w-full rounded-xl py-2.5 pl-10 pr-4 text-[13px] text-slate-700 font-bold outline-none focus:border-orange-500/30 transition-all duration-200 ease-out"
               >
                 <option value="">Seleccionar silo de destino</option>
-                {silos.map((silo) => (
+                {silosProductoTerminado.map((silo) => (
                   <option key={silo.uid} value={silo.nombre}>
                     {silo.nombre}
                   </option>
@@ -142,6 +237,9 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
               </select>
             </div>
             {silos.length === 0 ? <p className="text-xs text-amber-300">No hay silos cargados. Creá uno en el módulo Silos antes de finalizar.</p> : null}
+            {silos.length > 0 && silosProductoTerminado.length === 0 ? (
+              <p className="text-xs text-amber-300">No hay silos de Producto Terminado disponibles. Creá uno en el módulo Silos antes de finalizar.</p>
+            ) : null}
           </div>
 
           {/* GRID: CANTIDAD REAL Y MERMA */}
@@ -196,13 +294,38 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
             CANCELAR
           </button>
           <button 
-            disabled={!loteSalida.trim() || !destinoSilo || isSubmitting}
+            disabled={!loteSalida.trim() || !destinoSilo || isSubmitting || isStockLoading || (stockCheck !== null && !stockCheck.stockSuficiente)}
             onClick={handleConfirm}
             className="flex-[2] py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black uppercase rounded-lg shadow-lg shadow-blue-900/20 transition-all duration-200 ease-out disabled:opacity-20 flex items-center justify-center gap-2 tracking-[0.2em] active:scale-95"
           >
             <FiCheck size={14}/> {isSubmitting ? 'FINALIZANDO...' : 'FINALIZAR ORDEN'}
           </button>
         </footer>
+        {stockCheck && !stockCheck.stockSuficiente ? (
+          <div className="px-8 pb-8">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">
+                No hay stock suficiente para finalizar esta orden. Revisa materia prima disponible.
+              </p>
+              <div className="mt-3 space-y-2">
+                {stockCheck.faltantes.slice(0, 3).map((item) => (
+                  <div key={`${item.id_lote}-${item.lote}`} className="rounded-xl bg-white/80 px-3 py-2 border border-amber-100">
+                    <p className="font-medium text-slate-900">{item.nombre_insumo}</p>
+                    <p className="text-xs text-slate-600">
+                      Lote {item.lote} · Disponible {item.disponible.toLocaleString('es-AR', { maximumFractionDigits: 3 })} kg ·
+                      Requerido {item.requerida.toLocaleString('es-AR', { maximumFractionDigits: 3 })} kg
+                    </p>
+                  </div>
+                ))}
+                {stockCheck.faltantes.length > 3 ? (
+                  <p className="text-xs text-amber-700">
+                    Y {stockCheck.faltantes.length - 3} lote(s) más con faltante.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

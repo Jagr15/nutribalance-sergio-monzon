@@ -1,5 +1,6 @@
 // src/features/ordenes/components/OrdenModal.tsx
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { FiX, FiTarget, FiLayers, FiCheck, FiAlertCircle } from "react-icons/fi";
 import { ApiService } from '../../../infrastructure/api';
@@ -24,23 +25,35 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
 
   const [datosInversion, setDatosInversion] = useState<CalculoOrdenResultado | null>(null);
   const [stockSuficiente, setStockSuficiente] = useState(true);
-  const [insumosFaltantes, setInsumosFaltantes] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
   useEffect(() => {
     const cargarFormulas = async () => {
       try {
         const data = await ApiService.formulas.findAll();
         setFormulas(data);
+        setCatalogError(null);
       } catch (error) {
         console.error("Error al cargar fórmulas:", error);
+        setCatalogError('No se pudieron cargar las fórmulas disponibles.');
+      } finally {
+        setCatalogLoading(false);
       }
     };
     cargarFormulas();
   }, []);
 
-  const formulaOptions = useMemo(() => formulas.filter((f) => f.esta_activa), [formulas]);
+  const getFormulaId = (item: Formula) => item.uid || (item as Formula & { formula_id?: string; id?: string }).formula_id || (item as Formula & { id?: string }).id || '';
+  const getFormulaName = (item: Formula) => item.nombre_producto || (item as Formula & { producto?: string }).producto || 'Sin nombre';
+  const isFormulaActive = (item: Formula) => item.esta_activa ?? ((item as Formula & { estado?: string }).estado ?? '').toUpperCase() === 'ACTIVA';
+
+  const formulaOptions = useMemo(
+    () => formulas.filter((f) => isFormulaActive(f) && getFormulaId(f)),
+    [formulas],
+  );
 
   useEffect(() => {
     const realizarCalculo = async () => {
@@ -50,7 +63,6 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         if (resultado) {
           setDatosInversion(resultado);
           setStockSuficiente(resultado.stockSuficiente);
-          setInsumosFaltantes(resultado.ingredientesFaltantes);
         }
       } else {
         setDatosInversion(null);
@@ -80,10 +92,10 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     try {
       setIsSubmitting(true);
       // 1. CREACIÓN DE LA ORDEN
-      const payload = {
-        lote: '',
-        id_formula: selectedFormula.uid,
-        nombre_producto: selectedFormula.nombre_producto,
+        const payload = {
+          lote: '',
+        id_formula: getFormulaId(selectedFormula),
+        nombre_producto: getFormulaName(selectedFormula),
         version_formula: selectedFormula.version,
         cantidad_objetivo: unidad === 'TON' ? Number(pesoObjetivo) * 1000 : Number(pesoObjetivo),
         detalle_insumos: datosInversion.lotesInvolucrados, // Detalle FIFO
@@ -116,6 +128,17 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   };
 
   const isFormValid = !!selectedFormula && !!pesoObjetivo && stockSuficiente;
+  const stockDetalle = useMemo(() => {
+    if (!datosInversion) return [];
+    return datosInversion.resumenInsumos
+      .filter((row) => row.faltante > 0)
+      .map((row) => ({
+        ...row,
+        disponible: Number(row.disponible.toFixed(3)),
+        requerida: Number(row.requerida.toFixed(3)),
+        faltante: Number(row.faltante.toFixed(3)),
+      }));
+  }, [datosInversion]);
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -161,15 +184,18 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             >
               <option value="">Seleccioná una fórmula activa</option>
               {formulaOptions.map((f) => (
-                <option key={f.uid} value={f.uid}>
-                  {f.nombre_producto} · v{f.version}
+                <option key={getFormulaId(f)} value={getFormulaId(f)}>
+                  {getFormulaName(f)} · v{f.version}
                 </option>
               ))}
             </select>
-            {formulaOptions.length === 0 ? <p className="text-xs text-amber-600">No hay fórmulas activas disponibles.</p> : null}
+            {!catalogLoading && formulaOptions.length === 0 ? (
+              <p className="text-xs text-amber-600">No hay fórmulas activas disponibles. Activa una fórmula antes de crear una orden.</p>
+            ) : null}
+            {catalogError ? <p className="text-xs text-rose-600">{catalogError}</p> : null}
             {selectedFormula ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
-                <p>Producto: <strong>{selectedFormula.nombre_producto}</strong></p>
+                <p>Producto: <strong>{getFormulaName(selectedFormula)}</strong></p>
                 <p>Versión: <strong>v{selectedFormula.version}</strong></p>
                 <p>
                   Proteína objetivo: <strong>
@@ -221,14 +247,50 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
           </div>
 
           {!stockSuficiente && (
-            <div className="p-4 bg-red-500/5 border border-red-500/20 rounded-2xl flex gap-4 animate-pulse">
-              <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 shrink-0">
-                <FiAlertCircle size={20} />
+            <div className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+              <div className="flex gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 shrink-0">
+                  <FiAlertCircle size={20} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Stock insuficiente</p>
+                  <p className="text-sm text-red-700 font-medium">No puedes avanzar porque faltan insumos para producir esta orden.</p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Stock Insuficiente</p>
-                <p className="text-[10px] text-red-400/60 leading-tight uppercase font-bold">Faltan: {insumosFaltantes.join(", ")}</p>
-              </div>
+
+              {stockDetalle.length > 0 ? (
+                <div className="overflow-hidden rounded-2xl border border-red-200 bg-white">
+                  <table className="w-full text-sm">
+                    <thead className="bg-red-50 text-red-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Insumo</th>
+                        <th className="px-3 py-2 text-right">Disponible</th>
+                        <th className="px-3 py-2 text-right">Requerido</th>
+                        <th className="px-3 py-2 text-right">Faltante</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-red-100">
+                      {stockDetalle.map((row) => (
+                        <tr key={row.nombre_insumo}>
+                          <td className="px-3 py-2 font-medium text-slate-900">{row.nombre_insumo}</td>
+                          <td className="px-3 py-2 text-right text-slate-700">{row.disponible.toLocaleString('es-AR', { maximumFractionDigits: 3 })} kg</td>
+                          <td className="px-3 py-2 text-right text-slate-700">{row.requerida.toLocaleString('es-AR', { maximumFractionDigits: 3 })} kg</td>
+                          <td className="px-3 py-2 text-right font-semibold text-red-700">{row.faltante.toLocaleString('es-AR', { maximumFractionDigits: 3 })} kg</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-red-600">No se pudo calcular el detalle de stock.</p>
+              )}
+
+              <Link
+                to="/stock-materia-prima"
+                className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+              >
+                Ver stock de materia prima
+              </Link>
             </div>
           )}
 

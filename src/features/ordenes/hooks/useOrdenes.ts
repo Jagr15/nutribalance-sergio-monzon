@@ -9,6 +9,15 @@ export const useOrdenes = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const getErrorMessage = (err: unknown, fallback: string) => {
+    if (err instanceof Error && err.message.trim()) return err.message;
+    if (err && typeof err === 'object') {
+      const candidate = err as { message?: string; details?: string; hint?: string };
+      return [candidate.message, candidate.details, candidate.hint].filter(Boolean).join(' | ') || fallback;
+    }
+    return fallback;
+  };
+
   // Carga inicial de datos
   const fetchOrdenes = useCallback(async () => {
     try {
@@ -16,7 +25,7 @@ export const useOrdenes = () => {
       setOrdenes(data);
       setError(null);
     } catch (err) {
-      setError("Error al cargar las órdenes de producción.");
+      setError(getErrorMessage(err, "Error al cargar las órdenes de producción."));
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -38,7 +47,7 @@ export const useOrdenes = () => {
       setOrdenes(prev => prev.map(o => o.id === id ? updated : o));
       return updated;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo iniciar la producción.";
+      const message = getErrorMessage(err, "No se pudo iniciar la producción.");
       setError(message);
       throw err;
     }
@@ -50,7 +59,7 @@ export const useOrdenes = () => {
       await useOrdenService.delete(id);
       setOrdenes(prev => prev.filter(o => o.id !== id));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo anular la orden.";
+      const message = getErrorMessage(err, "No se pudo anular la orden.");
       setError(message);
       throw err;
     }
@@ -64,7 +73,7 @@ export const useOrdenes = () => {
       setOrdenes(prev => prev.map(o => o.id === id ? updated : o));
       return updated;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo finalizar la orden.";
+      const message = getErrorMessage(err, "No se pudo finalizar la orden.");
       setError(message);
       throw err;
     }

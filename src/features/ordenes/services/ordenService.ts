@@ -3,6 +3,7 @@ import { ApiService } from '../../../infrastructure/api/';
 import { EstadoOrden, type OrdenProduccion } from '../types/orden';
 import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
+import type { Silo } from '../../silos/types';
 
 export interface FinalizarOrdenPayload {
   lote_salida: string;
@@ -112,23 +113,37 @@ export const useOrdenService = {
       lote_salida: payload.lote_salida.trim().toUpperCase(),
       destino_silo: payload.destino_silo.trim(),
     };
-    return ApiService.ordenes.update(id, {
+
+    const silosService = (ApiService as typeof ApiService & { silos?: { getAll: () => Promise<Silo[]> } }).silos;
+    const validateDestinationSilo = silosService?.getAll
+      ? silosService.getAll().then((silos) => {
+          const siloSeleccionado = silos.find((silo) => silo.nombre === normalizedPayload.destino_silo);
+          if (!siloSeleccionado) {
+            throw new Error('El silo de destino seleccionado no existe.');
+          }
+          if (siloSeleccionado.tipo_uso !== 'PRODUCTO_TERMINADO') {
+            throw new Error('Solo se puede finalizar la orden en silos de Producto Terminado.');
+          }
+        })
+      : Promise.resolve();
+
+    return validateDestinationSilo.then(() => ApiService.ordenes.update(id, {
       ...normalizedPayload,
       merma_manual: payload.merma, // Mapeo para el backend si el campo difiere
       estado: EstadoOrden.FINALIZADO,
-    }).then(async (result) => {
-      await auditAction({
-        modulo: 'ordenes',
-        accion: 'finish_order',
-        entidad: 'orden_produccion',
-        entidad_ref: id,
-        payload: {
-          cantidad_real: payload.cantidad_real,
-          merma: payload.merma,
-          destino_silo: payload.destino_silo,
-        },
-      });
-      return result;
-    });
+      }).then(async (result) => {
+        await auditAction({
+          modulo: 'ordenes',
+          accion: 'finish_order',
+          entidad: 'orden_produccion',
+          entidad_ref: id,
+          payload: {
+            cantidad_real: payload.cantidad_real,
+            merma: payload.merma,
+            destino_silo: payload.destino_silo,
+          },
+        });
+        return result;
+      }));
   }
 };

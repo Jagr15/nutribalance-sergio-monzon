@@ -34,6 +34,29 @@ export interface FinalizationPlanResult {
   trazabilidad: Array<{ tipo: 'CONSUMO_MP' | 'PRODUCCION_FIN' | 'INGRESO_PT'; referencia: string; payload: Record<string, unknown> }>;
 }
 
+export interface FinalizationStockCheckRow {
+  id_lote: string;
+  nombre_insumo: string;
+  lote: string;
+  requerida: number;
+  disponible: number;
+  faltante: number;
+}
+
+export interface FinalizationStockCheckResult {
+  stockSuficiente: boolean;
+  totalRequerido: number;
+  faltantes: FinalizationStockCheckRow[];
+  mensaje: string | null;
+}
+
+export interface StockRequirementRow {
+  nombre_insumo: string;
+  disponible: number;
+  requerida: number;
+  faltante: number;
+}
+
 export const planFifoConsumption = (
   cantidadObjetivoKg: number,
   ingredientes: Ingrediente[],
@@ -148,4 +171,84 @@ export const buildFinalizationPlan = (
       },
     ],
   };
+};
+
+export const buildFinalizationStockCheck = (
+  cantidadObjetivoKg: number,
+  cantidadRealKg: number,
+  detalle: DetalleInsumoLote[],
+  lotes: StockLoteForFlow[]
+): FinalizationStockCheckResult => {
+  const factor = cantidadObjetivoKg > 0 ? cantidadRealKg / cantidadObjetivoKg : 0;
+  const faltantes: FinalizationStockCheckRow[] = [];
+  let totalRequerido = 0;
+
+  for (const item of detalle) {
+    const requerida = Number((item.cantidad_usada * factor).toFixed(3));
+    totalRequerido += requerida;
+
+    const lote = lotes.find((current) => current.legacy_uid === item.id_lote || current.lote === item.id_lote);
+    if (!lote) {
+      faltantes.push({
+        id_lote: item.id_lote,
+        nombre_insumo: item.nombre_insumo,
+        lote: item.id_lote,
+        requerida,
+        disponible: 0,
+        faltante: requerida,
+      });
+      continue;
+    }
+
+    const disponible = Number((lote.cantidad_actual - (lote.cantidad_comprometida || 0)).toFixed(3));
+    const faltante = Number((requerida - disponible).toFixed(3));
+
+    if (faltante > 0.0005) {
+      faltantes.push({
+        id_lote: item.id_lote,
+        nombre_insumo: item.nombre_insumo,
+        lote: lote.lote,
+        requerida,
+        disponible,
+        faltante,
+      });
+    }
+  }
+
+  return {
+    stockSuficiente: faltantes.length === 0,
+    totalRequerido,
+    faltantes,
+    mensaje: faltantes.length > 0
+      ? 'No hay stock suficiente para finalizar esta orden. Revisa materia prima disponible.'
+      : null,
+  };
+};
+
+export const buildStockRequirementRows = (
+  cantidadObjetivoKg: number,
+  ingredientes: Ingrediente[],
+  lotes: StockLoteForFlow[],
+): StockRequirementRow[] => {
+  const rows: StockRequirementRow[] = [];
+
+  for (const ingrediente of ingredientes) {
+    const requerida = Number((cantidadObjetivoKg * ((ingrediente.porcentaje || 0) / 100)).toFixed(3));
+    const disponible = Number(
+      lotes
+        .filter((lote) => lote.insumo_id === ingrediente.id_insumo || lote.insumo_legacy_uid === ingrediente.id_insumo)
+        .reduce((acc, lote) => acc + Math.max(0, lote.cantidad_actual - (lote.cantidad_comprometida || 0)), 0)
+        .toFixed(3),
+    );
+    const faltante = Number(Math.max(0, requerida - disponible).toFixed(3));
+
+    rows.push({
+      nombre_insumo: ingrediente.nombre_insumo,
+      disponible,
+      requerida,
+      faltante,
+    });
+  }
+
+  return rows.filter((row) => row.requerida > 0 || row.disponible > 0 || row.faltante > 0);
 };
