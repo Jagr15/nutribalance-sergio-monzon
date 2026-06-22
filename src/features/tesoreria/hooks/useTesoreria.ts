@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { finanzasService } from '../../finanzas/services/finanzasService';
 import type { FinanzasTesoreriaInsights } from '../../finanzas/types';
 import type { EstadoChequeTesoreria } from '../../finanzas/types';
@@ -43,7 +43,7 @@ export const useTesoreria = () => {
     };
   }, []);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const data = await finanzasService.getTreasuryInsights();
@@ -54,24 +54,24 @@ export const useTesoreria = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const createCheque = async (payload: ChequeTesoreriaFormValues) => {
+  const createCheque = useCallback(async (payload: ChequeTesoreriaFormValues) => {
     await tesoreriaService.createCheque(payload);
     await refresh();
-  };
+  }, [refresh]);
 
-  const updateCheque = async (id: string, payload: ChequeTesoreriaFormValues) => {
+  const updateCheque = useCallback(async (id: string, payload: ChequeTesoreriaFormValues) => {
     await tesoreriaService.updateCheque(id, payload);
     await refresh();
-  };
+  }, [refresh]);
 
-  const updateChequeEstado = async (id: string, estado: EstadoChequeTesoreria) => {
+  const updateChequeEstado = useCallback(async (id: string, estado: EstadoChequeTesoreria) => {
     await tesoreriaService.updateChequeEstado(id, estado);
     await refresh();
-  };
+  }, [refresh]);
 
-  const getCheques = async (params?: Parameters<typeof tesoreriaService.getCheques>[0]) => tesoreriaService.getCheques(params);
+  const getCheques = useCallback((params?: Parameters<typeof tesoreriaService.getCheques>[0]) => tesoreriaService.getCheques(params), []);
 
   return { tesoreria, loading, error, refresh, getCheques, createCheque, updateCheque, updateChequeEstado };
 };

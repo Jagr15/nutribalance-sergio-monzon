@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Card } from '../../../shared/components/card';
 import { useEstadosFinancieros } from '../hooks/useEstadosFinancieros';
 import type { PeriodoFiltro } from '../utils/estadosFinancieros';
@@ -6,6 +6,23 @@ import { historicoContableService, parseHistoricoCsv, type MovimientoHistoricoIm
 
 const money = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
 const dateLabel = (value: string) => new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+
+const toDateInputValue = (date: Date) => date.toISOString().slice(0, 10);
+const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+const startOfQuarter = (date: Date) => new Date(date.getFullYear(), Math.floor(date.getMonth() / 3) * 3, 1);
+const startOfYear = (date: Date) => new Date(date.getFullYear(), 0, 1);
+const endOfToday = (date: Date) => toDateInputValue(date);
+
+const getPresetRange = (periodo: PeriodoFiltro) => {
+  const today = new Date();
+  if (periodo === 'MES_ACTUAL') return { desde: toDateInputValue(startOfMonth(today)), hasta: endOfToday(today) };
+  if (periodo === 'TRIMESTRE_ACTUAL') return { desde: toDateInputValue(startOfQuarter(today)), hasta: endOfToday(today) };
+  if (periodo === 'ANIO_ACTUAL') return { desde: toDateInputValue(startOfYear(today)), hasta: endOfToday(today) };
+  return { desde: '', hasta: '' };
+};
+
+const DEMO_PATTERN = /prueba|test|demo|www|tttt/i;
+const isDemoText = (value?: string | null) => Boolean(value && DEMO_PATTERN.test(value));
 
 const PeriodoSelect = ({ value, onChange }: { value: PeriodoFiltro; onChange: (value: PeriodoFiltro) => void }) => (
   <select className="ui-input rounded-2xl px-4 py-3 text-sm" value={value} onChange={(event) => onChange(event.target.value as PeriodoFiltro)}>
@@ -34,12 +51,47 @@ const EstadosFinancierosPage = () => {
   const [importPreview, setImportPreview] = useState<MovimientoHistoricoImportRow[]>([]);
   const [importLoading, setImportLoading] = useState(false);
 
+  const periodoEsPersonalizado = periodo === 'RANGO';
+  const rangoVisible = useMemo(() => ({
+    desde: periodoEsPersonalizado ? rangoCustom.desde : getPresetRange(periodo).desde,
+    hasta: periodoEsPersonalizado ? rangoCustom.hasta : getPresetRange(periodo).hasta,
+  }), [periodo, periodoEsPersonalizado, rangoCustom.desde, rangoCustom.hasta]);
+  const showInitialLoadSection = import.meta.env.VITE_SHOW_HISTORICO_LOAD === 'true';
+
+  const librosFiltrados = useMemo(() => ({
+    libroMayor: data.libros.libroMayor.filter((row) => !isDemoText(row.cuenta) && !isDemoText(row.descripcion)),
+    auxiliarIngresos: data.libros.auxiliarIngresos.filter((row) => !isDemoText(row.label)),
+    auxiliarEgresos: data.libros.auxiliarEgresos.filter((row) => !isDemoText(row.label)),
+  }), [data.libros.auxiliarEgresos, data.libros.auxiliarIngresos, data.libros.libroMayor]);
+
+  const rangoInvalido = Boolean(rangoVisible.desde && rangoVisible.hasta && rangoVisible.desde > rangoVisible.hasta);
+
   const hasData =
     data.estadoResultados.ingresos.length > 0 ||
     data.estadoResultados.egresos.length > 0 ||
     data.balanceGeneral.activos.length > 0 ||
     data.balanceGeneral.pasivos.length > 0 ||
     data.libros.libroMayor.length > 0;
+
+  const handlePeriodoChange = (next: PeriodoFiltro) => {
+    setPeriodo(next);
+    if (next === 'RANGO') return;
+    if (next === 'TODO') {
+      setRangoCustom({ desde: '', hasta: '' });
+      return;
+    }
+    setRangoCustom(getPresetRange(next));
+  };
+
+  const handleDesdeChange = (value: string) => {
+    setPeriodo('RANGO');
+    setRangoCustom((current) => ({ ...current, desde: value }));
+  };
+
+  const handleHastaChange = (value: string) => {
+    setPeriodo('RANGO');
+    setRangoCustom((current) => ({ ...current, hasta: value }));
+  };
 
   const runValidation = (rows: MovimientoHistoricoImportRow[]) => {
     const result = historicoContableService.validate(rows);
@@ -110,21 +162,24 @@ const EstadosFinancierosPage = () => {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="block">
             <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Periodo</span>
-            <PeriodoSelect value={periodo} onChange={setPeriodo} />
+            <PeriodoSelect value={periodo} onChange={handlePeriodoChange} />
           </label>
           <label className="block">
             <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Desde</span>
-            <input type="date" className="ui-input rounded-2xl px-4 py-3 text-sm" value={rangoCustom.desde} onChange={(event) => setRangoCustom((current) => ({ ...current, desde: event.target.value }))} disabled={periodo !== 'RANGO'} />
+            <input type="date" className="ui-input rounded-2xl px-4 py-3 text-sm" value={rangoVisible.desde} onChange={(event) => handleDesdeChange(event.target.value)} />
           </label>
           <label className="block">
             <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Hasta</span>
-            <input type="date" className="ui-input rounded-2xl px-4 py-3 text-sm" value={rangoCustom.hasta} onChange={(event) => setRangoCustom((current) => ({ ...current, hasta: event.target.value }))} disabled={periodo !== 'RANGO'} />
+            <input type="date" className="ui-input rounded-2xl px-4 py-3 text-sm" value={rangoVisible.hasta} onChange={(event) => handleHastaChange(event.target.value)} />
           </label>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Movimientos</p>
             <p className="mt-1 text-2xl font-semibold text-slate-900">{loading ? '...' : data.libros.libroMayor.length}</p>
           </div>
         </div>
+        {rangoInvalido ? (
+          <p className="mt-3 text-sm font-medium text-rose-700">El rango de fechas no es válido: la fecha "Desde" no puede ser mayor que "Hasta".</p>
+        ) : null}
       </Card>
 
       {loading ? (
@@ -133,52 +188,54 @@ const EstadosFinancierosPage = () => {
         </Card>
       ) : null}
 
-      <Card>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">Carga inicial de históricos</h2>
-            <p className="mt-1 text-sm text-slate-500">Pegá un CSV simple o cargá un archivo con columnas: `fecha,tipo,descripcion,monto,origen_operativo,legacy_uid`.</p>
-          </div>
-          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{importState}</div>
-        </div>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-          <div className="space-y-3">
-            <textarea
-              className="ui-input min-h-[180px] w-full rounded-2xl px-4 py-3 text-sm"
-              placeholder="fecha,tipo,descripcion,monto,origen_operativo,legacy_uid\n2026-01-01,INGRESO,Venta inicial,1000,VENTA_PT,hist-001"
-              value={csvText}
-              onChange={(event) => handleCsvText(event.target.value)}
-            />
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100" onClick={handlePreview}>Validar CSV</button>
-              <button type="button" className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-60" onClick={handleImport} disabled={importLoading || csvText.trim().length === 0}>{importLoading ? 'Importando...' : 'Importar histórico'}</button>
-              <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100" onClick={() => fileRef.current?.click()}>Cargar CSV</button>
-              <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => void handleFile(event.target.files?.[0] ?? null)} />
+      {showInitialLoadSection ? (
+        <Card>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">Carga inicial de históricos</h2>
+              <p className="mt-1 text-sm text-slate-500">Pegá un CSV simple o cargá un archivo con columnas: `fecha,tipo,descripcion,monto,origen_operativo,legacy_uid`.</p>
             </div>
-            <p className="text-xs text-slate-500">Si falta `legacy_uid`, se genera una clave estable para evitar duplicados. Los campos vacíos invalidan la fila antes de importar.</p>
+            <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{importState}</div>
           </div>
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-900">Estado de la carga</p>
-            <p className="text-sm text-slate-600">{importMessage ?? 'Pendiente de validación.'}</p>
-            {importErrors.length > 0 ? (
-              <div className="max-h-44 overflow-auto rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {importErrors.map((item) => <p key={item}>{item}</p>)}
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+            <div className="space-y-3">
+              <textarea
+                className="ui-input min-h-[180px] w-full rounded-2xl px-4 py-3 text-sm"
+                placeholder="fecha,tipo,descripcion,monto,origen_operativo,legacy_uid\n2026-01-01,INGRESO,Venta inicial,1000,VENTA_PT,hist-001"
+                value={csvText}
+                onChange={(event) => handleCsvText(event.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100" onClick={handlePreview}>Validar CSV</button>
+                <button type="button" className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-60" onClick={handleImport} disabled={importLoading || csvText.trim().length === 0}>{importLoading ? 'Importando...' : 'Importar histórico'}</button>
+                <button type="button" className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100" onClick={() => fileRef.current?.click()}>Cargar CSV</button>
+                <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => void handleFile(event.target.files?.[0] ?? null)} />
               </div>
-            ) : null}
-            {importPreview.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Vista previa</p>
-                {importPreview.map((row) => (
-                  <div key={`${row.legacy_uid ?? row.fecha}-${row.descripcion}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
-                    <p className="font-semibold text-slate-900">{row.descripcion}</p>
-                    <p className="text-slate-500">{row.fecha} · {row.tipo} · {row.origen_operativo} · {row.monto}</p>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+              <p className="text-xs text-slate-500">Si falta `legacy_uid`, se genera una clave estable para evitar duplicados. Los campos vacíos invalidan la fila antes de importar.</p>
+            </div>
+            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-900">Estado de la carga</p>
+              <p className="text-sm text-slate-600">{importMessage ?? 'Pendiente de validación.'}</p>
+              {importErrors.length > 0 ? (
+                <div className="max-h-44 overflow-auto rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {importErrors.map((item) => <p key={item}>{item}</p>)}
+                </div>
+              ) : null}
+              {importPreview.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Vista previa</p>
+                  {importPreview.map((row) => (
+                    <div key={`${row.legacy_uid ?? row.fecha}-${row.descripcion}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
+                      <p className="font-semibold text-slate-900">{row.descripcion}</p>
+                      <p className="text-slate-500">{row.fecha} · {row.tipo} · {row.origen_operativo} · {row.monto}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      ) : null}
 
       {!loading && !hasData ? (
         <Card>
@@ -242,16 +299,16 @@ const EstadosFinancierosPage = () => {
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Libro mayor</p>
               <div className="mt-2 space-y-2 max-h-72 overflow-auto pr-1">
-                {data.libros.libroMayor.length > 0 ? data.libros.libroMayor.slice(0, 12).map((row) => <div key={`${row.fecha}-${row.descripcion}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-semibold">{row.cuenta}</span><span>{dateLabel(row.fecha)}</span></div><p className="mt-1 text-slate-700">{row.descripcion}</p><div className="mt-2 flex items-center justify-between"><span>Débito {money(row.debito)}</span><span>Crédito {money(row.credito)}</span></div></div>) : <EmptyState title="Sin libro mayor" description="No hay movimientos confirmados para mostrar." />}
+                {librosFiltrados.libroMayor.length > 0 ? librosFiltrados.libroMayor.slice(0, 12).map((row) => <div key={`${row.fecha}-${row.descripcion}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-semibold">{row.cuenta}</span><span>{dateLabel(row.fecha)}</span></div><p className="mt-1 text-slate-700">{row.descripcion}</p><div className="mt-2 flex items-center justify-between"><span>Débito {money(row.debito)}</span><span>Crédito {money(row.credito)}</span></div></div>) : <EmptyState title="Sin libro mayor" description="No hay movimientos confirmados para mostrar." />}
               </div>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Auxiliar de ingresos</p>
-              <div className="mt-2 space-y-2">{data.libros.auxiliarIngresos.length > 0 ? data.libros.auxiliarIngresos.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-emerald-700">{money(row.amount)}</span></div>) : <EmptyState title="Sin ingresos auxiliares" description="No hay ingresos en el periodo." />}</div>
+              <div className="mt-2 space-y-2">{librosFiltrados.auxiliarIngresos.length > 0 ? librosFiltrados.auxiliarIngresos.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-emerald-700">{money(row.amount)}</span></div>) : <EmptyState title="Sin ingresos auxiliares" description="No hay ingresos en el periodo." />}</div>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Auxiliar de egresos</p>
-              <div className="mt-2 space-y-2">{data.libros.auxiliarEgresos.length > 0 ? data.libros.auxiliarEgresos.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-rose-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-rose-700">{money(row.amount)}</span></div>) : <EmptyState title="Sin egresos auxiliares" description="No hay egresos en el periodo." />}</div>
+              <div className="mt-2 space-y-2">{librosFiltrados.auxiliarEgresos.length > 0 ? librosFiltrados.auxiliarEgresos.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-rose-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-rose-700">{money(row.amount)}</span></div>) : <EmptyState title="Sin egresos auxiliares" description="No hay egresos en el periodo." />}</div>
             </div>
           </div>
         </Card>
