@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import jsPDF from 'jspdf';
 import { Card } from '../../../shared/components/card';
 import { useDashboardOperativo } from '../hooks/useDashboardOperativo';
 import { BrandLogo } from '../../../shared/components/BrandLogo';
@@ -40,36 +39,38 @@ const DashboardExecutivePage = () => {
   const healthScore = Math.max(0, Math.min(100, 70 + (kpis.stock_critico === 0 ? 10 : -10) + (temporalInsights.flujoCaja >= 0 ? 10 : -10)));
 
   const handleExportPdf = () => {
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const width = doc.internal.pageSize.getWidth();
-    let y = 18;
-    const line = (label: string, value: string) => { doc.setFontSize(10); doc.setTextColor(100,116,139); doc.text(label, 14, y); doc.setTextColor(15,23,42); doc.setFont('helvetica', 'bold'); doc.text(value, 76, y); y += 6; };
-    const section = (title: string) => { y += 2; doc.setFontSize(13); doc.setTextColor(15,23,42); doc.text(title, 14, y); y += 5; doc.setDrawColor(226,232,240); doc.line(14, y, width - 14, y); y += 5; };
-    doc.setFillColor(14, 165, 233);
-    doc.rect(0, 0, width, 24, 'F');
-    doc.setTextColor(255,255,255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.text('Nutribalance', 14, 14);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Reporte Ejecutivo Nutribalance', 14, 20);
-    doc.text(new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date()), width - 14, 20, { align: 'right' });
-    y = 34;
-    section('Salud general del negocio');
-    line('Score ejecutivo', `${healthScore}/100`);
-    line('Órdenes pendientes', `${kpis.ordenes_pendientes}`);
-    line('Stock crítico', `${kpis.stock_critico}`);
-    section('KPIs principales');
-    line('Producción total', `${kpis.produccion_total.toLocaleString('es-AR')} kg`);
-    line('Stock disponible MP', `${kpis.stock_disponible_mp.toLocaleString('es-AR')} kg`);
-    line('Ingresos', fmtARS(temporalInsights.ingresos));
-    line('Costos', fmtARS(temporalInsights.costos));
-    line('Flujo de caja', fmtARS(temporalInsights.flujoCaja));
-    section('Producto terminado / clientes principales');
-    executiveInsights.ventasPorProducto.slice(0, 3).forEach((item) => line(item.producto_nombre, `${item.kg.toLocaleString('es-AR')} kg`));
-    executiveInsights.topClientesPorVolumen.slice(0, 3).forEach((item) => line(item.cliente_nombre, `${item.kg.toLocaleString('es-AR')} kg`));
-    doc.save(`Reporte Ejecutivo Nutribalance-${new Date().toISOString().slice(0, 10)}.pdf`);
+    void import('jspdf').then(({ default: jsPDF }) => {
+      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const width = doc.internal.pageSize.getWidth();
+      let y = 18;
+      const line = (label: string, value: string) => { doc.setFontSize(10); doc.setTextColor(100,116,139); doc.text(label, 14, y); doc.setTextColor(15,23,42); doc.setFont('helvetica', 'bold'); doc.text(value, 76, y); y += 6; };
+      const section = (title: string) => { y += 2; doc.setFontSize(13); doc.setTextColor(15,23,42); doc.text(title, 14, y); y += 5; doc.setDrawColor(226,232,240); doc.line(14, y, width - 14, y); y += 5; };
+      doc.setFillColor(14, 165, 233);
+      doc.rect(0, 0, width, 24, 'F');
+      doc.setTextColor(255,255,255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text('Nutribalance', 14, 14);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Reporte Ejecutivo Nutribalance', 14, 20);
+      doc.text(new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date()), width - 14, 20, { align: 'right' });
+      y = 34;
+      section('Salud general del negocio');
+      line('Score ejecutivo', `${healthScore}/100`);
+      line('Órdenes pendientes', `${kpis.ordenes_pendientes}`);
+      line('Stock crítico', `${kpis.stock_critico}`);
+      section('KPIs principales');
+      line('Producción total', `${kpis.produccion_total.toLocaleString('es-AR')} kg`);
+      line('Stock disponible MP', `${kpis.stock_disponible_mp.toLocaleString('es-AR')} kg`);
+      line('Ingresos', fmtARS(temporalInsights.ingresos));
+      line('Costos', fmtARS(temporalInsights.costos));
+      line('Flujo de caja', fmtARS(temporalInsights.flujoCaja));
+      section('Producto terminado / clientes principales');
+      executiveInsights.ventasPorProducto.slice(0, 3).forEach((item) => line(item.producto_nombre, `${item.kg.toLocaleString('es-AR')} kg`));
+      executiveInsights.topClientesPorVolumen.slice(0, 3).forEach((item) => line(item.cliente_nombre, `${item.kg.toLocaleString('es-AR')} kg`));
+      doc.save(`Reporte Ejecutivo Nutribalance-${new Date().toISOString().slice(0, 10)}.pdf`);
+    });
   };
 
   if (loading && stockResumenes.stockMateriaPrima.length === 0 && stockResumenes.stockProductoTerminado.length === 0) {

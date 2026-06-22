@@ -3,6 +3,7 @@ import { finanzasService } from '../../finanzas/services/finanzasService';
 import type { FinanzasTesoreriaInsights } from '../../finanzas/types';
 import type { EstadoChequeTesoreria } from '../../finanzas/types';
 import type { ChequeTesoreriaFormValues } from '../services/tesoreriaService';
+import { tesoreriaService } from '../services/tesoreriaService';
 
 const EMPTY_TESORERIA: FinanzasTesoreriaInsights = {
   presupuestoVsReal: [],
@@ -56,22 +57,21 @@ export const useTesoreria = () => {
   };
 
   const createCheque = async (payload: ChequeTesoreriaFormValues) => {
-    const { tesoreriaService } = await import('../services/tesoreriaService');
     await tesoreriaService.createCheque(payload);
     await refresh();
   };
 
   const updateCheque = async (id: string, payload: ChequeTesoreriaFormValues) => {
-    const { tesoreriaService } = await import('../services/tesoreriaService');
     await tesoreriaService.updateCheque(id, payload);
     await refresh();
   };
 
   const updateChequeEstado = async (id: string, estado: EstadoChequeTesoreria) => {
-    const { tesoreriaService } = await import('../services/tesoreriaService');
     await tesoreriaService.updateChequeEstado(id, estado);
     await refresh();
   };
 
-  return { tesoreria, loading, error, refresh, createCheque, updateCheque, updateChequeEstado };
+  const getCheques = async (params?: Parameters<typeof tesoreriaService.getCheques>[0]) => tesoreriaService.getCheques(params);
+
+  return { tesoreria, loading, error, refresh, getCheques, createCheque, updateCheque, updateChequeEstado };
 };

@@ -1,4 +1,4 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../config/routes';
 import { MainLayout } from '../../shared/layouts/MainLayout';
@@ -6,25 +6,25 @@ import { isAuthenticated } from '../../features/auth/session';
 import type { AppModule } from '../../features/auth/permissions';
 import { usePermissions } from '../../features/auth/usePermissions';
 
-// Usamos importación directa para estar seguros, luego puedes volver a lazy
-import DashboardPage from '../../features/dashboard/pages/DashboardExecutivePage';
-import DashboardOperativoPage from '../../features/dashboard/pages/DashboardOperativoPage';
-import InsumoPage from '../../features/insumos/pages/InsumoPage';
-import ProveedorPage from '../../features/proveedores/pages/ProveedorPage';
-import StockMateriaPrimaPage from '../../features/insumos/pages/StockMateriaPrimaPage';
-import SiloPage from '../../features/silos/pages/SiloPage';
-import FormulaPage from '../../features/formulas/pages/FormulaPage';
-import OrdenPage from '../../features/ordenes/pages/OrdenPage';
-import ClientesPage from '../../features/clientes/pages/ClientesPage';
-import ProductosPage from '../../features/productos/pages/ProductosPage';
-import CostosPage from '../../features/costos/pages/CostosPage';
-import EstadosFinancierosPage from '../../features/finanzas/pages/EstadosFinancierosPage';
-import TesoreriaPage from '../../features/tesoreria/pages/TesoreriaPage';
-import StockGeneralPage from '../../features/inventario/pages/StockGeneralPage';
-import TrazabilidadPage from '../../features/trazabilidad/pages/TrazabilidadPage';
-import AlertasPage from '../../features/alertas/pages/AlertasPage';
-import LoginPage from '../../features/auth/pages/LoginPage';
-import UsuariosPage from '../../features/usuarios/pages/UsuariosPage';
+const DashboardPage = lazy(() => import('../../features/dashboard/pages/DashboardExecutivePage'));
+const DashboardOperativoPage = lazy(() => import('../../features/dashboard/pages/DashboardOperativoPage'));
+const InsumoPage = lazy(() => import('../../features/insumos/pages/InsumoPage'));
+const ProveedorPage = lazy(() => import('../../features/proveedores/pages/ProveedorPage'));
+const StockMateriaPrimaPage = lazy(() => import('../../features/insumos/pages/StockMateriaPrimaPage'));
+const SiloPage = lazy(() => import('../../features/silos/pages/SiloPage'));
+const FormulaPage = lazy(() => import('../../features/formulas/pages/FormulaPage'));
+const OrdenPage = lazy(() => import('../../features/ordenes/pages/OrdenPage'));
+const ClientesPage = lazy(() => import('../../features/clientes/pages/ClientesPage'));
+const ProductosPage = lazy(() => import('../../features/productos/pages/ProductosPage'));
+const CostosPage = lazy(() => import('../../features/costos/pages/CostosPage'));
+const EstadosFinancierosPage = lazy(() => import('../../features/finanzas/pages/EstadosFinancierosPage'));
+const MovimientosFinancierosPage = lazy(() => import('../../features/finanzas/pages/MovimientosFinancierosPage'));
+const TesoreriaPage = lazy(() => import('../../features/tesoreria/pages/TesoreriaPage'));
+const StockGeneralPage = lazy(() => import('../../features/inventario/pages/StockGeneralPage'));
+const TrazabilidadPage = lazy(() => import('../../features/trazabilidad/pages/TrazabilidadPage'));
+const AlertasPage = lazy(() => import('../../features/alertas/pages/AlertasPage'));
+const LoginPage = lazy(() => import('../../features/auth/pages/LoginPage'));
+const UsuariosPage = lazy(() => import('../../features/usuarios/pages/UsuariosPage'));
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const location = useLocation();
@@ -87,6 +87,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.TRAZABILIDAD} element={<ModuleRoute module="trazabilidad"><TrazabilidadPage /></ModuleRoute>} />
           <Route path={ROUTES.PRODUCTOS} element={<ModuleRoute module="productos"><ProductosPage /></ModuleRoute>} />
           <Route path={ROUTES.COSTOS} element={<ModuleRoute module="finanzas"><CostosPage /></ModuleRoute>} />
+          <Route path={ROUTES.MOVIMIENTOS_FINANCIEROS} element={<ModuleRoute module="finanzas"><MovimientosFinancierosPage /></ModuleRoute>} />
           <Route path={ROUTES.ESTADOS_FINANCIEROS} element={<ModuleRoute module="finanzas"><EstadosFinancierosPage /></ModuleRoute>} />
           <Route path={ROUTES.TESORERIA} element={<ModuleRoute module="tesoreria"><TesoreriaPage /></ModuleRoute>} />
           <Route path={ROUTES.USUARIOS} element={<ModuleRoute module="usuarios"><UsuariosPage /></ModuleRoute>} />

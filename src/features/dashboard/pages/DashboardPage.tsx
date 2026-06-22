@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import jsPDF from 'jspdf';
+import type jsPDF from 'jspdf';
 import { Card } from '../../../shared/components/card';
 import { LoadingState } from '../../../shared/components/table';
 import { ROUTES } from '../../../app/config/routes';
@@ -235,80 +235,82 @@ export const DashboardPage = () => {
   );
 
   const handleExportPdf = () => {
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const width = doc.internal.pageSize.getWidth();
-    const height = doc.internal.pageSize.getHeight();
-    let cursorY = 16;
-    const addPageIfNeeded = (needed = 12) => {
-      if (cursorY + needed < height - 12) return;
-      doc.addPage();
-      cursorY = 16;
-    };
-    const advance = (nextY: number) => {
-      cursorY = nextY;
-      return cursorY;
-    };
-    const writeSectionTitle = (title: string) => {
-      cursorY = addPdfSectionTitle(doc, title, cursorY);
-    };
-    const writeLine = (label: string, value: string, valueX?: number) => {
-      cursorY = addPdfLine(doc, label, value, cursorY, valueX);
-    };
+    void import('jspdf').then(({ default: jsPDF }) => {
+      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const width = doc.internal.pageSize.getWidth();
+      const height = doc.internal.pageSize.getHeight();
+      let cursorY = 16;
+      const addPageIfNeeded = (needed = 12) => {
+        if (cursorY + needed < height - 12) return;
+        doc.addPage();
+        cursorY = 16;
+      };
+      const advance = (nextY: number) => {
+        cursorY = nextY;
+        return cursorY;
+      };
+      const writeSectionTitle = (title: string) => {
+        cursorY = addPdfSectionTitle(doc, title, cursorY);
+      };
+      const writeLine = (label: string, value: string, valueX?: number) => {
+        cursorY = addPdfLine(doc, label, value, cursorY, valueX);
+      };
 
-    doc.setFillColor(14, 165, 233);
-    doc.rect(0, 0, width, 24, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.text('NutriBalance', 14, 14);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text('Dashboard Ejecutivo', 14, 20);
-    doc.text(`Generado: ${new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date())}`, width - 14, 20, { align: 'right' });
+      doc.setFillColor(14, 165, 233);
+      doc.rect(0, 0, width, 24, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text('NutriBalance', 14, 14);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text('Dashboard Ejecutivo', 14, 20);
+      doc.text(`Generado: ${new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date())}`, width - 14, 20, { align: 'right' });
 
-    cursorY = 32;
-    addPageIfNeeded(36);
-    writeSectionTitle('Producción');
-    writeLine('Órdenes pendientes', `${kpis.ordenes_pendientes}`);
-    writeLine('Órdenes en proceso', `${kpis.ordenes_en_proceso}`);
-    writeLine('Órdenes finalizadas', `${kpis.ordenes_finalizadas}`);
-    writeLine('Producción total', `${kpis.produccion_total.toLocaleString('es-AR')} kg`);
-    writeLine('Merma total', `${kpis.merma_total.toLocaleString('es-AR')} kg`);
+      cursorY = 32;
+      addPageIfNeeded(36);
+      writeSectionTitle('Producción');
+      writeLine('Órdenes pendientes', `${kpis.ordenes_pendientes}`);
+      writeLine('Órdenes en proceso', `${kpis.ordenes_en_proceso}`);
+      writeLine('Órdenes finalizadas', `${kpis.ordenes_finalizadas}`);
+      writeLine('Producción total', `${kpis.produccion_total.toLocaleString('es-AR')} kg`);
+      writeLine('Merma total', `${kpis.merma_total.toLocaleString('es-AR')} kg`);
 
-    cursorY = advance(cursorY + 2);
-    addPageIfNeeded(30);
-    writeSectionTitle('Inventario');
-    writeLine('Stock físico MP', `${kpis.stock_total_mp.toLocaleString('es-AR')} kg`);
-    writeLine('Stock comprometido MP', `${kpis.stock_comprometido_mp.toLocaleString('es-AR')} kg`);
-    writeLine('Stock disponible MP', `${kpis.stock_disponible_mp.toLocaleString('es-AR')} kg`);
-    writeLine('Lotes críticos', `${kpis.stock_critico}`);
-    writeLine('Stock PT total', `${kpis.stock_total_pt.toLocaleString('es-AR')} kg`);
-    writeLine('Valor inventario PT', valorInventarioPtLabel);
+      cursorY = advance(cursorY + 2);
+      addPageIfNeeded(30);
+      writeSectionTitle('Inventario');
+      writeLine('Stock físico MP', `${kpis.stock_total_mp.toLocaleString('es-AR')} kg`);
+      writeLine('Stock comprometido MP', `${kpis.stock_comprometido_mp.toLocaleString('es-AR')} kg`);
+      writeLine('Stock disponible MP', `${kpis.stock_disponible_mp.toLocaleString('es-AR')} kg`);
+      writeLine('Lotes críticos', `${kpis.stock_critico}`);
+      writeLine('Stock PT total', `${kpis.stock_total_pt.toLocaleString('es-AR')} kg`);
+      writeLine('Valor inventario PT', valorInventarioPtLabel);
 
-    cursorY = advance(cursorY + 2);
-    addPageIfNeeded(30);
-    writeSectionTitle('Finanzas');
-    writeLine('Costos', fmtARS(temporalInsights.costos));
-    writeLine('Ingresos', fmtARS(temporalInsights.ingresos));
-    writeLine('Flujo de caja', fmtARS(temporalInsights.flujoCaja));
-    writeLine('Proteína promedio fórmula', `${kpis.proteina_promedio_formula.toFixed(2)}%`);
+      cursorY = advance(cursorY + 2);
+      addPageIfNeeded(30);
+      writeSectionTitle('Finanzas');
+      writeLine('Costos', fmtARS(temporalInsights.costos));
+      writeLine('Ingresos', fmtARS(temporalInsights.ingresos));
+      writeLine('Flujo de caja', fmtARS(temporalInsights.flujoCaja));
+      writeLine('Proteína promedio fórmula', `${kpis.proteina_promedio_formula.toFixed(2)}%`);
 
-    cursorY = advance(cursorY + 2);
-    addPageIfNeeded(30);
-    writeSectionTitle('Alertas Operativas');
-    writeLine('Alertas activas', `${temporalInsights.alertas.length}`);
-    writeLine('Pendientes', `${summary.pendientes}`);
-    writeLine('Críticas activas', `${summary.criticas}`);
-    writeLine('En seguimiento', `${summary.seguimiento}`);
+      cursorY = advance(cursorY + 2);
+      addPageIfNeeded(30);
+      writeSectionTitle('Alertas Operativas');
+      writeLine('Alertas activas', `${temporalInsights.alertas.length}`);
+      writeLine('Pendientes', `${summary.pendientes}`);
+      writeLine('Críticas activas', `${summary.criticas}`);
+      writeLine('En seguimiento', `${summary.seguimiento}`);
 
-    cursorY = advance(cursorY + 2);
-    addPageIfNeeded(24);
-    writeSectionTitle('Periodo y actualización');
-    writeLine('Periodo actual', periodoLabel);
-    writeLine('Última actualización', updatedAtLabel);
-    writeLine('Antigüedad', relativeUpdatedLabel);
+      cursorY = advance(cursorY + 2);
+      addPageIfNeeded(24);
+      writeSectionTitle('Periodo y actualización');
+      writeLine('Periodo actual', periodoLabel);
+      writeLine('Última actualización', updatedAtLabel);
+      writeLine('Antigüedad', relativeUpdatedLabel);
 
-    doc.save(`dashboard-ejecutivo-${new Date().toISOString().slice(0, 10)}.pdf`);
+      doc.save(`dashboard-ejecutivo-${new Date().toISOString().slice(0, 10)}.pdf`);
+    });
   };
 
   const alertasTop = useMemo(() => buildAlertRanking(alertas, periodo, dashboardNow, 3), [alertas, dashboardNow, periodo]);

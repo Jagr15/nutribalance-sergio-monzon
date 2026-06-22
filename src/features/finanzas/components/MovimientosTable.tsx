@@ -1,27 +1,72 @@
 import type { MovimientoFinanciero } from '../types';
 import { DataTable, EmptyState, StatusBadge, TableBody, TableCell, TableHeader, TableRow } from '../../../shared/components/table';
 
-export const MovimientosTable = ({ movimientos }: { movimientos: MovimientoFinanciero[] }) => (
-  <DataTable minWidthClassName="min-w-[900px]">
-    <TableHeader>
-      <tr>
-        <TableCell header>Fecha</TableCell><TableCell header>Tipo</TableCell><TableCell header>Descripción</TableCell><TableCell header>Origen</TableCell><TableCell header>Categoría</TableCell><TableCell header>Centro costo</TableCell><TableCell header>Monto</TableCell><TableCell header>Estado</TableCell>
-      </tr>
-    </TableHeader>
-    <TableBody>
-      {movimientos.slice(0, 25).map((m) => (
-        <TableRow key={m.uid}>
-          <TableCell>{new Date(m.fecha).toLocaleDateString('es-AR')}</TableCell>
-          <TableCell><StatusBadge value={m.tipo} /></TableCell>
-          <TableCell>{m.descripcion}</TableCell>
-          <TableCell className="text-slate-500">{m.origen_operativo || '-'}</TableCell>
-          <TableCell className="text-slate-500">{m.categoria || '-'}</TableCell>
-          <TableCell className="text-slate-500">{m.centro_costo || '-'}</TableCell>
-          <TableCell>{m.monto.toLocaleString('es-AR')}</TableCell>
-          <TableCell><StatusBadge value={m.estado} /></TableCell>
-        </TableRow>
-      ))}
-      {movimientos.length === 0 ? <EmptyState colSpan={8} message="No hay movimientos cargados todavía." /> : null}
-    </TableBody>
-  </DataTable>
-);
+const formatDateCompact = (value: string) =>
+  new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: '2-digit' }).format(new Date(value));
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
+
+export const MovimientosTable = ({
+  movimientos,
+  showOrigenAndCentroCosto = false,
+  limit = 20,
+}: {
+  movimientos: MovimientoFinanciero[];
+  showOrigenAndCentroCosto?: boolean;
+  limit?: number;
+}) => {
+  const visibleMovimientos = movimientos.slice(0, limit);
+  const colSpan = showOrigenAndCentroCosto ? 8 : 6;
+
+  return (
+    <DataTable className="rounded-3xl shadow-sm" minWidthClassName="min-w-[980px]">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">Movimientos financieros</h3>
+          <p className="mt-1 text-sm text-slate-500">Últimos registros de ingresos, egresos y transferencias.</p>
+        </div>
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+          Últimos {limit}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left">
+          <TableHeader>
+            <tr className="bg-slate-50/80">
+              <TableCell header className="text-slate-600">Fecha</TableCell>
+              <TableCell header className="text-slate-600">Tipo</TableCell>
+              <TableCell header className="text-slate-600">Descripción</TableCell>
+              <TableCell header className="text-slate-600">Categoría</TableCell>
+              <TableCell header className="text-right text-slate-600">Monto</TableCell>
+              <TableCell header className="text-slate-600">Estado</TableCell>
+              {showOrigenAndCentroCosto ? <TableCell header className="text-slate-600">Origen</TableCell> : null}
+              {showOrigenAndCentroCosto ? <TableCell header className="text-slate-600">Centro costo</TableCell> : null}
+            </tr>
+          </TableHeader>
+          <TableBody>
+            {visibleMovimientos.map((m) => (
+              <TableRow key={m.uid}>
+                <TableCell className="whitespace-nowrap text-slate-600">{formatDateCompact(m.fecha)}</TableCell>
+                <TableCell><StatusBadge value={m.tipo} /></TableCell>
+                <TableCell className="max-w-[320px] truncate text-slate-900">{m.descripcion}</TableCell>
+                <TableCell className="text-slate-500">{m.categoria || '-'}</TableCell>
+                <TableCell className="whitespace-nowrap text-right font-semibold text-slate-900">{formatCurrency(m.monto)}</TableCell>
+                <TableCell><StatusBadge value={m.estado} /></TableCell>
+                {showOrigenAndCentroCosto ? <TableCell className="text-slate-500">{m.origen_operativo || '-'}</TableCell> : null}
+                {showOrigenAndCentroCosto ? <TableCell className="text-slate-500">{m.centro_costo || '-'}</TableCell> : null}
+              </TableRow>
+            ))}
+            {movimientos.length === 0 ? (
+              <EmptyState
+                colSpan={colSpan}
+                title="Aún no hay movimientos registrados."
+                message="Cuando registres ingresos, egresos o transferencias aparecerán aquí."
+              />
+            ) : null}
+          </TableBody>
+        </table>
+      </div>
+    </DataTable>
+  );
+};

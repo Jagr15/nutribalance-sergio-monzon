@@ -3,47 +3,76 @@ import type { RubroFinancieroCatalogo } from '../types';
 
 export const RegistrarMovimientoForm = ({
   onSubmit,
+  onSuccess,
   rubros,
 }: {
   onSubmit: (payload: { tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA'; descripcion: string; monto: number; origen_operativo: string; categoria_id?: string }) => Promise<void>;
+  onSuccess?: () => void;
   rubros: RubroFinancieroCatalogo[];
 }) => {
   const isTipo = (value: string): value is 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA' =>
     value === 'INGRESO' || value === 'EGRESO' || value === 'TRANSFERENCIA';
-  const [tipo, setTipo] = useState<'INGRESO' | 'EGRESO' | 'TRANSFERENCIA'>('EGRESO');
+  const [tipo, setTipo] = useState<'INGRESO' | 'EGRESO' | 'TRANSFERENCIA' | ''>('');
   const [descripcion, setDescripcion] = useState('');
-  const [monto, setMonto] = useState('0');
-  const [origen, setOrigen] = useState('MANUAL');
+  const [monto, setMonto] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    tipo?: string;
+    descripcion?: string;
+    monto?: string;
+    categoriaId?: string;
+  }>({});
   const rubrosActivos = useMemo(() => rubros.filter((rubro) => rubro.activo), [rubros]);
+  const resetForm = () => {
+    setTipo('');
+    setDescripcion('');
+    setMonto('');
+    setCategoriaId('');
+    setFieldErrors({});
+    setSubmitError(null);
+  };
+  const montoNum = Number(monto);
+  const hasMontoValue = monto.trim() !== '';
+  const isFormValid =
+    tipo !== '' &&
+    descripcion.trim() !== '' &&
+    hasMontoValue &&
+    Number.isFinite(montoNum) &&
+    montoNum > 0 &&
+    categoriaId !== '' &&
+    rubrosActivos.length > 0;
 
   return (
     <form
-      className="grid grid-cols-1 md:grid-cols-5 gap-2"
+      className="space-y-5"
       onSubmit={async (e) => {
         e.preventDefault();
         if (isSubmitting) return;
         setSubmitError(null);
-
+        const nextFieldErrors: typeof fieldErrors = {};
         const descripcionLimpia = descripcion.trim();
-        const montoNum = Number(monto);
+        const montoLimpio = monto.trim();
+        const montoValor = Number(montoLimpio);
+        const tipoValido = tipo !== '' ? tipo : null;
 
-        if (!descripcionLimpia) {
-          setSubmitError('La descripción es obligatoria.');
-          return;
-        }
-        if (!Number.isFinite(montoNum) || montoNum <= 0) {
-          setSubmitError('El monto debe ser mayor a 0.');
-          return;
-        }
+        if (!tipoValido) nextFieldErrors.tipo = 'Selecciona un tipo de movimiento.';
+        if (!descripcionLimpia) nextFieldErrors.descripcion = 'La descripción es obligatoria.';
+        if (!montoLimpio) nextFieldErrors.monto = 'El monto es obligatorio.';
+        else if (!Number.isFinite(montoValor) || montoValor <= 0) nextFieldErrors.monto = 'El monto debe ser mayor a 0.';
+        if (categoriaId === '') nextFieldErrors.categoriaId = 'Selecciona un rubro financiero.';
+        if (rubrosActivos.length === 0) nextFieldErrors.categoriaId = 'No hay rubros activos disponibles.';
+
+        setFieldErrors(nextFieldErrors);
+        if (Object.keys(nextFieldErrors).length > 0) return;
 
         try {
           setIsSubmitting(true);
-          await onSubmit({ tipo, descripcion: descripcionLimpia, monto: montoNum, origen_operativo: origen, categoria_id: categoriaId || undefined });
-          setDescripcion('');
-          setMonto('0');
+          if (!tipoValido) return;
+          await onSubmit({ tipo: tipoValido, descripcion: descripcionLimpia, monto: montoValor, origen_operativo: 'Manual', categoria_id: categoriaId || undefined });
+          resetForm();
+          onSuccess?.();
         } catch (error: unknown) {
           setSubmitError(error instanceof Error ? error.message : 'No se pudo registrar el movimiento.');
         } finally {
@@ -52,48 +81,103 @@ export const RegistrarMovimientoForm = ({
       }}
     >
       {submitError ? (
-        <div className="md:col-span-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {submitError}
         </div>
       ) : null}
-      <select
-        value={tipo}
-        onChange={(e) => {
-          const value = e.target.value;
-          if (isTipo(value)) setTipo(value);
-        }}
-        className="rounded-lg bg-white border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200"
-      >
-        <option value="INGRESO">Ingreso</option>
-        <option value="EGRESO">Egreso</option>
-        <option value="TRANSFERENCIA">Transferencia</option>
-      </select>
-      <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción" className="rounded-lg bg-white border border-slate-200 px-3 py-2 md:col-span-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200" />
-      <input type="number" min="0" step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} className="rounded-lg bg-white border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200" />
-      <select value={origen} onChange={(e) => setOrigen(e.target.value)} className="rounded-lg bg-white border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200">
-        <option value="MANUAL">Manual</option>
-        <option value="COMPRA_MP">Compra MP</option>
-        <option value="PAGO_PROVEEDOR">Pago proveedor</option>
-        <option value="VENTA">Venta</option>
-        <option value="PRODUCCION">Producción</option>
-        <option value="MERMA">Merma</option>
-        <option value="IMPUESTO">Impuesto</option>
-        <option value="SERVICIO">Servicio</option>
-      </select>
-      <select
-        value={categoriaId}
-        onChange={(e) => setCategoriaId(e.target.value)}
-        className="rounded-lg bg-white border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 md:col-span-2"
-      >
-        <option value="">{rubrosActivos.length > 0 ? 'Selecciona rubro' : 'Sin rubros activos'}</option>
-        {rubrosActivos.map((rubro) => (
-          <option key={rubro.id} value={rubro.id}>{rubro.nombre}</option>
-        ))}
-      </select>
-      {rubrosActivos.length === 0 ? <p className="md:col-span-5 text-xs text-amber-700">No hay rubros activos. El movimiento quedará sin categoría.</p> : null}
-      <button type="submit" disabled={isSubmitting} className="rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-4 py-2 text-sm font-semibold md:col-span-5 transition-colors">
-        {isSubmitting ? 'Registrando...' : 'Registrar movimiento'}
-      </button>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Tipo de movimiento</span>
+          <select
+            value={tipo}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === '' || isTipo(value)) setTipo(value);
+              setFieldErrors((current) => ({ ...current, tipo: undefined }));
+            }}
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+            aria-invalid={Boolean(fieldErrors.tipo)}
+          >
+            <option value="">Seleccionar tipo</option>
+            <option value="INGRESO">Ingreso</option>
+            <option value="EGRESO">Egreso</option>
+            <option value="TRANSFERENCIA">Transferencia</option>
+          </select>
+          <p className="mt-1.5 text-xs text-slate-500">Define si este registro suma o resta al flujo.</p>
+          {fieldErrors.tipo ? <p className="mt-1.5 text-xs text-red-600">{fieldErrors.tipo}</p> : null}
+        </label>
+
+        <label className="block">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Cantidad / Importe</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={monto}
+            onChange={(e) => {
+              setMonto(e.target.value);
+              setFieldErrors((current) => ({ ...current, monto: undefined }));
+            }}
+            placeholder="Ej: 85000"
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+            aria-invalid={Boolean(fieldErrors.monto)}
+          />
+          {fieldErrors.monto ? <p className="mt-1.5 text-xs text-red-600">{fieldErrors.monto}</p> : null}
+        </label>
+
+        <label className="block md:col-span-2">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Descripción</span>
+          <input
+            value={descripcion}
+            onChange={(e) => {
+              setDescripcion(e.target.value);
+              setFieldErrors((current) => ({ ...current, descripcion: undefined }));
+            }}
+            placeholder="Describe brevemente el movimiento"
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+            aria-invalid={Boolean(fieldErrors.descripcion)}
+          />
+          {fieldErrors.descripcion ? <p className="mt-1.5 text-xs text-red-600">{fieldErrors.descripcion}</p> : null}
+        </label>
+
+        <label className="block">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Rubro financiero</span>
+          <select
+            value={categoriaId}
+            onChange={(e) => {
+              setCategoriaId(e.target.value);
+              setFieldErrors((current) => ({ ...current, categoriaId: undefined }));
+            }}
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+            aria-invalid={Boolean(fieldErrors.categoriaId)}
+          >
+            <option value="">{rubrosActivos.length > 0 ? 'Selecciona rubro' : 'Sin rubros activos'}</option>
+            {rubrosActivos.map((rubro) => (
+              <option key={rubro.id} value={rubro.id}>{rubro.nombre}</option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-xs text-slate-500">Clasifica el movimiento para presupuesto vs real.</p>
+          {fieldErrors.categoriaId ? <p className="mt-1.5 text-xs text-red-600">{fieldErrors.categoriaId}</p> : null}
+        </label>
+      </div>
+
+      <p className="text-xs text-slate-500">Origen asignado automáticamente: Manual.</p>
+      {rubrosActivos.length === 0 ? <p className="text-xs text-amber-700">No hay rubros activos. El movimiento quedará sin categoría.</p> : null}
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={() => {
+            resetForm();
+            onSuccess?.();
+          }}
+          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+        >
+          Cancelar
+        </button>
+        <button type="submit" disabled={isSubmitting || !isFormValid} className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 disabled:opacity-60">
+          {isSubmitting ? 'Registrando...' : 'Registrar movimiento'}
+        </button>
+      </div>
     </form>
   );
 };

@@ -3,14 +3,14 @@ import { Card } from '../../../shared/components/card';
 import { useTesoreria } from '../hooks/useTesoreria';
 import { ChequeForm } from '../components/ChequeForm';
 import { EMPTY_CHEQUE_FORM } from '../components/chequeFormDefaults';
-import { tesoreriaService, type ChequeTesoreriaFormValues } from '../services/tesoreriaService';
+import type { ChequeTesoreriaFormValues } from '../services/tesoreriaService';
 import type { ChequeTesoreriaRow, EstadoChequeTesoreria } from '../../finanzas/types';
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value)) : 'Sin dato';
 
 const TesoreriaPage = () => {
-  const { tesoreria, error, createCheque, updateCheque, updateChequeEstado } = useTesoreria();
+  const { tesoreria, error, getCheques, createCheque, updateCheque, updateChequeEstado } = useTesoreria();
   const [form, setForm] = useState<ChequeTesoreriaFormValues>(EMPTY_CHEQUE_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -29,10 +29,10 @@ const TesoreriaPage = () => {
   const PAGE_SIZE = 20;
 
   const loadCheques = useCallback(async (emitidosPageValue = emitidosPage, recibidosPageValue = recibidosPage) => {
-    setChequesLoading(true);
+      setChequesLoading(true);
     try {
       const [emitidosRows, recibidosRows] = await Promise.all([
-        tesoreriaService.getCheques({
+        getCheques({
           tipo: filtroTipo === 'RECIBIDO' ? undefined : 'EMITIDO',
           estado: filtroEstado || undefined,
           query: filtroQuery.trim() || undefined,
@@ -41,7 +41,7 @@ const TesoreriaPage = () => {
           limit: PAGE_SIZE,
           offset: (emitidosPageValue - 1) * PAGE_SIZE,
         }),
-        tesoreriaService.getCheques({
+        getCheques({
           tipo: filtroTipo === 'EMITIDO' ? undefined : 'RECIBIDO',
           estado: filtroEstado || undefined,
           query: filtroQuery.trim() || undefined,
@@ -61,7 +61,7 @@ const TesoreriaPage = () => {
     } finally {
       setChequesLoading(false);
     }
-  }, [emitidosPage, recibidosPage, filtroQuery, filtroEstado, filtroFechaDesde, filtroFechaHasta, filtroTipo]);
+  }, [emitidosPage, recibidosPage, filtroQuery, filtroEstado, filtroFechaDesde, filtroFechaHasta, filtroTipo, getCheques]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
