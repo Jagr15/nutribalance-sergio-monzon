@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiPlus, FiTrash2, FiChevronDown, FiSearch, FiCheckCircle, FiLayers, FiGitMerge } from "react-icons/fi";
 import { useFormulas } from '../hooks/useFormulas';
@@ -56,6 +56,8 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
   const [maestroStock, setMaestroStock] = useState<StockMateriaPrima[]>([]);
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const dropdownAnchorRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const comparisonFormulas = useMemo(
     () => formulas.filter((item) => item.uid !== formula?.uid),
@@ -193,6 +195,32 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
     setInsumosSeleccionados(nuevosInsumos);
     setActiveDropdown(null);
   };
+
+  useEffect(() => {
+    if (activeDropdown === null) return undefined;
+
+    const handleClose = () => setActiveDropdown(null);
+    const handleReposition = () => {
+      const anchor = dropdownAnchorRefs.current[activeDropdown];
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      setDropdownPosition({
+        top: Math.max(12, rect.top - 12),
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
+    document.addEventListener('mousedown', handleClose);
+
+    return () => {
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition, true);
+      document.removeEventListener('mousedown', handleClose);
+    };
+  }, [activeDropdown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -335,39 +363,76 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
             <div className="space-y-2">
               {insumosSeleccionados.map((item, index) => (
                 <div key={index} className="flex gap-2 items-center group">
-                  <div className="flex-1 relative">
+                  <div
+                    ref={(node) => {
+                      dropdownAnchorRefs.current[index] = node;
+                    }}
+                    className="flex-1 relative"
+                  >
                     <button
                       type="button"
-                      onClick={() => { setActiveDropdown(activeDropdown === index ? null : index); setSearchTerm(''); }}
+                    onClick={() => {
+                      if (activeDropdown === index) {
+                        setActiveDropdown(null);
+                        setDropdownPosition(null);
+                        return;
+                      }
+
+                      const anchor = dropdownAnchorRefs.current[index];
+                      if (anchor) {
+                        const rect = anchor.getBoundingClientRect();
+                        setDropdownPosition({
+                          top: Math.max(12, rect.top - 12),
+                          left: rect.left,
+                          width: rect.width,
+                        });
+                      }
+
+                      setActiveDropdown(index);
+                      setSearchTerm('');
+                    }}
                       className="ui-input w-full rounded-xl py-2 px-4 text-left text-[10px] text-slate-700 flex justify-between items-center hover:bg-white/[0.04] transition-all duration-200 ease-out"
                     >
                       <span className="truncate font-medium">{item.nombre_insumo || 'Seleccionar...'}</span>
                       <FiChevronDown size={12} className="text-gray-600" />
                     </button>
 
-                    {activeDropdown === index && (
-                      <div className="absolute left-0 right-0 bottom-full mb-2 z-[100] bg-slate-50 border border-slate-200 rounded-xl shadow-xl p-2 w-72">
+                    {activeDropdown === index && dropdownPosition ? createPortal(
+                      <div
+                        className="z-[10000] rounded-xl border border-slate-200 bg-slate-50 p-2 shadow-2xl"
+                        style={{
+                          position: 'fixed',
+                          top: dropdownPosition.top,
+                          left: dropdownPosition.left,
+                          width: dropdownPosition.width,
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                      >
                         <div className="relative mb-2">
                           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={12} />
-                          <input 
-                            autoFocus placeholder="Buscar..." value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full bg-white border border-slate-200 rounded-lg py-2 pl-8 pr-3 text-[10px] text-slate-900 outline-none focus:border-blue-500/40"
+                          <input
+                            autoFocus
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Buscar..."
+                            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-[10px] text-slate-900 outline-none focus:border-blue-500/40"
                           />
                         </div>
-                        <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1">
+                        <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1">
                           {maestroInsumos.filter(i => i.nombre.toLowerCase().includes(searchTerm.toLowerCase())).map(ins => (
                             <button
-                              key={ins.uid} type="button"
-                              className="w-full text-left px-3 py-2 hover:bg-blue-600/20 rounded-lg text-[10px] text-slate-500 hover:text-slate-900 transition-colors duration-200 transition-colors"
+                              key={ins.uid}
+                              type="button"
+                              className="w-full rounded-lg px-3 py-2 text-left text-[10px] text-slate-500 transition-colors hover:bg-blue-600/20 hover:text-slate-900"
                               onClick={() => handleSelectInsumo(index, ins)}
                             >
                               {ins.nombre}
                             </button>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      </div>,
+                      document.body
+                    ) : null}
                   </div>
 
                     <div className="w-20 relative">

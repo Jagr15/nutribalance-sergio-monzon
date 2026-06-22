@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FiCheckCircle, FiChevronDown, FiGitMerge, FiPlus, FiSearch, FiTrash2, FiX } from 'react-icons/fi';
 import Swal from 'sweetalert2';
@@ -38,6 +38,34 @@ const badgeLabel = (value: number | null, positive: string, negative: string) =>
   return value > 0 ? positive : negative;
 };
 
+const isValidPercentage = (value: number) => Number.isFinite(value) && value > 0;
+
+const getDraftSaveError = (draft: FormulaDraftState, summary: Formula) => {
+  if (!draft.nombre_producto.trim()) {
+    return 'El nombre de la fórmula es obligatorio.';
+  }
+
+  const validIngredients = getValidDraftIngredients(draft);
+  if (validIngredients.length === 0) {
+    return 'Debe agregar al menos un ingrediente.';
+  }
+
+  if (validIngredients.some((ingredient) => !isValidPercentage(Number(ingredient.porcentaje)))) {
+    return 'Todos los ingredientes deben tener un porcentaje mayor a 0.';
+  }
+
+  const sumaIngredientes = validIngredients.reduce((acc, ingredient) => acc + (Number(ingredient.porcentaje) || 0), 0);
+  if (Math.abs(sumaIngredientes - 100) > 0.01) {
+    return `La suma de ingredientes debe ser 100%. Actualmente es ${sumaIngredientes.toFixed(2)}%.`;
+  }
+
+  if (summary.advertencias_costos?.some((warning) => warning.toLowerCase().includes('sin costo disponible'))) {
+    return 'Hay ingredientes sin precio disponible. Complete el costo antes de guardar.';
+  }
+
+  return null;
+};
+
 interface DraftEditorProps {
   draft: FormulaDraftState;
   onChange: (draft: FormulaDraftState) => void;
@@ -50,6 +78,8 @@ const DraftEditor: React.FC<DraftEditorProps> = ({ draft, onChange, maestroInsum
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const dropdownAnchorRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const handleChangeIngredient = (index: number, next: Partial<Ingrediente>) => {
     const updated = draft.ingredientes.map((ingredient, currentIndex) => (
@@ -69,6 +99,32 @@ const DraftEditor: React.FC<DraftEditorProps> = ({ draft, onChange, maestroInsum
     handleChangeIngredient(index, { id_insumo: item.uid, nombre_insumo: item.nombre });
     setActiveDropdown(null);
   };
+
+  useEffect(() => {
+    if (activeDropdown === null) return undefined;
+
+    const handleClose = () => setActiveDropdown(null);
+    const handleReposition = () => {
+      const anchor = dropdownAnchorRefs.current[activeDropdown];
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      setDropdownPosition({
+        top: Math.max(12, rect.top - 12),
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
+    document.addEventListener('mousedown', handleClose);
+
+    return () => {
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition, true);
+      document.removeEventListener('mousedown', handleClose);
+    };
+  }, [activeDropdown]);
 
   return (
     <section className="flex flex-col rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -116,11 +172,32 @@ const DraftEditor: React.FC<DraftEditorProps> = ({ draft, onChange, maestroInsum
           <div className="space-y-2">
             {draft.ingredientes.map((ingredient, index) => (
               <div key={`${draft.id}-${index}`} className="flex items-center gap-2">
-                <div className="relative flex-1">
+                <div
+                  ref={(node) => {
+                    dropdownAnchorRefs.current[index] = node;
+                  }}
+                  className="relative flex-1"
+                >
                   <button
                     type="button"
                     onClick={() => {
-                      setActiveDropdown(activeDropdown === index ? null : index);
+                      if (activeDropdown === index) {
+                        setActiveDropdown(null);
+                        setDropdownPosition(null);
+                        return;
+                      }
+
+                      const anchor = dropdownAnchorRefs.current[index];
+                      if (anchor) {
+                        const rect = anchor.getBoundingClientRect();
+                        setDropdownPosition({
+                          top: Math.max(12, rect.top - 12),
+                          left: rect.left,
+                          width: rect.width,
+                        });
+                      }
+
+                      setActiveDropdown(index);
                       setSearchTerm('');
                       setLocalError(null);
                     }}
@@ -130,8 +207,17 @@ const DraftEditor: React.FC<DraftEditorProps> = ({ draft, onChange, maestroInsum
                     <FiChevronDown size={12} className="text-slate-500" />
                   </button>
 
-                  {activeDropdown === index ? (
-                    <div className="absolute left-0 right-0 bottom-full z-20 mb-2 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 shadow-xl">
+                  {activeDropdown === index && dropdownPosition ? createPortal(
+                    <div
+                      className="z-[10000] rounded-xl border border-slate-200 bg-slate-50 p-2 shadow-2xl"
+                      style={{
+                        position: 'fixed',
+                        top: dropdownPosition.top,
+                        left: dropdownPosition.left,
+                        width: dropdownPosition.width,
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                    >
                       <div className="relative mb-2">
                         <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
                         <input
@@ -142,7 +228,7 @@ const DraftEditor: React.FC<DraftEditorProps> = ({ draft, onChange, maestroInsum
                           className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-xs text-slate-900 outline-none focus:border-blue-500/40"
                         />
                       </div>
-                      <div className="max-h-40 space-y-1 overflow-y-auto custom-scrollbar">
+                      <div className="max-h-56 space-y-1 overflow-y-auto custom-scrollbar">
                         {maestroInsumos
                           .filter((item) => item.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
                           .map((item) => (
@@ -156,7 +242,8 @@ const DraftEditor: React.FC<DraftEditorProps> = ({ draft, onChange, maestroInsum
                             </button>
                           ))}
                       </div>
-                    </div>
+                    </div>,
+                    document.body
                   ) : null}
                 </div>
 
@@ -264,8 +351,8 @@ const FormulaComparisonBuilder: React.FC<Props> = ({ onClose, onSuccess }) => {
     [draftA, draftB, environment]
   );
 
-  const canSaveA = draftA.nombre_producto.trim() !== '' && getValidDraftIngredients(draftA).length > 0;
-  const canSaveB = draftB.nombre_producto.trim() !== '' && getValidDraftIngredients(draftB).length > 0;
+  const canSaveA = getDraftSaveError(draftA, snapshotA) === null;
+  const canSaveB = getDraftSaveError(draftB, snapshotB) === null;
   const canSaveBoth = canSaveA && canSaveB;
 
   const Toast = useMemo(() => Swal.mixin({
@@ -298,9 +385,29 @@ const FormulaComparisonBuilder: React.FC<Props> = ({ onClose, onSuccess }) => {
 
     try {
       if (target === 'a' || target === 'b') {
+        const draft = target === 'a' ? draftA : draftB;
+        const summary = target === 'a' ? snapshotA : snapshotB;
+        const validationError = getDraftSaveError(draft, summary);
+        if (validationError) {
+          setSubmitError(validationError);
+          return;
+        }
+
         await saveDraft(target);
         await onSuccess();
         onClose();
+        return;
+      }
+
+      const validationErrorA = getDraftSaveError(draftA, snapshotA);
+      if (validationErrorA) {
+        setSubmitError(`Fórmula A: ${validationErrorA}`);
+        return;
+      }
+
+      const validationErrorB = getDraftSaveError(draftB, snapshotB);
+      if (validationErrorB) {
+        setSubmitError(`Fórmula B: ${validationErrorB}`);
         return;
       }
 
