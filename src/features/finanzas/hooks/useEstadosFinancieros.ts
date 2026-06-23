@@ -51,13 +51,55 @@ export const useEstadosFinancieros = () => {
     setLoading(true);
     setError(null);
     try {
-      const [movs, kpiData, treasuryData, inventarioData] = await Promise.all([
-        finanzasService.getMovimientos(),
-        finanzasService.getKPIs(),
-        finanzasService.getTreasuryInsights(),
-        finanzasService.getInventarioResumen(),
-      ]);
-      const historicalRows = await historicoContableService.refreshRows();
+      const logQueryError = (name: string, error: unknown) => {
+        if (!import.meta.env.DEV) return;
+        const maybe = error && typeof error === 'object' ? error as { message?: unknown; details?: unknown; hint?: unknown } : null;
+        console.error(`[EstadosFinancieros] ${name}`, {
+          message: maybe && typeof maybe.message === 'string' ? maybe.message : error instanceof Error ? error.message : String(error),
+          details: maybe && typeof maybe.details === 'string' ? maybe.details : undefined,
+          hint: maybe && typeof maybe.hint === 'string' ? maybe.hint : undefined,
+        });
+      };
+
+      let movimientos: MovimientoFinanciero[] = [];
+      let kpis: FinanzasKPIs = EMPTY_KPIS;
+      let tesoreria: FinanzasTesoreriaInsights = EMPTY_TESORERIA;
+      let inventario: FinanzasInventarioResumen = EMPTY_INVENTARIO;
+      let historicalRows: Awaited<ReturnType<typeof historicoContableService.refreshRows>> = [];
+      let criticalFailures = 0;
+
+      try {
+        movimientos = await finanzasService.getMovimientos();
+      } catch (error) {
+        logQueryError('getMovimientos()', error);
+        criticalFailures += 1;
+      }
+
+      try {
+        kpis = await finanzasService.getKPIs();
+      } catch (error) {
+        logQueryError('getKPIs()', error);
+        criticalFailures += 1;
+      }
+
+      try {
+        tesoreria = await finanzasService.getTreasuryInsights();
+      } catch (error) {
+        logQueryError('getTreasuryInsights()', error);
+      }
+
+      try {
+        inventario = await finanzasService.getInventarioResumen();
+      } catch (error) {
+        logQueryError('getInventarioResumen()', error);
+      }
+
+      try {
+        historicalRows = await historicoContableService.refreshRows();
+      } catch (error) {
+        logQueryError('historicoContableService.refreshRows()', error);
+      }
+
       const historical = historicalRows.map((row) => ({
         uid: row.legacy_uid ?? `${row.fecha}-${row.descripcion}`,
         fecha: row.fecha,
@@ -69,11 +111,18 @@ export const useEstadosFinancieros = () => {
         centro_costo: undefined,
         estado: row.estado ?? 'CONFIRMADO',
       }));
-      setMovimientos([...movs, ...historical]);
-      setKpis(kpiData);
-      setTesoreria(treasuryData);
-      setInventario(inventarioData);
+      setMovimientos([...movimientos, ...historical]);
+      setKpis(kpis);
+      setTesoreria(tesoreria);
+      setInventario(inventario);
+
+      if (criticalFailures >= 4) {
+        setError('No se pudieron cargar los estados financieros.');
+      }
     } catch (err: unknown) {
+      if (import.meta.env.DEV) {
+        console.error('Estados financieros principal:', err);
+      }
       setError(err instanceof Error ? err.message : 'No se pudieron cargar los estados financieros.');
     } finally {
       setLoading(false);
