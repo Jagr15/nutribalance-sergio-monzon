@@ -1,15 +1,15 @@
 import type { SessionUser } from '../../auth/session';
 import type { Role, Usuario } from '../types/usuario';
 
-export const USER_ROLE_VALUES = ['SUPERADMIN', 'ADMIN', 'ENCARGADO', 'OPERARIO', 'FINANZAS'] as const satisfies readonly Role[];
+export const USER_ROLE_VALUES = ['SUPERADMIN', 'ENCARGADO', 'OPERARIO', 'ADMIN', 'FINANZAS'] as const satisfies readonly Role[];
 
-export const ADMIN_ROLES: Role[] = ['SUPERADMIN', 'ADMIN'];
+export const ADMIN_ROLES: Role[] = ['SUPERADMIN', 'ADMIN', 'ENCARGADO'];
 
 export const USER_ROLE_OPTIONS: Array<{ value: Role; label: string }> = [
   { value: 'SUPERADMIN', label: 'SUPERADMIN' },
-  { value: 'ADMIN', label: 'ADMIN' },
   { value: 'ENCARGADO', label: 'ENCARGADO' },
   { value: 'OPERARIO', label: 'OPERARIO' },
+  { value: 'ADMIN', label: 'ADMIN' },
   { value: 'FINANZAS', label: 'FINANZAS' },
 ];
 
@@ -19,6 +19,8 @@ export const getRoleOptionsForCurrentUser = (currentRole: SessionUser['role']) =
   currentRole === 'superadmin' ? USER_ROLE_OPTIONS : ADMINISTRATIVE_ROLE_OPTIONS;
 
 export const isAdministrativeUserRole = (role: Role) => ADMIN_ROLES.includes(role);
+
+export const isSensitiveUsuarioRole = (role: Role) => role === 'SUPERADMIN';
 
 export const normalizeUsuarioText = (value: string) => value.trim();
 

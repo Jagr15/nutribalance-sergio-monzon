@@ -150,10 +150,10 @@ const DashboardExecutivePage = () => {
       doc.setTextColor(255,255,255);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(18);
-      doc.text('Nutribalance', 14, 14);
+      doc.text('DITMON AGRO', 14, 14);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text('Reporte Ejecutivo Nutribalance', 14, 20);
+      doc.text('Reporte Ejecutivo DITMON AGRO', 14, 20);
       doc.text(new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date()), width - 14, 20, { align: 'right' });
       y = 34;
       section('Salud general del negocio');
@@ -174,7 +174,7 @@ const DashboardExecutivePage = () => {
       section('Producto terminado / clientes principales');
       executiveInsights.ventasPorProducto.slice(0, 3).forEach((item) => line(item.producto_nombre, `${item.kg.toLocaleString('es-AR')} kg`));
       executiveInsights.topClientesPorVolumen.slice(0, 3).forEach((item) => line(item.cliente_nombre, `${item.kg.toLocaleString('es-AR')} kg`));
-      doc.save(`Reporte Ejecutivo Nutribalance-${new Date().toISOString().slice(0, 10)}.pdf`);
+      doc.save(`Reporte Ejecutivo DITMON AGRO-${new Date().toISOString().slice(0, 10)}.pdf`);
     });
   };
 
@@ -203,7 +203,7 @@ const DashboardExecutivePage = () => {
             <p className="text-sm text-slate-500 mt-2">Vista compacta con señales clave del negocio hoy.</p>
           </div>
           <div className="flex flex-col items-start gap-3 md:items-end">
-            <BrandLogo variant="full" className="max-w-[220px] self-start md:self-center" />
+            <BrandLogo variant="full" className="max-w-[280px] self-start md:self-center" />
             <button type="button" onClick={handleExportPdf} className="rounded-full bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-white">Exportar PDF</button>
           </div>
         </div>

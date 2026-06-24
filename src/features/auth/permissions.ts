@@ -1,4 +1,4 @@
-export const USER_ROLES = ['superadmin', 'admin', 'produccion', 'inventario', 'finanzas', 'supervisor', 'solo_lectura'] as const;
+export const USER_ROLES = ['superadmin', 'encargado', 'operario', 'admin', 'produccion', 'inventario', 'finanzas', 'supervisor', 'solo_lectura'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export type AppModule =
@@ -64,6 +64,37 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
     return acc;
   }, {} as Record<AppModule, AppAction[]>),
 
+  encargado: {
+    ...emptyByModule,
+    dashboard: ['view'],
+    usuarios: ['view', 'create', 'edit'],
+    clientes: ['view', 'create', 'edit'],
+    proveedores: ['view', 'create', 'edit'],
+    insumos: ['view', 'create', 'edit', 'modify_stock'],
+    stock_mp: ['view', 'create', 'edit', 'modify_stock'],
+    stock_general: ['view', 'edit', 'modify_stock'],
+    silos: ['view', 'create', 'edit'],
+    formulas: ['view', 'create', 'edit', 'approve', 'create_formula', 'edit_formula'],
+    ordenes: ['view', 'create', 'edit', 'start_order', 'finish_order', 'cancel_order'],
+    productos: ['view', 'edit'],
+    finanzas: ['view', 'register_financial_movement'],
+    tesoreria: ['view'],
+    trazabilidad: ['view'],
+    alertas: ['view'],
+  },
+
+  operario: {
+    ...emptyByModule,
+    dashboard: ['view'],
+    alertas: ['view'],
+    trazabilidad: ['view'],
+    formulas: ['view'],
+    productos: ['view'],
+    stock_general: ['view'],
+    ordenes: ['view', 'start_order', 'finish_order'],
+    tesoreria: ['view'],
+  },
+
   supervisor: {
     ...emptyByModule,
     dashboard: ['view'],
@@ -80,7 +111,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
     tesoreria: ['view', 'approve'],
     alertas: ['view', 'approve'],
     trazabilidad: ['view'],
-    usuarios: [],
+    usuarios: ['view'],
   },
 
   produccion: {
@@ -143,6 +174,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   superadmin: 'Super Admin',
+  encargado: 'Encargado',
+  operario: 'Operario',
   admin: 'Admin',
   produccion: 'Producción',
   inventario: 'Inventario',
@@ -153,10 +186,12 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 
 export const normalizeRole = (raw?: string | null): UserRole => {
   const value = (raw ?? '').toLowerCase().trim();
+  if (value === 'admin') return 'encargado';
   if (USER_ROLES.includes(value as UserRole)) return value as UserRole;
   if (value.includes('superadmin')) return 'superadmin';
-  if (value.includes('super')) return 'supervisor';
-  if (value.includes('admin')) return 'admin';
+  if (value.includes('encarg')) return 'encargado';
+  if (value.includes('oper')) return 'operario';
+  if (value.includes('super') && !value.includes('superadmin')) return 'supervisor';
   if (value.includes('produ')) return 'produccion';
   if (value.includes('invent')) return 'inventario';
   if (value.includes('finan')) return 'finanzas';

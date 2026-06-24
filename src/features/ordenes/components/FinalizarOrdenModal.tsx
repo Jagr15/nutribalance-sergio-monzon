@@ -8,6 +8,7 @@ import {
 import type { OrdenProduccion } from '../types/orden';
 import { ApiService } from '../../../infrastructure/api';
 import type { Silo } from '../../silos/types';
+import { getProductoTerminadoSilos, findSiloByName } from '../../silos/utils/siloFilters';
 import {
   buildFinalizationStockCheck,
   type FinalizationStockCheckResult,
@@ -89,10 +90,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
     );
   }, [cantidadReal, orden.cantidad_objetivo, orden.detalle_insumos, stockLotes]);
 
-  const silosProductoTerminado = useMemo(
-    () => silos.filter((silo) => silo.tipo_uso === 'PRODUCTO_TERMINADO'),
-    [silos]
-  );
+  const silosProductoTerminado = useMemo(() => getProductoTerminadoSilos(silos), [silos]);
 
   const handleConfirm = () => {
     if (isSubmitting) return;
@@ -104,6 +102,15 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
     }
     if (!destinoSilo) {
       setSubmitError('Debes seleccionar un silo de destino.');
+      return;
+    }
+    const siloSeleccionado = findSiloByName(silos, destinoSilo);
+    if (!siloSeleccionado) {
+      setSubmitError('El silo de destino seleccionado no existe.');
+      return;
+    }
+    if (siloSeleccionado.tipo_uso !== 'PRODUCTO_TERMINADO') {
+      setSubmitError('Solo se puede finalizar la orden en silos de Producto Terminado.');
       return;
     }
     if (Number.isNaN(cantidadReal) || cantidadReal <= 0) {

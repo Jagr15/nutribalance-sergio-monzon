@@ -26,12 +26,14 @@ const DEFAULT_USER: SessionUser = {
 const CREDENTIALS = [
   { login: "superadmin@nutribalance.com", password: "super123", role: "superadmin" as UserRole, name: "Super Admin", managedUserUid: "u-001" },
   { login: "superadmin", password: "super123", role: "superadmin" as UserRole, name: "Super Admin", managedUserUid: "u-001" },
-  { login: "admin@nutribalance.com", password: "admin123", role: "admin" as UserRole, name: "Admin", managedUserUid: "u-001" },
-  { login: "admin", password: "admin123", role: "admin" as UserRole, name: "Admin", managedUserUid: "u-001" },
-  { login: "produccion", password: "demo123", role: "produccion" as UserRole, name: "Operador Producción" },
-  { login: "inventario", password: "demo123", role: "inventario" as UserRole, name: "Operador Inventario" },
-  { login: "finanzas", password: "demo123", role: "finanzas" as UserRole, name: "Analista Finanzas" },
-  { login: "supervisor", password: "demo123", role: "supervisor" as UserRole, name: "Supervisor Planta" },
+  { login: "admin@nutribalance.com", password: "admin123", role: "encargado" as UserRole, name: "Encargado", managedUserUid: "u-001" },
+  { login: "admin", password: "admin123", role: "encargado" as UserRole, name: "Encargado", managedUserUid: "u-001" },
+  { login: "encargado", password: "demo123", role: "encargado" as UserRole, name: "Encargado" },
+  { login: "operario", password: "demo123", role: "operario" as UserRole, name: "Operario" },
+  { login: "produccion", password: "demo123", role: "operario" as UserRole, name: "Operario Producción" },
+  { login: "inventario", password: "demo123", role: "operario" as UserRole, name: "Operario Inventario" },
+  { login: "finanzas", password: "demo123", role: "encargado" as UserRole, name: "Analista Finanzas" },
+  { login: "supervisor", password: "demo123", role: "encargado" as UserRole, name: "Supervisor Planta" },
   { login: "lectura", password: "demo123", role: "solo_lectura" as UserRole, name: "Usuario Lectura" },
 ];
 

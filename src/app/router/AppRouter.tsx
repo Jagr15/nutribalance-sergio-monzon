@@ -14,6 +14,7 @@ const StockMateriaPrimaPage = lazy(() => import('../../features/insumos/pages/St
 const SiloPage = lazy(() => import('../../features/silos/pages/SiloPage'));
 const FormulaPage = lazy(() => import('../../features/formulas/pages/FormulaPage'));
 const OrdenPage = lazy(() => import('../../features/ordenes/pages/OrdenPage'));
+const OrdenesSalidaPage = lazy(() => import('../../features/ordenes/pages/OrdenesSalidaPage'));
 const ClientesPage = lazy(() => import('../../features/clientes/pages/ClientesPage'));
 const ProductosPage = lazy(() => import('../../features/productos/pages/ProductosPage'));
 const CostosPage = lazy(() => import('../../features/costos/pages/CostosPage'));
@@ -80,6 +81,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.SILOS} element= {<ModuleRoute module="silos"><SiloPage /></ModuleRoute>} />
           <Route path={ROUTES.FORMULAS} element={<ModuleRoute module="formulas"><FormulaPage /></ModuleRoute>} />
           <Route path={ROUTES.ORDENES} element={<ModuleRoute module="ordenes"><OrdenPage /></ModuleRoute>} />
+          <Route path={ROUTES.ORDENES_SALIDA} element={<ModuleRoute module="ordenes"><OrdenesSalidaPage /></ModuleRoute>} />
           <Route path="/Ordenes" element={<Navigate to={ROUTES.ORDENES} replace />} />
           <Route path={ROUTES.CLIENTES} element={<ModuleRoute module="clientes"><ClientesPage /></ModuleRoute>} />
           <Route path={ROUTES.STOCK} element={<ModuleRoute module="stock_general"><StockGeneralPage /></ModuleRoute>} />

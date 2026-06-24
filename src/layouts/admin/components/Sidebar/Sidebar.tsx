@@ -47,6 +47,7 @@ const menuItems: SidebarGroup[] = [
       { name: "Insumos", icon: FiArchive, path: ROUTES.INSUMOS, module: "insumos" },
       { name: "Fórmulas", icon: FiLayers, path: ROUTES.FORMULAS, module: "formulas" },
       { name: "Órdenes", icon: FiLayers, path: ROUTES.ORDENES, module: "ordenes"},
+      { name: "Órdenes de Salida", icon: FiTruck, path: ROUTES.ORDENES_SALIDA, module: "ordenes"},
       { name: "Trazabilidad", icon: FiGitMerge, path: ROUTES.TRAZABILIDAD, module: "trazabilidad" },
     ],
   },
@@ -100,12 +101,12 @@ export const Sidebar = () => {
     <aside className="w-full lg:w-[230px] lg:h-screen bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col overflow-hidden lg:sticky top-0">
       
       {/* LOGO: Se mantiene fijo arriba */}
-      <div className="px-4 md:px-5 py-4 md:py-5 border-b border-slate-200 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <BrandLogo variant="icon" className="lg:hidden shrink-0" />
-          <BrandLogo variant="full" className="hidden lg:inline-flex max-w-[150px]" />
+      <div className="px-4 md:px-5 py-6 md:py-7 border-b border-slate-200 flex-shrink-0">
+        <div className="flex items-center gap-4">
+          <BrandLogo variant="icon" className="lg:hidden shrink-0 max-w-[4.75rem]" />
+          <BrandLogo variant="full" className="hidden lg:inline-flex max-w-[16rem]" />
           <div className="hidden lg:block">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Producción e Inventario</p>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Sistema de Producción e Inventario</p>
           </div>
         </div>
       </div>

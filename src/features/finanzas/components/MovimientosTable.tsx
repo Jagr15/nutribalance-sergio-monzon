@@ -20,8 +20,8 @@ export const MovimientosTable = ({
   const colSpan = showOrigenAndCentroCosto ? 8 : 6;
 
   return (
-    <DataTable className="rounded-3xl shadow-sm" minWidthClassName="min-w-[980px]">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+    <DataTable className="rounded-3xl shadow-sm" minWidthClassName="min-w-full">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
         <div>
           <h3 className="text-lg font-semibold text-slate-900">Movimientos financieros</h3>
           <p className="mt-1 text-sm text-slate-500">Últimos registros de ingresos, egresos y transferencias.</p>
@@ -49,12 +49,12 @@ export const MovimientosTable = ({
               <TableRow key={m.uid}>
                 <TableCell className="whitespace-nowrap text-slate-600">{formatDateCompact(m.fecha)}</TableCell>
                 <TableCell><StatusBadge value={m.tipo} /></TableCell>
-                <TableCell className="max-w-[320px] truncate text-slate-900">{m.descripcion}</TableCell>
-                <TableCell className="text-slate-500">{m.categoria || '-'}</TableCell>
+                <TableCell className="max-w-[320px] whitespace-normal break-words text-slate-900">{m.descripcion}</TableCell>
+                <TableCell className="max-w-[220px] whitespace-normal break-words text-slate-500">{m.categoria || '-'}</TableCell>
                 <TableCell className="whitespace-nowrap text-right font-semibold text-slate-900">{formatCurrency(m.monto)}</TableCell>
                 <TableCell><StatusBadge value={m.estado} /></TableCell>
-                {showOrigenAndCentroCosto ? <TableCell className="text-slate-500">{m.origen_operativo || '-'}</TableCell> : null}
-                {showOrigenAndCentroCosto ? <TableCell className="text-slate-500">{m.centro_costo || '-'}</TableCell> : null}
+                {showOrigenAndCentroCosto ? <TableCell className="max-w-[200px] whitespace-normal break-words text-slate-500">{m.origen_operativo || '-'}</TableCell> : null}
+                {showOrigenAndCentroCosto ? <TableCell className="max-w-[200px] whitespace-normal break-words text-slate-500">{m.centro_costo || '-'}</TableCell> : null}
               </TableRow>
             ))}
             {movimientos.length === 0 ? (

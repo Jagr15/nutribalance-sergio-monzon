@@ -56,7 +56,7 @@ export const DashboardOperativoPage = () => {
             <p className="text-sm text-slate-500 mt-2">Vista compacta con producción, inventario y finanzas operativas del período activo.</p>
             <p className="mt-2 text-xs text-slate-500">Periodo activo: {periodoLabel} · {relativeUpdatedLabel}</p>
           </div>
-          <BrandLogo variant="full" className="max-w-[220px]" />
+          <BrandLogo variant="full" className="max-w-[280px]" />
         </div>
       </Card>
 

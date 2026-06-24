@@ -8,11 +8,9 @@ const tipoOptions: Array<{ value: TipoChequeTesoreria; label: string }> = [
 
 const estadoOptions: Array<{ value: EstadoChequeTesoreria; label: string }> = [
   { value: 'PENDIENTE', label: 'Pendiente' },
-  { value: 'A_DEPOSITAR', label: 'A depositar' },
   { value: 'DEPOSITADO', label: 'Depositado' },
   { value: 'COBRADO', label: 'Cobrado' },
   { value: 'RECHAZADO', label: 'Rechazado' },
-  { value: 'ENDOSADO', label: 'Endosado' },
   { value: 'VENCIDO', label: 'Vencido' },
 ];
 
@@ -98,6 +96,7 @@ export const ChequeForm = ({
             value={value.fecha_acreditacion ?? ''}
             onChange={(event) => onChange({ ...value, fecha_acreditacion: event.target.value })}
           />
+          <p className="mt-1 text-xs text-slate-500">Opcional. Puedes guardarlo sin informar acreditación.</p>
         </label>
       ) : null}
     </div>

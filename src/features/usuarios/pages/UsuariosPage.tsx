@@ -7,6 +7,7 @@ import { usuarioService } from '../services/usuarioService';
 import UsuarioModal from '../components/UsuarioModal';
 import type { Usuario } from '../types/usuario';
 import type { UsuarioFormValues } from '../utils/usuarioForm';
+import { isSensitiveUsuarioRole } from '../utils/usuarioRules';
 
 const formatDate = (value?: string) => {
   if (!value) return 'Sin fecha';
@@ -21,9 +22,9 @@ const formatDate = (value?: string) => {
 
 const roleLabel: Record<string, string> = {
   SUPERADMIN: 'Super Admin',
-  ADMIN: 'Admin',
   ENCARGADO: 'Encargado',
   OPERARIO: 'Operario',
+  ADMIN: 'Admin',
   FINANZAS: 'Finanzas',
 };
 
@@ -165,6 +166,13 @@ const UsuariosPage = () => {
             <FiPlus />
             Nuevo usuario
           </button>
+          <button
+            type="button"
+            onClick={() => window.alert('TODO: el panel de permisos personalizados se implementará en una fase posterior.')}
+            className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+          >
+            Configurar permisos
+          </button>
         </div>
       </section>
 
@@ -225,7 +233,8 @@ const UsuariosPage = () => {
               <tbody>
                 {usuarios.map((usuario) => {
                   const isBusy = actionUid === usuario.uid || savingUser;
-                  const isProtectedSuperadmin = usuario.role === 'SUPERADMIN' && currentUser.role !== 'superadmin';
+                  // Control UI de desarrollo: la seguridad real debe reforzarse en backend/policies.
+                  const isProtectedSuperadmin = isSensitiveUsuarioRole(usuario.role) && currentUser.role !== 'superadmin';
                   const isSelfManagedUser = currentUser.managedUserUid === usuario.uid;
                   const canEditRow = canManageUsers && !isProtectedSuperadmin;
                   const canToggleRow = canManageUsers && !isProtectedSuperadmin && !isSelfManagedUser;

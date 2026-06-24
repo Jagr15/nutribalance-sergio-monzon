@@ -5,8 +5,8 @@ export interface Proveedor {
     producto_que_provee?: string | null;
     contacto_nombre: string;
     telefono: string;
-    email: string;
+    email?: string | null;
     direccion: string;
-    documento?: string; // Dato fiscal necesario en Argentina
+    documento?: string | null; // Dato fiscal opcional en desarrollo
     esta_activo: boolean;
   }

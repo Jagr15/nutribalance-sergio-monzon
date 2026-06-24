@@ -1,4 +1,4 @@
-import { FiBell, FiSearch } from "react-icons/fi";
+import { FiSearch, FiSettings } from "react-icons/fi";
 import Swal from "sweetalert2";
 import { getSessionUser } from "../../../../features/auth/session";
 import { useAlertas } from "../../../../features/alertas/hooks/useAlertas";
@@ -9,8 +9,13 @@ import { buildAlertCategoryHtml, isFinancialAlert, isProductAlert } from "../../
 
 export const Header = () => {
   const currentUser = getSessionUser();
-  const { summary, alertas } = useAlertas();
+  const { alertas } = useAlertas();
   const navigate = useNavigate();
+  const criticalAlerts = alertas.filter((alerta) => alerta.prioridad === "critica" && alerta.estado !== "atendida" && alerta.estado !== "descartada");
+  const financialAlerts = criticalAlerts.filter(isFinancialAlert);
+  const operationalAlerts = criticalAlerts.filter(isProductAlert);
+  const financialCount = financialAlerts.length;
+  const operationalCount = operationalAlerts.length;
 
   const showInfo = (feature: string) => {
     void Swal.fire({
@@ -23,28 +28,38 @@ export const Header = () => {
     });
   };
 
-  const openAlertas = () => {
-    const criticalAlerts = alertas.filter((alerta) => alerta.prioridad === "critica" && alerta.estado !== "atendida" && alerta.estado !== "descartada");
-    const productAlerts = criticalAlerts.filter(isProductAlert);
-    const financialAlerts = criticalAlerts.filter(isFinancialAlert);
+  const openAlertas = (kind: "financial" | "operational") => {
+    const { title, description, alerts, tone, confirmButtonText, navigateTo } = kind === "financial"
+      ? {
+          title: "Campana financiera",
+          description: "Alertas críticas relacionadas con cheques, presupuesto, descubierto, cartera y vencimientos financieros.",
+          alerts: financialAlerts,
+          tone: "amber" as const,
+          confirmButtonText: "Ver finanzas",
+          navigateTo: ROUTES.TESORERIA,
+        }
+      : {
+          title: "Campana operativa",
+          description: "Alertas críticas relacionadas con stock, producción, inventario y trazabilidad.",
+          alerts: operationalAlerts,
+          tone: "red" as const,
+          confirmButtonText: "Ver operaciones",
+          navigateTo: ROUTES.ALERTAS,
+        };
 
     void Swal.fire({
-      title: "Centro de alertas",
+      title,
       html: `
         <div style="text-align:left; color:#0f172a; font-size:14px; line-height:1.55;">
-          <p style="margin:0; color:#64748b; font-size:14px;">Alertas críticas y pendientes que requieren seguimiento.</p>
+          <p style="margin:0; color:#64748b; font-size:14px;">${description}</p>
           <div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:14px;">
             ${buildAlertCategoryHtml(
-              "Productos y operación",
-              "Incluye alertas de stock, producción, lotes, inventario, insumos, producto terminado y trazabilidad operativa.",
-              productAlerts,
-              "red",
-            )}
-            ${buildAlertCategoryHtml(
-              "Financieras",
-              "Incluye flujo de caja, tesorería, cuentas por cobrar y por pagar, costos e ingresos.",
-              financialAlerts,
-              "amber",
+              kind === "financial" ? "Finanzas" : "Operación",
+              kind === "financial"
+                ? "Incluye cheques, presupuesto, descubierto, cartera, cuentas y vencimientos financieros."
+                : "Incluye stock, producción, inventario, trazabilidad y órdenes operativas.",
+              alerts,
+              tone,
             )}
           </div>
         </div>
@@ -55,9 +70,9 @@ export const Header = () => {
       padding: "0",
       showCloseButton: true,
       showCancelButton: true,
-      confirmButtonText: "Ver centro de alertas",
+      confirmButtonText,
       cancelButtonText: "Cerrar",
-      confirmButtonColor: "#dc2626",
+      confirmButtonColor: kind === "financial" ? "#d97706" : "#dc2626",
       cancelButtonColor: "#e2e8f0",
       customClass: {
         popup: "rounded-[28px] border border-amber-200 shadow-[0_30px_90px_rgba(15,23,42,.18)] overflow-hidden",
@@ -70,17 +85,17 @@ export const Header = () => {
       },
     }).then((result) => {
       if (result.isConfirmed) {
-        navigate(ROUTES.ALERTAS);
+        navigate(navigateTo);
       }
     });
   };
 
   return (
-    <header className="min-h-[72px] md:h-[80px] border-b border-slate-200 flex items-center justify-between px-4 md:px-8 py-3 bg-white gap-3">
-      <div className="flex items-center gap-3 min-w-0">
-        <BrandLogo variant="compact" className="shrink-0" />
-        <div className="min-w-0">
-          <h2 className="text-xl md:text-2xl font-bold truncate">Nutribalance</h2>
+    <header className="min-h-[104px] md:min-h-[112px] border-b border-slate-200 flex items-center justify-between px-4 md:px-8 py-3 bg-white gap-3">
+      <div className="flex items-center gap-5 min-w-0">
+        <BrandLogo variant="compact" className="shrink-0 max-w-[9rem]" />
+        <div className="min-w-0 leading-tight">
+          <h2 className="text-xl md:text-[1.7rem] font-black truncate">Ditmona Agro</h2>
           <p className="hidden md:block text-sm text-slate-500">Sistema de Producción e Inventario</p>
         </div>
       </div>
@@ -97,14 +112,28 @@ export const Header = () => {
 
         <button
           type="button"
-          aria-label="Notificaciones"
-          onClick={openAlertas}
-          className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition flex items-center justify-center relative"
+          aria-label="Campana financiera"
+          onClick={() => openAlertas("financial")}
+          className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 transition flex items-center justify-center relative border border-amber-200"
         >
-          <FiBell />
-          {summary.criticas + summary.pendientes > 0 ? (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-              {summary.criticas + summary.pendientes}
+          <span className="text-base font-black">$</span>
+          {financialCount > 0 ? (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center">
+              {financialCount}
+            </span>
+          ) : null}
+        </button>
+
+        <button
+          type="button"
+          aria-label="Campana operativa"
+          onClick={() => openAlertas("operational")}
+          className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 hover:bg-sky-100 transition flex items-center justify-center relative border border-sky-200"
+        >
+          <FiSettings size={16} />
+          {operationalCount > 0 ? (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-sky-600 text-white text-[10px] font-bold flex items-center justify-center">
+              {operationalCount}
             </span>
           ) : null}
         </button>

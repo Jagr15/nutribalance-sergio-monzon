@@ -110,6 +110,16 @@ export const planFifoConsumption = (
   };
 };
 
+const findStockLote = (lotes: StockLoteForFlow[], idLote: string) => {
+  const normalized = idLote.trim().toUpperCase();
+  return lotes.find((current) =>
+    current.id === idLote ||
+    current.legacy_uid === idLote ||
+    current.lote === idLote ||
+    current.lote.toUpperCase() === normalized
+  );
+};
+
 export const buildFinalizationPlan = (
   ordenLegacyUid: string,
   nombreProducto: string,
@@ -187,7 +197,7 @@ export const buildFinalizationStockCheck = (
     const requerida = Number((item.cantidad_usada * factor).toFixed(3));
     totalRequerido += requerida;
 
-    const lote = lotes.find((current) => current.legacy_uid === item.id_lote || current.lote === item.id_lote);
+    const lote = findStockLote(lotes, item.id_lote);
     if (!lote) {
       faltantes.push({
         id_lote: item.id_lote,

@@ -60,7 +60,6 @@ export const calculateFormulaNutrition = (
     const cenizas = insumo?.cenizas_pct;
 
     if (typeof pb !== 'number') localWarnings.push(`Falta PB en ${item.nombre_insumo}`);
-    if (typeof humedad !== 'number') localWarnings.push(`Falta humedad en ${item.nombre_insumo}`);
     if (typeof fibra !== 'number') localWarnings.push(`Falta fibra en ${item.nombre_insumo}`);
     if (typeof grasa !== 'number') localWarnings.push(`Falta grasa en ${item.nombre_insumo}`);
     if (typeof cenizas !== 'number') localWarnings.push(`Faltan cenizas en ${item.nombre_insumo}`);

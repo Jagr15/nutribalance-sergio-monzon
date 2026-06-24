@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FiBell, FiSettings } from 'react-icons/fi';
 import { Card } from '../../../shared/components/card';
 import { useFinanzas } from '../../finanzas/hooks/useFinanzas';
 import { useTesoreria } from '../hooks/useTesoreria';
@@ -36,6 +37,7 @@ const formatMovementLabel = (movement: MovimientoFinanciero) => {
 const TesoreriaPage = () => {
   const { kpis, reportes, movimientos, tesoreria: tesoreriaFinanzas } = useFinanzas();
   const { tesoreria, error, getCheques, createCheque, updateCheque, updateChequeEstado } = useTesoreria();
+  const [todayKey] = useState(() => new Date().toISOString().slice(0, 10));
   const [form, setForm] = useState<ChequeTesoreriaFormValues>(EMPTY_CHEQUE_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -48,7 +50,7 @@ const TesoreriaPage = () => {
   const [chequesLoading, setChequesLoading] = useState(true);
   const [chequesError, setChequesError] = useState<string | null>(null);
   const [filtroQuery, setFiltroQuery] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState<'PENDIENTE' | 'A_DEPOSITAR' | 'DEPOSITADO' | 'COBRADO' | 'RECHAZADO' | 'ENDOSADO' | 'VENCIDO' | ''>('');
+  const [filtroEstado, setFiltroEstado] = useState<'PENDIENTE' | 'DEPOSITADO' | 'COBRADO' | 'RECHAZADO' | 'VENCIDO' | ''>('');
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<'EMITIDO' | 'RECIBIDO' | ''>('');
@@ -224,6 +226,22 @@ const TesoreriaPage = () => {
     }
     return null;
   }, [normalizedChequesEmitidos, normalizedChequesRecibidos]);
+  const campanaFinanciera = useMemo(() => {
+    const vencidos = tesoreria.chequesEmitidos.filter((cheque) => cheque.estado === 'VENCIDO' || (cheque.estado === 'PENDIENTE' && cheque.fecha_vencimiento.slice(0, 10) < todayKey));
+    const depositados = tesoreria.chequesRecibidos.filter((cheque) => cheque.estado === 'DEPOSITADO' || cheque.estado === 'COBRADO');
+    return {
+      count: vencidos.length + depositados.length,
+      label: vencidos.length > 0 ? `Hay ${vencidos.length} cheques vencidos.` : 'Sin vencimientos financieros críticos.',
+    };
+  }, [todayKey, tesoreria.chequesEmitidos, tesoreria.chequesRecibidos]);
+  const campanaOperativa = useMemo(() => {
+    const porAcreditar = tesoreria.chequesRecibidos.filter((cheque) => cheque.estado === 'PENDIENTE' || cheque.estado === 'RECHAZADO');
+    const porCubrir = tesoreria.chequesEmitidos.filter((cheque) => cheque.estado === 'PENDIENTE');
+    return {
+      count: porAcreditar.length + porCubrir.length,
+      label: porCubrir.length > 0 ? `Hay ${porCubrir.length} cheques por cubrir.` : 'Sin pendientes operativos urgentes.',
+    };
+  }, [tesoreria.chequesEmitidos, tesoreria.chequesRecibidos]);
   const openCreateForm = () => {
     resetForm();
     setIsFormOpen(true);
@@ -310,11 +328,9 @@ const TesoreriaPage = () => {
             <select className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" value={filtroEstado} onChange={(event) => setFilterEstado(event.target.value as typeof filtroEstado)}>
               <option value="">Todos</option>
               <option value="PENDIENTE">Pendiente</option>
-              <option value="A_DEPOSITAR">A depositar</option>
               <option value="DEPOSITADO">Depositado</option>
               <option value="COBRADO">Cobrado</option>
               <option value="RECHAZADO">Rechazado</option>
-              <option value="ENDOSADO">Endosado</option>
               <option value="VENCIDO">Vencido</option>
             </select>
           </label>
@@ -358,6 +374,36 @@ const TesoreriaPage = () => {
         </div>
       </section>
 
+      <section className="grid gap-4 md:grid-cols-2">
+        <Card className="border-sky-200 bg-sky-50">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-sky-700">Campana financiera</p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-900">Alertas de flujo y vencimientos</h2>
+            </div>
+            <div className="rounded-2xl bg-white p-3 text-sky-700 shadow-sm">
+              <FiBell size={18} />
+            </div>
+          </div>
+          <p className="mt-3 text-sm text-slate-700">{campanaFinanciera.label}</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">{campanaFinanciera.count}</p>
+        </Card>
+
+        <Card className="border-emerald-200 bg-emerald-50">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-700">Campana operativa</p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-900">Seguimiento de cheques y acción</h2>
+            </div>
+            <div className="rounded-2xl bg-white p-3 text-emerald-700 shadow-sm">
+              <FiSettings size={18} />
+            </div>
+          </div>
+          <p className="mt-3 text-sm text-slate-700">{campanaOperativa.label}</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">{campanaOperativa.count}</p>
+        </Card>
+      </section>
+
       <Card>
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Movimientos de caja recientes</h2>
@@ -399,11 +445,9 @@ const TesoreriaPage = () => {
                     <div className="flex items-center gap-2 shrink-0">
                       <select className="ui-input rounded-xl px-2 py-1.5 text-[11px]" value={cheque.estado} onChange={(event) => void changeEstado(cheque.id, event.target.value as EstadoChequeTesoreria)}>
                         <option value="PENDIENTE">Pendiente</option>
-                        <option value="A_DEPOSITAR">A depositar</option>
                         <option value="DEPOSITADO">Depositado</option>
                         <option value="COBRADO">Cobrado</option>
                         <option value="RECHAZADO">Rechazado</option>
-                        <option value="ENDOSADO">Endosado</option>
                         <option value="VENCIDO">Vencido</option>
                       </select>
                       <button className="rounded-xl border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100" onClick={() => startEdit(cheque)} type="button">Editar</button>
@@ -412,7 +456,6 @@ const TesoreriaPage = () => {
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-700">{formatCurrency(cheque.importe)}</p>
                     <div className="text-right">
-                      {cheque.estado === 'A_DEPOSITAR' ? <p className="text-[11px] font-semibold text-amber-700">A depositar</p> : null}
                       {cheque.estado === 'PENDIENTE' && isDueToday(cheque.fecha_vencimiento) ? <p className="text-[11px] font-semibold text-red-700">Depositar hoy</p> : null}
                     </div>
                   </div>
@@ -460,11 +503,9 @@ const TesoreriaPage = () => {
                     <div className="flex items-center gap-2 shrink-0">
                       <select className="ui-input rounded-xl px-2 py-1.5 text-[11px]" value={cheque.estado} onChange={(event) => void changeEstado(cheque.id, event.target.value as EstadoChequeTesoreria)}>
                         <option value="PENDIENTE">Pendiente</option>
-                        <option value="A_DEPOSITAR">A depositar</option>
                         <option value="DEPOSITADO">Depositado</option>
                         <option value="COBRADO">Cobrado</option>
                         <option value="RECHAZADO">Rechazado</option>
-                        <option value="ENDOSADO">Endosado</option>
                         <option value="VENCIDO">Vencido</option>
                       </select>
                       <button className="rounded-xl border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100" onClick={() => startEdit(cheque)} type="button">Editar</button>

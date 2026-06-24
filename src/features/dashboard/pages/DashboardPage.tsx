@@ -394,7 +394,7 @@ export const DashboardPage = () => {
               <h1 className="text-3xl font-black mt-1">Centro Ejecutivo de Dirección</h1>
               <p className="text-sm text-slate-500 mt-2">Respuesta rápida sobre la salud del negocio hoy, con vista resumida de producción, inventario y finanzas.</p>
             </div>
-            <BrandLogo variant="full" className="max-w-[220px] self-start md:self-center" />
+            <BrandLogo variant="full" className="max-w-[280px] self-start md:self-center" />
           </div>
         </Card>
 
@@ -501,7 +501,7 @@ export const DashboardPage = () => {
             <h1 className="text-3xl font-black mt-1">Centro Ejecutivo de Dirección</h1>
             <p className="text-sm text-slate-500 mt-2">Vista consolidada de Producción, Inventario, Finanzas y Alertas Operativas.</p>
           </div>
-          <BrandLogo variant="full" className="max-w-[220px] self-start md:self-center" />
+          <BrandLogo variant="full" className="max-w-[280px] self-start md:self-center" />
         </div>
       </Card>
 

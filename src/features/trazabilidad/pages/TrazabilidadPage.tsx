@@ -1,4 +1,4 @@
-import { FiAlertTriangle, FiArrowDown, FiArrowUp, FiSearch } from 'react-icons/fi';
+import { FiAlertTriangle, FiSearch } from 'react-icons/fi';
 import { Card } from '../../../shared/components/card';
 import { useTrazabilidadHistoria } from '../hooks/useTrazabilidadHistoria';
 
@@ -12,8 +12,6 @@ const TrazabilidadPage = () => {
   const {
     loading,
     error,
-    sentido,
-    setSentido,
     loteInsumo,
     setLoteInsumo,
     producto,
@@ -38,56 +36,21 @@ const TrazabilidadPage = () => {
     <div className="space-y-6">
       <section className="space-y-2">
         <p className="text-sm uppercase tracking-widest text-blue-400">Control de trazabilidad</p>
-        <h1 className="text-3xl font-bold">Historial de movimientos</h1>
+        <h1 className="text-3xl font-bold">Trazabilidad del lote</h1>
         <p className="max-w-3xl text-slate-500">
-          Consultá la trazabilidad en ambos sentidos para auditoría: desde insumos hasta clientes o desde una venta hacia los lotes de insumo usados.
+          Consultá la secuencia completa de eventos para auditoría: desde insumos hasta clientes o desde una venta hacia los lotes de insumo usados.
         </p>
       </section>
 
       <Card>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Sentido de consulta</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setSentido('ADELANTE')}
-                className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
-                  sentido === 'ADELANTE'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <FiArrowDown />
-                  Hacia adelante
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSentido('ATRAS')}
-                className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
-                  sentido === 'ATRAS'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <FiArrowUp />
-                  Hacia atrás
-                </span>
-              </button>
-            </div>
-          </div>
-          <div className="flex items-end justify-start lg:justify-end">
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Limpiar filtros
-            </button>
-          </div>
+        <div className="flex items-end justify-start lg:justify-end">
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Limpiar filtros
+          </button>
         </div>
       </Card>
 
@@ -206,7 +169,7 @@ const TrazabilidadPage = () => {
         <section className="grid gap-4 xl:grid-cols-3">
           <Card className="xl:col-span-2">
             <div className="mb-4">
-              <h2 className="text-xl font-semibold">Timeline de movimientos</h2>
+              <h2 className="text-xl font-semibold">Trazabilidad del lote</h2>
               <p className="text-sm text-slate-500">
                 {resultado.sentido === 'ADELANTE'
                   ? 'Insumo → producción → lote terminado → venta → cliente.'
@@ -264,8 +227,8 @@ const TrazabilidadPage = () => {
                       <p className="mt-1 font-semibold">{movimiento.lote_pt ?? 'Sin lote'}</p>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-xs uppercase tracking-widest text-slate-500">Sentido</p>
-                      <p className="mt-1 font-semibold">{resultado.sentido === 'ADELANTE' ? 'Hacia adelante' : 'Hacia atrás'}</p>
+                      <p className="text-xs uppercase tracking-widest text-slate-500">Evento</p>
+                      <p className="mt-1 font-semibold">Secuencia consolidada</p>
                     </div>
                   </div>
                 </article>

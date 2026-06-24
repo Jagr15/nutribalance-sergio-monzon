@@ -6,6 +6,7 @@ import { ApiService } from '../../../infrastructure/api';
 import type { Insumo } from '../types';
 import type { Proveedor } from '../../proveedores/types';
 import type { Silo } from '../../silos/types';
+import { findSiloByName, getMateriaPrimaSilos } from '../../silos/utils/siloFilters';
 import { calcularCostoIngresoMP } from '../utils/costoIngreso';
 
 interface Props {
@@ -76,10 +77,7 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     }
   }, [formData.cantidad, formData.unidad_entrada, formData.precio_unitario, formData.unidad_precio, formData.costo_total]);
 
-  const silosMateriaPrima = useMemo(
-    () => silos.filter((silo) => silo.tipo_uso === 'MATERIA_PRIMA'),
-    [silos]
-  );
+  const silosMateriaPrima = useMemo(() => getMateriaPrimaSilos(silos), [silos]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,6 +98,16 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     }
     if (!Number.isFinite(formData.precio_unitario) || formData.precio_unitario <= 0) {
       setSubmitError('El precio unitario debe ser mayor a 0.');
+      return;
+    }
+
+    const siloSeleccionado = findSiloByName(silos, formData.ubicacion);
+    if (!siloSeleccionado) {
+      setSubmitError('El silo seleccionado no existe.');
+      return;
+    }
+    if (siloSeleccionado.tipo_uso !== 'MATERIA_PRIMA') {
+      setSubmitError('Solo se pueden ingresar materias primas en silos de Materia Prima.');
       return;
     }
 
@@ -203,7 +211,7 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             <div className="relative">
               <label className={labelStyles}><FiMapPin className="text-emerald-500" /> Ubicación (Silo)</label>
               <input 
-                type="text" className={inputStyles} placeholder="Seleccionar silo..." 
+                type="text" className={inputStyles} placeholder="Seleccionar silo de Materia Prima..." 
                 value={formData.ubicacion || searchs.silo}
                 onFocus={() => setActiveDropdown('silo')}
                 readOnly // Para forzar selección de la lista

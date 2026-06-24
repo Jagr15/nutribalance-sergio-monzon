@@ -76,12 +76,12 @@ const LoginPage = () => {
                 </div>
 
                 <div className="space-y-5">
-                  <div className="max-w-[280px]">
-                    <BrandLogo variant="full" className="w-full" />
+                  <div className="max-w-[520px] md:max-w-[560px]">
+                    <BrandLogo variant="full" className="w-full max-w-[34rem]" />
                   </div>
                   <div>
-                    <h1 className="text-4xl md:text-5xl font-black leading-tight text-emerald-950">DITMON AGRO</h1>
-                    <p className="mt-2 text-amber-700 text-lg md:text-xl font-semibold">Nutrición Animal</p>
+                    <h1 className="text-4xl md:text-5xl font-black leading-tight text-emerald-950">Ditmona Agro</h1>
+                    <p className="mt-2 text-amber-700 text-lg md:text-xl font-semibold">Sistema de Producción e Inventario</p>
                     <p className="mt-4 text-slate-600 max-w-xl leading-relaxed">
                       Sistema operativo de producción, inventario y trazabilidad para coordinar la operación con mayor control y visibilidad.
                     </p>
@@ -102,7 +102,7 @@ const LoginPage = () => {
               </div>
 
               <p className="text-xs uppercase tracking-[0.26em] text-slate-400">
-                Nutribalance · Sistema operativo de producción, inventario y trazabilidad
+                DITMON AGRO · Sistema de Producción e Inventario
               </p>
             </div>
           </section>
@@ -115,7 +115,7 @@ const LoginPage = () => {
                     Modo Demo
                   </div>
                 ) : null}
-                <BrandLogo variant="full" className="w-full max-w-[280px] md:max-w-[240px]" />
+                <BrandLogo variant="full" className="w-full max-w-[440px] md:max-w-[500px]" />
               </div>
               <h2 className="text-2xl font-bold text-emerald-950">Acceso operativo</h2>
               <p className="mt-2 text-sm text-slate-500 leading-relaxed">
@@ -135,7 +135,7 @@ const LoginPage = () => {
                       value={login}
                       onChange={(event) => setLogin(event.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 transition"
-                      placeholder="admin@nutribalance.com"
+                      placeholder="admin@ditmonaagro.com"
                       autoComplete="username"
                     />
                   </div>
@@ -181,12 +181,12 @@ const LoginPage = () => {
                   <FiTrendingUp size={12} /> Acceso operativo
                 </p>
                 <p>
-                  Usuario: <span className="font-semibold">admin@nutribalance.com</span>
+                  Usuario: <span className="font-semibold">admin@ditmonaagro.com</span>
                 </p>
                 <p>
                   Contraseña: <span className="font-semibold">admin123</span>
                 </p>
-                <p className="mt-2">Perfiles demo: <span className="font-semibold">produccion / inventario / finanzas / supervisor / lectura</span> (clave: <span className="font-semibold">demo123</span>)</p>
+                <p className="mt-2">Perfiles demo: <span className="font-semibold">encargado / operario / produccion / inventario / finanzas / supervisor / lectura</span> (clave: <span className="font-semibold">demo123</span>)</p>
               </div>
             </div>
           </section>

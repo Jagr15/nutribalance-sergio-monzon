@@ -4,6 +4,9 @@ import { FiX } from "react-icons/fi";
 import { useProveedores } from '../hooks/useProveedores';
 import type { Proveedor } from '../types/proveedor';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CUIT_REGEX = /^\d{2}-\d{8}-\d$/;
+
 interface Props {
   proveedor?: Proveedor;
   onClose: () => void;
@@ -34,16 +37,16 @@ const ProveedorModal: React.FC<Props> = ({ proveedor, onClose, onSuccess }) => {
       producto_que_provee: form.producto_que_provee.trim() || null,
       contacto_nombre: form.contacto_nombre.trim(),
       telefono: form.telefono.trim(),
-      email: form.email.trim().toLowerCase(),
+      email: form.email.trim().toLowerCase() || null,
       direccion: form.direccion.trim(),
-      documento: form.documento.trim(),
+      documento: form.documento.trim() || null,
     };
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!normalized.nombre_empresa) return setSubmitError("La empresa es obligatoria.");
     if (!normalized.contacto_nombre) return setSubmitError("El contacto es obligatorio.");
     if (!normalized.telefono) return setSubmitError("El teléfono es obligatorio.");
-    if (!normalized.email || !emailRegex.test(normalized.email)) return setSubmitError("Ingresa un email válido.");
+    if (normalized.email && !EMAIL_REGEX.test(normalized.email)) return setSubmitError("Ingresa un email válido.");
+    if (normalized.documento && !CUIT_REGEX.test(normalized.documento)) return setSubmitError("Ingresa un CUIT válido.");
 
     setIsSubmitting(true);
     try {
@@ -98,6 +101,7 @@ const ProveedorModal: React.FC<Props> = ({ proveedor, onClose, onSuccess }) => {
               <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Documento / CUIT</label>
               <input 
                 className="ui-input w-full rounded-xl py-2.5 px-4 text-sm"
+                placeholder="Opcional"
                 value={form.documento}
                 onChange={e => setForm({...form, documento: e.target.value})}
               />
@@ -123,9 +127,9 @@ const ProveedorModal: React.FC<Props> = ({ proveedor, onClose, onSuccess }) => {
             <div className="space-y-1 text-slate-900">
               <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Email</label>
               <input 
-                required
                 type="email"
                 className="ui-input w-full rounded-xl py-2.5 px-4 text-sm"
+                placeholder="Opcional"
                 value={form.email}
                 onChange={e => setForm({...form, email: e.target.value})}
               />

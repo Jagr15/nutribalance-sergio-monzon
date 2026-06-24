@@ -22,6 +22,9 @@ type ClienteFormPayload = {
   observaciones?: string;
 };
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CUIT_REGEX = /^\d{2}-\d{8}-\d$/;
+
 const statusStyle: Record<EstadoClienteType, string> = {
   [EstadoCliente.ACTIVO]: "bg-emerald-500/20 text-emerald-300",
   [EstadoCliente.EN_RIESGO]: "bg-amber-500/20 text-amber-300",
@@ -57,6 +60,12 @@ const preserveExisting = (rawValue?: string, currentValue?: string | null) => {
   const trimmed = rawValue?.trim() ?? "";
   if (trimmed) return trimmed;
   return currentValue ?? undefined;
+};
+
+const validateOptionalContactData = (email: string, cuit: string) => {
+  if (email && !EMAIL_REGEX.test(email)) return "Ingresa un email válido.";
+  if (cuit && !CUIT_REGEX.test(cuit)) return "Ingresa un CUIT válido.";
+  return null;
 };
 
 const buildCreatePayload = (payload: ClienteFormPayload): ClienteCreatePayload => ({
@@ -265,6 +274,11 @@ const openEditarCliente = (cliente: Cliente, onSave: (payload: ClienteFormPayloa
       const condicionComercial = (document.getElementById("cli-condicion") as HTMLInputElement | null)?.value.trim() ?? "";
       const estado = ((document.getElementById("cli-estado") as HTMLSelectElement | null)?.value ?? "Activo") as EstadoClienteType;
       const observaciones = (document.getElementById("cli-observaciones") as HTMLTextAreaElement | null)?.value.trim() ?? "";
+      const contactError = validateOptionalContactData(email, cuit);
+      if (contactError) {
+        Swal.showValidationMessage(contactError);
+        return;
+      }
       return {
         nombre,
         razonSocial,
@@ -443,6 +457,11 @@ const openNuevoCliente = (onCreate: (payload: ClienteFormPayload) => Promise<voi
       const condicionComercial = (document.getElementById("new-cli-condicion") as HTMLInputElement | null)?.value.trim() ?? "";
       const estado = ((document.getElementById("new-cli-estado") as HTMLSelectElement | null)?.value ?? "Activo") as EstadoClienteType;
       const observaciones = (document.getElementById("new-cli-observaciones") as HTMLTextAreaElement | null)?.value.trim() ?? "";
+      const contactError = validateOptionalContactData(email, cuit);
+      if (contactError) {
+        Swal.showValidationMessage(contactError);
+        return;
+      }
       return {
         nombre,
         razonSocial,

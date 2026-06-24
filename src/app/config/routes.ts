@@ -19,4 +19,5 @@ export const ROUTES = {
   TRAZABILIDAD: '/trazabilidad',
   SILOS: '/silos',
   ORDENES: '/ordenes',
+  ORDENES_SALIDA: '/ordenes-salida',
 } as const;

@@ -178,6 +178,17 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
   const hasStatusChanged = useMemo(() => formula ? estaActiva !== formula.esta_activa : false, [estaActiva, formula]);
 
   const isSumaValida = Math.abs(sumaTotal - 100) < 0.01;
+  const sumDelta = Number((100 - sumaTotal).toFixed(2));
+  const sumMessage = isSumaValida
+    ? 'La fórmula está completa al 100%.'
+    : sumDelta > 0
+      ? `Faltan ${Math.abs(sumDelta).toFixed(2)}% para completar la fórmula.`
+      : `La fórmula excede el 100% por ${Math.abs(sumDelta).toFixed(2)}%.`;
+  const sumTone = isSumaValida
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+    : sumDelta > 0
+      ? 'border-amber-200 bg-amber-50 text-amber-800'
+      : 'border-red-200 bg-red-50 text-red-700';
 
   const canSave = useMemo(
     () => nombre.trim() !== '' && ingredientesValidos.length > 0 && (hasStructuralChanges || hasStatusChanged),
@@ -237,7 +248,9 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
       return;
     }
     if (!isSumaValida) {
-      setSubmitError('La suma de ingredientes debe ser 100%.');
+      setSubmitError(sumDelta > 0
+        ? `Faltan ${Math.abs(sumDelta).toFixed(2)}% para completar la fórmula.`
+        : `La fórmula excede el 100% por ${Math.abs(sumDelta).toFixed(2)}%.`);
       return;
     }
     if (catalogError) {
@@ -359,9 +372,12 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
           <div className="space-y-3 relative">
             <div className="flex justify-between items-center px-1">
               <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Mezcla de Insumos</label>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isSumaValida ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                {sumaTotal}%
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isSumaValida ? 'bg-emerald-500/10 text-emerald-500' : sumDelta > 0 ? 'bg-amber-500/10 text-amber-600' : 'bg-red-500/10 text-red-500'}`}>
+                {sumaTotal.toFixed(2)}%
               </span>
+            </div>
+            <div className={`rounded-xl border px-3 py-2 text-sm font-semibold ${sumTone}`}>
+              {sumMessage}
             </div>
 
             <div className="space-y-2">
@@ -472,6 +488,7 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
               <div className="text-slate-700">PB (g/kg): <span className="text-blue-300 font-bold">{nutrition.totals.proteina_g_kg.toFixed(1)}</span></div>
               <div className="text-slate-700">Costo/kg: <span className="text-emerald-300 font-bold">{cost.costo_por_kg.toFixed(4)}</span></div>
               <div className="text-slate-700">Costo/ton: <span className="text-emerald-300 font-bold">{cost.costo_por_tonelada.toFixed(2)}</span></div>
+              <div className="col-span-2 text-slate-700">Total de ingredientes: <span className={`font-bold ${isSumaValida ? 'text-emerald-300' : sumDelta > 0 ? 'text-amber-300' : 'text-rose-300'}`}>{sumaTotal.toFixed(2)}%</span></div>
             </div>
           </div>
 
@@ -628,7 +645,7 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all duration-200 ease-out border border-slate-200">Cancelar</button>
             <button 
               type="submit" 
-              disabled={isLoading || isSubmitting || !canSave}
+              disabled={isLoading || isSubmitting || !canSave || !isSumaValida}
               className="flex-[1.5] py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl text-[9px] font-black uppercase shadow-lg shadow-blue-900/20 transition-all duration-200 ease-out"
             >
               {isSubmitting
