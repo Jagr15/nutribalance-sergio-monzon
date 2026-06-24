@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { runtimeConfig } from '../runtimeConfig';
 
+const isVitest = typeof import.meta !== 'undefined'
+  && Boolean(import.meta.env?.VITEST);
+
 const failSafeClient = new Proxy(
   {},
   {
@@ -13,6 +16,6 @@ const failSafeClient = new Proxy(
   }
 );
 
-export const supabaseClient = runtimeConfig.mode === 'supabase'
+export const supabaseClient = !isVitest && runtimeConfig.mode === 'supabase'
   ? createClient(runtimeConfig.supabaseUrl as string, runtimeConfig.supabaseAnonKey as string)
   : (failSafeClient as ReturnType<typeof createClient>);

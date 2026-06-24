@@ -65,6 +65,8 @@ const normalizeText = (value: string) =>
     .trim()
     .toLowerCase();
 
+const getDisponibilidadLote = (lote: StockLoteForFlow) => Math.max(0, lote.cantidad_actual - (lote.cantidad_comprometida || 0));
+
 const getStockMatchesForIngredient = (ingrediente: Ingrediente, lotes: StockLoteForFlow[]) => {
   const id = ingrediente.id_insumo.trim();
   const normalizedNombreIngrediente = normalizeText(ingrediente.nombre_insumo);
@@ -85,41 +87,45 @@ const getStockMatchesForIngredient = (ingrediente: Ingrediente, lotes: StockLote
   return byNombre;
 };
 
-export const planFifoConsumption = (
+const allocateFifoByIngredient = (
   cantidadObjetivoKg: number,
   ingredientes: Ingrediente[],
-  lotes: StockLoteForFlow[]
-): FifoPlanResult => {
-  let costoTotal = 0;
-  const detalle: DetalleInsumoLote[] = [];
+  lotes: StockLoteForFlow[],
+) => {
+  const movimientos: Array<{
+    lote_id: string;
+    id_lote_legacy: string;
+    id_insumo: string;
+    nombre_insumo: string;
+    cantidad: number;
+    costo_unitario: number;
+    costo_total: number;
+  }> = [];
   const faltantes: string[] = [];
+  let costoTotal = 0;
 
   for (const ingrediente of ingredientes) {
     const requerida = cantidadObjetivoKg * ((ingrediente.porcentaje || 0) / 100);
     let pendiente = requerida;
-
     const lotesInsumo = getStockMatchesForIngredient(ingrediente, lotes)
       .sort((a, b) => new Date(a.fecha_ingreso).getTime() - new Date(b.fecha_ingreso).getTime());
 
     for (const lote of lotesInsumo) {
       if (pendiente <= 0) break;
-
-      const disponible = lote.cantidad_actual - (lote.cantidad_comprometida || 0);
+      const disponible = getDisponibilidadLote(lote);
       if (disponible <= 0) continue;
 
       const usar = Math.min(disponible, pendiente);
       const costo = usar * lote.costo_unitario;
-
-      detalle.push({
-        id_lote: lote.legacy_uid || lote.lote,
+      movimientos.push({
+        lote_id: lote.id,
+        id_lote_legacy: lote.legacy_uid || lote.lote,
         id_insumo: ingrediente.id_insumo,
         nombre_insumo: ingrediente.nombre_insumo,
-        cantidad_usada: usar,
-        tipo_unidad: 'KG',
+        cantidad: usar,
         costo_unitario: lote.costo_unitario,
         costo_total: costo,
       });
-
       costoTotal += costo;
       pendiente -= usar;
     }
@@ -129,22 +135,30 @@ export const planFifoConsumption = (
     }
   }
 
-  return {
-    detalle,
-    stockSuficiente: faltantes.length === 0,
-    faltantes,
-    costoTotal,
-  };
+  return { movimientos, faltantes, costoTotal };
 };
 
-const findStockLote = (lotes: StockLoteForFlow[], idLote: string) => {
-  const normalized = idLote.trim().toUpperCase();
-  return lotes.find((current) =>
-    current.id === idLote ||
-    current.legacy_uid === idLote ||
-    current.lote === idLote ||
-    current.lote.toUpperCase() === normalized
-  );
+export const planFifoConsumption = (
+  cantidadObjetivoKg: number,
+  ingredientes: Ingrediente[],
+  lotes: StockLoteForFlow[]
+): FifoPlanResult => {
+  const allocation = allocateFifoByIngredient(cantidadObjetivoKg, ingredientes, lotes);
+
+  return {
+    detalle: allocation.movimientos.map((movimiento) => ({
+      id_lote: movimiento.id_lote_legacy,
+      id_insumo: movimiento.id_insumo,
+      nombre_insumo: movimiento.nombre_insumo,
+      cantidad_usada: movimiento.cantidad,
+      tipo_unidad: 'KG',
+      costo_unitario: movimiento.costo_unitario,
+      costo_total: movimiento.costo_total,
+    })),
+    stockSuficiente: allocation.faltantes.length === 0,
+    faltantes: allocation.faltantes,
+    costoTotal: allocation.costoTotal,
+  };
 };
 
 export const buildFinalizationPlan = (
@@ -223,50 +237,49 @@ export const buildFinalizationStockCheck = (
   lotes: StockLoteForFlow[]
 ): FinalizationStockCheckResult => {
   const factor = cantidadObjetivoKg > 0 ? cantidadRealKg / cantidadObjetivoKg : 0;
-  const faltantes: FinalizationStockCheckRow[] = [];
-  let totalRequerido = 0;
+  const totalRequerido = Number(
+    detalle.reduce((acc, item) => acc + Number((item.cantidad_usada * factor).toFixed(3)), 0).toFixed(3)
+  );
+  const grouped = new Map<string, { nombre_insumo: string; id_insumo: string; requerida: number }>();
 
-  for (const item of detalle) {
-    const requerida = Number((item.cantidad_usada * factor).toFixed(3));
-    totalRequerido += requerida;
+  detalle.forEach((item) => {
+    const current = grouped.get(item.id_insumo) ?? {
+      nombre_insumo: item.nombre_insumo,
+      id_insumo: item.id_insumo,
+      requerida: 0,
+    };
+    current.requerida += Number((item.cantidad_usada * factor).toFixed(3));
+    grouped.set(item.id_insumo, current);
+  });
 
-    const lote = findStockLote(lotes, item.id_lote);
+  const allocation = allocateFifoByIngredient(
+    cantidadRealKg,
+    [...grouped.values()].map((item) => ({
+      id_insumo: item.id_insumo,
+      nombre_insumo: item.nombre_insumo,
+      porcentaje: 100,
+    })),
+    lotes,
+  );
+
+  const faltantes = allocation.faltantes.map((nombre_insumo) => {
+    const row = [...grouped.values()].find((item) => item.nombre_insumo === nombre_insumo);
     const lotesDelInsumo = getStockMatchesForIngredient(
-      { id_insumo: item.id_insumo, nombre_insumo: item.nombre_insumo, porcentaje: 0 },
-      lotes
+      { id_insumo: row?.id_insumo ?? '', nombre_insumo, porcentaje: 0 },
+      lotes,
     );
-    const lotesEvaluados = lote ? [lote] : lotesDelInsumo;
+    const disponible = Number(lotesDelInsumo.reduce((acc, lote) => acc + getDisponibilidadLote(lote), 0).toFixed(3));
+    const requerida = Number((row?.requerida ?? 0).toFixed(3));
 
-    if (lotesEvaluados.length === 0) {
-      faltantes.push({
-        id_lote: item.id_lote,
-        nombre_insumo: item.nombre_insumo,
-        lote: item.id_lote,
-        requerida,
-        disponible: 0,
-        faltante: requerida,
-      });
-      continue;
-    }
-
-    const disponible = Number(
-      lotesEvaluados
-        .reduce((acc, current) => acc + Math.max(0, current.cantidad_actual - (current.cantidad_comprometida || 0)), 0)
-        .toFixed(3)
-    );
-    const faltante = Number((requerida - disponible).toFixed(3));
-
-    if (faltante > 0.0005) {
-      faltantes.push({
-        id_lote: item.id_lote,
-        nombre_insumo: item.nombre_insumo,
-        lote: lote?.lote ?? (lotesDelInsumo[0]?.lote ?? item.id_lote),
-        requerida,
-        disponible,
-        faltante,
-      });
-    }
-  }
+    return {
+      id_lote: row?.id_insumo ?? nombre_insumo,
+      nombre_insumo,
+      lote: lotesDelInsumo[0]?.lote ?? nombre_insumo,
+      requerida,
+      disponible,
+      faltante: Number(Math.max(0, requerida - disponible).toFixed(3)),
+    } satisfies FinalizationStockCheckRow;
+  });
 
   return {
     stockSuficiente: faltantes.length === 0,
@@ -289,7 +302,7 @@ export const buildStockRequirementRows = (
     const requerida = Number((cantidadObjetivoKg * ((ingrediente.porcentaje || 0) / 100)).toFixed(3));
     const disponible = Number(
       getStockMatchesForIngredient(ingrediente, lotes)
-        .reduce((acc, lote) => acc + Math.max(0, lote.cantidad_actual - (lote.cantidad_comprometida || 0)), 0)
+        .reduce((acc, lote) => acc + getDisponibilidadLote(lote), 0)
         .toFixed(3),
     );
     const faltante = Number(Math.max(0, requerida - disponible).toFixed(3));

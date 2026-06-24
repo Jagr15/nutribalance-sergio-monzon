@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FiCheckCircle, FiLoader, FiLock, FiShield, FiTrendingUp, FiUser, FiXCircle } from "react-icons/fi";
 import { runtimeConfig } from "../../../infrastructure/api/runtimeConfig";
-import { authenticateDemoUser, saveSession } from "../session";
+import { DEMO_LOGIN_EMAIL, authenticateDemoUser, saveSession } from "../session";
 import { BrandLogo } from "../../../shared/components/BrandLogo";
 
 type LoginStatus = "idle" | "loading" | "success" | "error";
@@ -135,7 +135,7 @@ const LoginPage = () => {
                       value={login}
                       onChange={(event) => setLogin(event.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 transition"
-                      placeholder="admin@ditmonaagro.com"
+                      placeholder={DEMO_LOGIN_EMAIL}
                       autoComplete="username"
                     />
                   </div>
@@ -181,7 +181,7 @@ const LoginPage = () => {
                   <FiTrendingUp size={12} /> Acceso operativo
                 </p>
                 <p>
-                  Usuario: <span className="font-semibold">admin@ditmonaagro.com</span>
+                  Usuario: <span className="font-semibold">{DEMO_LOGIN_EMAIL}</span>
                 </p>
                 <p>
                   Contraseña: <span className="font-semibold">admin123</span>

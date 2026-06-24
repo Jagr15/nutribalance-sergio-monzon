@@ -24,18 +24,20 @@ const MANAGED_UID_KEY = "nutribalance_user_managed_uid";
 const DEMO_CREDENTIALS_KEY = "nutribalance_demo_credentials_v1";
 const ALERTS_SEEN_SESSION_KEY = "nutribalance_alerts_seen_session";
 
+export const DEMO_LOGIN_EMAIL = "admin@nutribalance.com";
+
 const DEFAULT_USER: SessionUser = {
   name: "Edwin",
   role: "admin",
   roleLabel: ROLE_LABELS.admin,
-  login: "admin@nutribalance.com",
+  login: DEMO_LOGIN_EMAIL,
   managedUserUid: "u-001",
 };
 
 const CREDENTIALS = [
   { login: "superadmin@nutribalance.com", password: "super123", role: "superadmin" as UserRole, name: "Super Admin", managedUserUid: "u-001" },
   { login: "superadmin", password: "super123", role: "superadmin" as UserRole, name: "Super Admin", managedUserUid: "u-001" },
-  { login: "admin@nutribalance.com", password: "admin123", role: "encargado" as UserRole, name: "Encargado", managedUserUid: "u-001" },
+  { login: DEMO_LOGIN_EMAIL, password: "admin123", role: "encargado" as UserRole, name: "Encargado", managedUserUid: "u-001" },
   { login: "admin", password: "admin123", role: "encargado" as UserRole, name: "Encargado", managedUserUid: "u-001" },
   { login: "encargado", password: "demo123", role: "encargado" as UserRole, name: "Encargado" },
   { login: "operario", password: "demo123", role: "operario" as UserRole, name: "Operario" },

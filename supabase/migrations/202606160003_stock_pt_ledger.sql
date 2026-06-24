@@ -265,7 +265,6 @@ declare
   v_lote_id uuid;
   v_consumo_real numeric;
   v_factor numeric;
-  v_consumo_planificado numeric;
   v_disponible numeric;
   v_costo_unitario numeric;
 begin
@@ -366,7 +365,6 @@ begin
       raise exception 'No se encontró lote %.', v_item.id_lote_legacy;
     end if;
 
-    v_lote_id := v_item.lote_id_resuelto;
     v_consumo_real := round(v_item.cantidad_usada * v_factor, 3);
 
     if v_consumo_real <= 0 then

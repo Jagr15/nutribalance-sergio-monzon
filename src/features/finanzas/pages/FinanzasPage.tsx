@@ -217,21 +217,22 @@ const FinanzasPage = () => {
     () => ingresosPtPorProducto.filter((row) => row.importe_total > 0),
     [ingresosPtPorProducto],
   );
-  const rubrosFinancierosVisibles = useMemo(
-    () => rubrosFinancieros,
-    [rubrosFinancieros],
-  );
-  const rubrosFinancierosPreview = useMemo(
-    () => rubrosFinancierosVisibles.slice(0, 5),
-    [rubrosFinancierosVisibles],
-  );
+  const rubrosActivos = useMemo(() => rubrosFinancieros.filter((rubro) => rubro.activo), [rubrosFinancieros]);
+  const rubrosFinancierosVisibles = useMemo(() => rubrosFinancieros, [rubrosFinancieros]);
+  const rubrosFinancierosPreview = useMemo(() => rubrosFinancierosVisibles.slice(0, 5), [rubrosFinancierosVisibles]);
+  const rubrosInactivosEnPresupuesto = useMemo(() => {
+    const activeIds = new Set(rubrosActivos.map((rubro) => rubro.id));
+    return budgetDraft.rubros
+      .map((id) => rubrosFinancieros.find((rubro) => rubro.id === id))
+      .filter((rubro): rubro is RubroFinancieroAdmin => Boolean(rubro && !activeIds.has(rubro.id)));
+  }, [budgetDraft.rubros, rubrosActivos, rubrosFinancieros]);
   const budgetRubrosOptions = useMemo(
-    () => rubrosFinancieros.map((rubro) => ({
+    () => rubrosActivos.map((rubro) => ({
       id: rubro.nombre,
       label: rubro.nombre,
       activo: rubro.activo,
     })),
-    [rubrosFinancieros],
+    [rubrosActivos],
   );
   const budgetRows = useMemo(() => budgetConfigs.map((config) => {
     const rubrosSeleccionados = config.rubros.length > 0
@@ -437,6 +438,12 @@ const FinanzasPage = () => {
     setRubrosSavedMessage(rubro.activo ? `Rubro ${rubro.nombre} desactivado.` : `Rubro ${rubro.nombre} activado.`);
   };
 
+  const handleOpenRubrosModal = () => {
+    setIsRubrosModalOpen(true);
+    setRubroError(null);
+    setRubrosSavedMessage(null);
+  };
+
   const ingresosPtMax = Math.max(1, ...ingresosPtPorProducto.map((row) => row.importe_total));
 
   return (
@@ -472,7 +479,7 @@ const FinanzasPage = () => {
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Costos</p>
                 <h3 id="configurar-rubros-title" className="mt-1 text-xl font-semibold text-slate-900">
-                  Configurar rubros
+                  Administrar rubros
                 </h3>
                 <p className="mt-1 text-sm text-slate-500">Gestiona rubros activos e inactivos desde un solo lugar.</p>
               </div>
@@ -786,10 +793,10 @@ const FinanzasPage = () => {
               </button>
                 <button
                   type="button"
-                  onClick={() => setIsRubrosModalOpen(true)}
+                  onClick={handleOpenRubrosModal}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                 >
-                  Configurar rubros
+                  Administrar rubros
                 </button>
               <button
                 type="button"
@@ -929,11 +936,10 @@ const FinanzasPage = () => {
                     {budgetRubrosOptions.map((rubro) => {
                       const checked = budgetDraft.rubros.includes(rubro.id);
                       return (
-                        <label key={rubro.id} className={`flex items-center gap-3 rounded-2xl border px-4 py-2 text-sm ${rubro.activo ? 'border-slate-200 bg-white' : 'border-slate-200 bg-slate-100 text-slate-400'}`}>
+                        <label key={rubro.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm">
                           <input
                             type="checkbox"
                             checked={checked}
-                            disabled={!rubro.activo}
                             onChange={(event) => setBudgetDraft((current) => ({
                               ...current,
                               rubros: event.target.checked ? [...current.rubros, rubro.id] : current.rubros.filter((item) => item !== rubro.id),
@@ -941,12 +947,16 @@ const FinanzasPage = () => {
                             className="h-4 w-4 rounded border-slate-300 text-blue-600"
                           />
                           <span className="text-slate-700">{rubro.label}</span>
-                          {!rubro.activo ? <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Inactivo</span> : null}
                         </label>
                       );
                     })}
                     {budgetRubrosOptions.length === 0 ? <p className="text-sm text-slate-500">No hay rubros disponibles para incluir.</p> : null}
                   </div>
+                  {rubrosInactivosEnPresupuesto.length > 0 ? (
+                    <p className="text-xs text-amber-700">
+                      Aviso: este presupuesto conserva rubros desactivados que ya no se pueden seleccionar nuevamente: {rubrosInactivosEnPresupuesto.map((rubro) => rubro.nombre).join(', ')}.
+                    </p>
+                  ) : null}
                 </label>
                 <div className="flex justify-end gap-3">
                   <button type="button" onClick={() => setBudgetDraft(createDefaultBudgetConfig())} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700">Restablecer</button>
