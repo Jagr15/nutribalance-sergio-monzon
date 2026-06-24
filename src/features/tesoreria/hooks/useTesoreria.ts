@@ -57,18 +57,22 @@ export const useTesoreria = () => {
   }, []);
 
   const createCheque = useCallback(async (payload: ChequeTesoreriaFormValues) => {
-    await tesoreriaService.createCheque(payload);
+    const created = await tesoreriaService.createCheque(payload);
     await refresh();
+    console.log('[tesoreria] cheque created and refreshed', created.id);
+    return created;
   }, [refresh]);
 
   const updateCheque = useCallback(async (id: string, payload: ChequeTesoreriaFormValues) => {
-    await tesoreriaService.updateCheque(id, payload);
+    const updated = await tesoreriaService.updateCheque(id, payload);
     await refresh();
+    return updated;
   }, [refresh]);
 
   const updateChequeEstado = useCallback(async (id: string, estado: EstadoChequeTesoreria) => {
-    await tesoreriaService.updateChequeEstado(id, estado);
+    const updated = await tesoreriaService.updateChequeEstado(id, estado);
     await refresh();
+    return updated;
   }, [refresh]);
 
   const getCheques = useCallback((params?: Parameters<typeof tesoreriaService.getCheques>[0]) => tesoreriaService.getCheques(params), []);

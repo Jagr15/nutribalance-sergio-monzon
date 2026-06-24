@@ -66,6 +66,7 @@ const normalizeCheque = (row: ChequeTesoreriaDbRow): ChequeTesoreriaRow => ({
   fecha_emision: row.fecha_emision,
   fecha_vencimiento: row.fecha_vencimiento,
   fecha_acreditacion: row.fecha_acreditacion ?? null,
+  created_at: row.created_at ?? null,
   estado: row.estado,
   cliente_id: row.cliente_id ?? null,
   cliente_nombre: row.cliente_nombre ?? null,
@@ -99,6 +100,12 @@ const validatePayload = (payload: ChequeTesoreriaFormValues) => {
   };
 };
 
+const compareChequeRecency = (a: ChequeTesoreriaDbRow, b: ChequeTesoreriaDbRow) => {
+  const aTime = new Date(a.created_at ?? a.fecha_emision ?? '').getTime();
+  const bTime = new Date(b.created_at ?? b.fecha_emision ?? '').getTime();
+  return bTime - aTime;
+};
+
 export const tesoreriaService = {
   async getCheques(params: {
     tipo?: TipoChequeTesoreria;
@@ -120,14 +127,16 @@ export const tesoreriaService = {
         })
         .filter((row) => (params.fechaDesde ? row.fecha_vencimiento >= params.fechaDesde : true))
         .filter((row) => (params.fechaHasta ? row.fecha_vencimiento <= params.fechaHasta : true))
+        .sort(compareChequeRecency)
         .slice(params.offset ?? 0, (params.offset ?? 0) + (params.limit ?? 50))
         .map(normalizeCheque);
     }
 
     let query = supabaseClient
       .from('tesoreria_cheques')
-      .select('id,numero,tipo,tercero,importe,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre')
-      .order('fecha_vencimiento', { ascending: true });
+      .select('id,numero,tipo,tercero,importe,created_at,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre')
+      .order('created_at', { ascending: false, nullsFirst: false })
+      .order('fecha_emision', { ascending: false });
 
     if (params.tipo) query = query.eq('tipo', params.tipo);
     if (params.estado) query = query.eq('estado', params.estado);
@@ -149,7 +158,7 @@ export const tesoreriaService = {
       writeMockCheques([next, ...readMockCheques()]);
       return normalizeCheque(next);
     }
-    const { data, error } = await supabaseClient.from('tesoreria_cheques').insert({
+    const insertPayload = {
       numero: normalized.numero,
       tipo: normalized.tipo,
       tercero: normalized.tercero,
@@ -160,9 +169,24 @@ export const tesoreriaService = {
       estado: normalized.estado,
       cliente_id: normalized.cliente_id,
       cliente_nombre: normalized.cliente_nombre,
-    }).select('id,numero,tipo,tercero,importe,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre').single<ChequeTesoreriaDbRow>();
-    if (error) throw new Error(formatDbError('guardar el cheque', error));
-    return normalizeCheque(data);
+    };
+    console.log('[tesoreria] creating cheque', insertPayload);
+    const { data, error } = await supabaseClient
+      .from('tesoreria_cheques')
+      .insert(insertPayload)
+      .select('id,numero,tipo,tercero,importe,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre,created_at')
+      .single<ChequeTesoreriaDbRow>();
+    if (error) {
+      console.error('[tesoreria] create cheque failed', { error, payload: insertPayload });
+      throw new Error(formatDbError('guardar el cheque', error));
+    }
+    if (!data) {
+      console.error('[tesoreria] create cheque failed', { error: new Error('Supabase returned no row after insert'), payload: insertPayload });
+      throw new Error('No se pudo guardar el cheque: Supabase no devolvió el registro creado.');
+    }
+    const created = normalizeCheque(data);
+    console.log('[tesoreria] cheque created', created);
+    return created;
   },
 
   async updateCheque(id: string, payload: ChequeTesoreriaFormValues): Promise<ChequeTesoreriaRow> {
@@ -185,7 +209,7 @@ export const tesoreriaService = {
       estado: normalized.estado,
       cliente_id: normalized.cliente_id,
       cliente_nombre: normalized.cliente_nombre,
-    }).eq('id', id).select('id,numero,tipo,tercero,importe,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre').single<ChequeTesoreriaDbRow>();
+    }).eq('id', id).select('id,numero,tipo,tercero,importe,created_at,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre').single<ChequeTesoreriaDbRow>();
     if (error) throw new Error(formatDbError('actualizar el cheque', error));
     return normalizeCheque(data);
   },
@@ -220,11 +244,11 @@ export const tesoreriaService = {
     }
     const { data: current, error: currentError } = await supabaseClient
       .from('tesoreria_cheques')
-      .select('id,numero,tipo,tercero,importe,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre')
+      .select('id,numero,tipo,tercero,importe,created_at,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre')
       .eq('id', id)
       .maybeSingle<ChequeTesoreriaDbRow>();
     if (currentError) throw currentError;
-    const { data, error } = await supabaseClient.from('tesoreria_cheques').update({ estado }).eq('id', id).select('id,numero,tipo,tercero,importe,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre').single<ChequeTesoreriaDbRow>();
+    const { data, error } = await supabaseClient.from('tesoreria_cheques').update({ estado }).eq('id', id).select('id,numero,tipo,tercero,importe,created_at,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre').single<ChequeTesoreriaDbRow>();
     if (error) throw new Error(formatDbError('actualizar el estado del cheque', error));
     if (current && estado === 'COBRADO' && current.tipo === 'RECIBIDO') {
       await contabilidadOperativaService.registrarCobranzaComprobante({
