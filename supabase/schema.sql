@@ -35,7 +35,7 @@ create table if not exists public.proveedores (
   producto_que_provee text,
   contacto_nombre text not null,
   telefono text not null,
-  email text not null,
+  email text,
   direccion text not null,
   documento text,
   esta_activo boolean not null default true,

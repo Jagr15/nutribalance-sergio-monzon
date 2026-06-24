@@ -98,14 +98,14 @@ export const Sidebar = () => {
 
   return (
     // CAMBIO 1: h-screen y overflow-hidden para fijar el alto total
-    <aside className="w-full lg:w-[230px] lg:h-screen bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col overflow-hidden lg:sticky top-0">
+    <aside className="w-full lg:w-[300px] lg:h-screen bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col overflow-hidden lg:sticky top-0">
       
       {/* LOGO: Se mantiene fijo arriba */}
-      <div className="px-4 md:px-5 py-6 md:py-7 border-b border-slate-200 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <BrandLogo variant="icon" className="lg:hidden shrink-0 max-w-[4.75rem]" />
-          <BrandLogo variant="full" className="hidden lg:inline-flex max-w-[16rem]" />
-          <div className="hidden lg:block">
+      <div className="px-4 md:px-6 py-9 md:py-10 border-b border-slate-200 flex-shrink-0">
+        <div className="flex items-center gap-5 md:gap-6">
+          <BrandLogo variant="icon" className="lg:hidden shrink-0 w-[124px] max-w-none" />
+          <BrandLogo variant="full" className="hidden lg:inline-flex w-[196px] max-w-none" />
+          <div className="hidden lg:block min-w-0">
             <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Sistema de Producción e Inventario</p>
           </div>
         </div>

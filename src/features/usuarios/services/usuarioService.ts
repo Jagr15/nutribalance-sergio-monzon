@@ -1,6 +1,11 @@
 import { ApiService } from '../../../infrastructure/api';
 import type { Usuario } from '../types/usuario';
 
+export interface UsuarioWritePayload extends Omit<Usuario, 'uid'> {
+  password?: string;
+  confirmPassword?: string;
+}
+
 export const usuarioService = {
   findAll: (): Promise<Usuario[]> => {
     return ApiService.usuarios.getAll();
@@ -10,11 +15,11 @@ export const usuarioService = {
     return ApiService.usuarios.getById(uid);
   },
 
-  create: (data: Omit<Usuario, 'uid'>): Promise<Usuario> => {
+  create: (data: UsuarioWritePayload): Promise<Usuario> => {
     return ApiService.usuarios.create(data);
   },
 
-  update: (uid: string, data: Partial<Usuario>): Promise<Usuario> => {
+  update: (uid: string, data: Partial<UsuarioWritePayload>): Promise<Usuario> => {
     return ApiService.usuarios.update(uid, data);
   },
 

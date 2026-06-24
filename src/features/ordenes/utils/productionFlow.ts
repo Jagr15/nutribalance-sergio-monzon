@@ -57,6 +57,34 @@ export interface StockRequirementRow {
   faltante: number;
 }
 
+const normalizeText = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+const getStockMatchesForIngredient = (ingrediente: Ingrediente, lotes: StockLoteForFlow[]) => {
+  const id = ingrediente.id_insumo.trim();
+  const normalizedNombreIngrediente = normalizeText(ingrediente.nombre_insumo);
+
+  const byIds = lotes.filter((lote) =>
+    lote.insumo_id === id ||
+    lote.legacy_uid === id ||
+    lote.insumo_legacy_uid === id
+  );
+
+  if (byIds.length > 0) return byIds;
+
+  const byNombre = lotes.filter((lote) => {
+    const loteNombre = normalizeText(lote.insumo_nombre ?? lote.lote ?? '');
+    return loteNombre === normalizedNombreIngrediente;
+  });
+
+  return byNombre;
+};
+
 export const planFifoConsumption = (
   cantidadObjetivoKg: number,
   ingredientes: Ingrediente[],
@@ -70,8 +98,7 @@ export const planFifoConsumption = (
     const requerida = cantidadObjetivoKg * ((ingrediente.porcentaje || 0) / 100);
     let pendiente = requerida;
 
-    const lotesInsumo = lotes
-      .filter((l) => l.insumo_id === ingrediente.id_insumo || l.insumo_legacy_uid === ingrediente.id_insumo)
+    const lotesInsumo = getStockMatchesForIngredient(ingrediente, lotes)
       .sort((a, b) => new Date(a.fecha_ingreso).getTime() - new Date(b.fecha_ingreso).getTime());
 
     for (const lote of lotesInsumo) {
@@ -128,11 +155,17 @@ export const buildFinalizationPlan = (
   cantidadObjetivoKg: number,
   cantidadReal: number,
   detalle: DetalleInsumoLote[],
-  stockLoteIdMap: Map<string, string>
+  stockLoteIdMap: Map<string, string>,
+  stockLotes: StockLoteForFlow[] = []
 ): FinalizationPlanResult => {
   const factor = cantidadObjetivoKg > 0 ? cantidadReal / cantidadObjetivoKg : 1;
   const movimientos = detalle.map((item) => {
-    const loteId = stockLoteIdMap.get(item.id_lote);
+    const loteId = stockLoteIdMap.get(item.id_lote)
+      ?? stockLoteIdMap.get(item.id_insumo)
+      ?? stockLotes.find((lote) => lote.insumo_id === item.id_insumo || lote.insumo_legacy_uid === item.id_insumo)?.legacy_uid
+      ?? stockLotes.find((lote) => lote.insumo_id === item.id_insumo || lote.insumo_legacy_uid === item.id_insumo)?.id
+      ?? null;
+
     if (!loteId) {
       throw new Error(`No se encontró lote físico para ${item.id_lote}.`);
     }
@@ -198,7 +231,13 @@ export const buildFinalizationStockCheck = (
     totalRequerido += requerida;
 
     const lote = findStockLote(lotes, item.id_lote);
-    if (!lote) {
+    const lotesDelInsumo = getStockMatchesForIngredient(
+      { id_insumo: item.id_insumo, nombre_insumo: item.nombre_insumo, porcentaje: 0 },
+      lotes
+    );
+    const lotesEvaluados = lote ? [lote] : lotesDelInsumo;
+
+    if (lotesEvaluados.length === 0) {
       faltantes.push({
         id_lote: item.id_lote,
         nombre_insumo: item.nombre_insumo,
@@ -210,14 +249,18 @@ export const buildFinalizationStockCheck = (
       continue;
     }
 
-    const disponible = Number((lote.cantidad_actual - (lote.cantidad_comprometida || 0)).toFixed(3));
+    const disponible = Number(
+      lotesEvaluados
+        .reduce((acc, current) => acc + Math.max(0, current.cantidad_actual - (current.cantidad_comprometida || 0)), 0)
+        .toFixed(3)
+    );
     const faltante = Number((requerida - disponible).toFixed(3));
 
     if (faltante > 0.0005) {
       faltantes.push({
         id_lote: item.id_lote,
         nombre_insumo: item.nombre_insumo,
-        lote: lote.lote,
+        lote: lote?.lote ?? (lotesDelInsumo[0]?.lote ?? item.id_lote),
         requerida,
         disponible,
         faltante,
@@ -245,8 +288,7 @@ export const buildStockRequirementRows = (
   for (const ingrediente of ingredientes) {
     const requerida = Number((cantidadObjetivoKg * ((ingrediente.porcentaje || 0) / 100)).toFixed(3));
     const disponible = Number(
-      lotes
-        .filter((lote) => lote.insumo_id === ingrediente.id_insumo || lote.insumo_legacy_uid === ingrediente.id_insumo)
+      getStockMatchesForIngredient(ingrediente, lotes)
         .reduce((acc, lote) => acc + Math.max(0, lote.cantidad_actual - (lote.cantidad_comprometida || 0)), 0)
         .toFixed(3),
     );

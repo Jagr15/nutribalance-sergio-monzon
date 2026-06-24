@@ -8,11 +8,20 @@ export interface SessionUser {
   managedUserUid?: string;
 }
 
+export type DemoCredential = {
+  login: string;
+  password: string;
+  role: UserRole;
+  name: string;
+  managedUserUid?: string;
+};
+
 const AUTH_KEY = "nutribalance_auth";
 const NAME_KEY = "nutribalance_user_name";
 const ROLE_KEY = "nutribalance_user_role";
 const LOGIN_KEY = "nutribalance_user_login";
 const MANAGED_UID_KEY = "nutribalance_user_managed_uid";
+const DEMO_CREDENTIALS_KEY = "nutribalance_demo_credentials_v1";
 const ALERTS_SEEN_SESSION_KEY = "nutribalance_alerts_seen_session";
 
 const DEFAULT_USER: SessionUser = {
@@ -35,14 +44,35 @@ const CREDENTIALS = [
   { login: "finanzas", password: "demo123", role: "encargado" as UserRole, name: "Analista Finanzas" },
   { login: "supervisor", password: "demo123", role: "encargado" as UserRole, name: "Supervisor Planta" },
   { login: "lectura", password: "demo123", role: "solo_lectura" as UserRole, name: "Usuario Lectura" },
-];
+] satisfies DemoCredential[];
+
+const readStoredDemoCredentials = (): DemoCredential[] => {
+  try {
+    const raw = localStorage.getItem(DEMO_CREDENTIALS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as DemoCredential[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeStoredDemoCredentials = (credentials: DemoCredential[]) => {
+  localStorage.setItem(DEMO_CREDENTIALS_KEY, JSON.stringify(credentials));
+};
+
+const normalizeLogin = (value: string) => value.trim().toLowerCase();
+
+const findCredential = (login: string, password: string) => {
+  const loginNormalized = normalizeLogin(login);
+  const stored = readStoredDemoCredentials();
+  const combined = [...stored, ...CREDENTIALS];
+  return combined.find((item) => item.login === loginNormalized && item.password === password) ?? null;
+};
 
 export const authenticateDemoUser = (login: string, password: string): SessionUser | null => {
-  const loginNormalized = login.trim().toLowerCase();
-  const isValid = CREDENTIALS.some((item) => item.login === loginNormalized && item.password === password);
-  if (!isValid) return null;
-
-  const credential = CREDENTIALS.find((item) => item.login === loginNormalized && item.password === password);
+  const loginNormalized = normalizeLogin(login);
+  const credential = findCredential(loginNormalized, password);
   if (!credential) return null;
 
   return {
@@ -52,6 +82,20 @@ export const authenticateDemoUser = (login: string, password: string): SessionUs
     login: loginNormalized,
     managedUserUid: credential.managedUserUid,
   };
+};
+
+export const upsertDemoCredentials = (credential: DemoCredential, aliases: string[] = []) => {
+  const loginNormalized = normalizeLogin(credential.login);
+  const nextAliases = [loginNormalized, ...aliases.map(normalizeLogin)].filter(Boolean);
+  const stored = readStoredDemoCredentials().filter((item) => !nextAliases.includes(item.login));
+  const nextEntries = nextAliases.map((login) => ({ ...credential, login }));
+  writeStoredDemoCredentials([...stored, ...nextEntries]);
+};
+
+export const removeDemoCredentialsByAlias = (aliases: string[]) => {
+  const normalizedAliases = aliases.map(normalizeLogin);
+  const stored = readStoredDemoCredentials().filter((item) => !normalizedAliases.includes(item.login));
+  writeStoredDemoCredentials(stored);
 };
 
 export const saveSession = (user: SessionUser) => {

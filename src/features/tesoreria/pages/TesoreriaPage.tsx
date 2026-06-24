@@ -6,18 +6,11 @@ import { useTesoreria } from '../hooks/useTesoreria';
 import { ChequeForm } from '../components/ChequeForm';
 import { EMPTY_CHEQUE_FORM } from '../components/chequeFormDefaults';
 import type { ChequeTesoreriaFormValues } from '../services/tesoreriaService';
-import type { ChequeTesoreriaRow, EstadoChequeTesoreria, MovimientoFinanciero, ProyeccionFlujoRow } from '../../finanzas/types';
+import type { ChequeTesoreriaRow, EstadoChequeTesoreria, MovimientoFinanciero } from '../../finanzas/types';
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value)) : 'Sin dato';
 const dayMs = 24 * 60 * 60 * 1000;
-
-const getRangeDays = (horizonte: ProyeccionFlujoRow['horizonte']) => {
-  if (horizonte === 'Hoy') return 0;
-  if (horizonte === '7 días') return 7;
-  if (horizonte === '15 días') return 15;
-  return 30;
-};
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const isDeprecatedText = (value?: string | null) => {
@@ -36,7 +29,7 @@ const formatMovementLabel = (movement: MovimientoFinanciero) => {
 
 const TesoreriaPage = () => {
   const { kpis, reportes, movimientos, tesoreria: tesoreriaFinanzas } = useFinanzas();
-  const { tesoreria, error, getCheques, createCheque, updateCheque, updateChequeEstado } = useTesoreria();
+  const { tesoreria, error, getCheques, createCheque, updateCheque } = useTesoreria();
   const [todayKey] = useState(() => new Date().toISOString().slice(0, 10));
   const [form, setForm] = useState<ChequeTesoreriaFormValues>(EMPTY_CHEQUE_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -47,18 +40,15 @@ const TesoreriaPage = () => {
   const [recibidosPage, setRecibidosPage] = useState(1);
   const [emitidos, setEmitidos] = useState<ChequeTesoreriaRow[]>([]);
   const [recibidos, setRecibidos] = useState<ChequeTesoreriaRow[]>([]);
-  const [chequesLoading, setChequesLoading] = useState(true);
   const [chequesError, setChequesError] = useState<string | null>(null);
   const [filtroQuery, setFiltroQuery] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<'PENDIENTE' | 'DEPOSITADO' | 'COBRADO' | 'RECHAZADO' | 'VENCIDO' | ''>('');
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<'EMITIDO' | 'RECIBIDO' | ''>('');
-  const [detalleHorizonte, setDetalleHorizonte] = useState<ProyeccionFlujoRow['horizonte']>('Hoy');
   const PAGE_SIZE = 20;
 
   const loadCheques = useCallback(async (emitidosPageValue = emitidosPage, recibidosPageValue = recibidosPage) => {
-      setChequesLoading(true);
     try {
       const [emitidosRows, recibidosRows] = await Promise.all([
         getCheques({
@@ -87,8 +77,6 @@ const TesoreriaPage = () => {
       setChequesError(err instanceof Error ? err.message : 'No se pudieron cargar los cheques.');
       setEmitidos([]);
       setRecibidos([]);
-    } finally {
-      setChequesLoading(false);
     }
   }, [emitidosPage, recibidosPage, filtroQuery, filtroEstado, filtroFechaDesde, filtroFechaHasta, filtroTipo, getCheques]);
 
@@ -148,6 +136,68 @@ const TesoreriaPage = () => {
 
   const normalizedChequesEmitidos = useMemo(() => emitidos.filter((cheque) => !isDeprecatedText(cheque.numero) && !isDeprecatedText(cheque.tercero)), [emitidos]);
   const normalizedChequesRecibidos = useMemo(() => recibidos.filter((cheque) => !isDeprecatedText(cheque.numero) && !isDeprecatedText(cheque.tercero)), [recibidos]);
+  const allCheques = useMemo(
+    () => [...tesoreria.chequesEmitidos, ...tesoreria.chequesRecibidos].filter((cheque) => !isDeprecatedText(cheque.numero) && !isDeprecatedText(cheque.tercero)),
+    [tesoreria.chequesEmitidos, tesoreria.chequesRecibidos],
+  );
+  const getChequeStateLabel = (estado: EstadoChequeTesoreria) => ({
+    PENDIENTE: 'Pendiente',
+    A_DEPOSITAR: 'A depositar',
+    DEPOSITADO: 'Depositado',
+    COBRADO: 'Cobrado',
+    RECHAZADO: 'Rechazado',
+    ENDOSADO: 'Endosado',
+    VENCIDO: 'Vencido',
+  }[estado]);
+  const getChequeStateTone = (estado: EstadoChequeTesoreria) => ({
+    PENDIENTE: 'bg-amber-100 text-amber-800 border-amber-200',
+    A_DEPOSITAR: 'bg-amber-100 text-amber-800 border-amber-200',
+    DEPOSITADO: 'bg-sky-100 text-sky-800 border-sky-200',
+    COBRADO: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    RECHAZADO: 'bg-rose-100 text-rose-800 border-rose-200',
+    ENDOSADO: 'bg-violet-100 text-violet-800 border-violet-200',
+    VENCIDO: 'bg-slate-100 text-slate-800 border-slate-200',
+  }[estado]);
+  const chequeCards = useMemo(() => {
+    const buckets = [
+      { key: 'emitidos', title: 'Cheques emitidos', items: allCheques.filter((cheque) => cheque.tipo === 'EMITIDO') },
+      { key: 'recibidos', title: 'Cheques recibidos', items: allCheques.filter((cheque) => cheque.tipo === 'RECIBIDO') },
+      { key: 'pendientes', title: 'Cheques pendientes', items: allCheques.filter((cheque) => cheque.estado === 'PENDIENTE') },
+      { key: 'depositados', title: 'Cheques depositados', items: allCheques.filter((cheque) => cheque.estado === 'DEPOSITADO') },
+      { key: 'cobrados', title: 'Cheques cobrados', items: allCheques.filter((cheque) => cheque.estado === 'COBRADO') },
+      { key: 'rechazados', title: 'Cheques rechazados', items: allCheques.filter((cheque) => cheque.estado === 'RECHAZADO') },
+      { key: 'vencidos', title: 'Cheques vencidos', items: allCheques.filter((cheque) => cheque.estado === 'VENCIDO') },
+    ];
+    return buckets.map((bucket) => ({
+      ...bucket,
+      total: bucket.items.reduce((acc, cheque) => acc + cheque.importe, 0),
+      sample: bucket.items.slice(0, 3),
+    }));
+  }, [allCheques]);
+  const horizonBuckets = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const buildBucket = (days: number, label: string) => {
+      const limit = new Date(now.getTime() + days * dayMs);
+      const inRange = (value: string) => {
+        const fecha = new Date(value);
+        fecha.setHours(0, 0, 0, 0);
+        return fecha.getTime() >= now.getTime() && fecha.getTime() <= limit.getTime();
+      };
+      const recibidosPendientes = tesoreria.chequesRecibidos.filter((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(cheque.estado) && inRange(cheque.fecha_vencimiento));
+      const emitidosPendientes = tesoreria.chequesEmitidos.filter((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(cheque.estado) && inRange(cheque.fecha_vencimiento));
+      const row = tesoreria.proyeccionFlujo.find((item) => item.horizonte === label);
+      return {
+        label,
+        recibidosPendientes,
+        emitidosPendientes,
+        entradas: row?.ingresos_estimados ?? 0,
+        salidas: row?.egresos_estimados ?? 0,
+        saldo: row?.saldo_estimado ?? 0,
+      };
+    };
+    return [buildBucket(0, 'Hoy'), buildBucket(7, '7 días'), buildBucket(15, '15 días'), buildBucket(30, '30 días')];
+  }, [tesoreria.chequesEmitidos, tesoreria.chequesRecibidos, tesoreria.proyeccionFlujo]);
   const cajasYcobranza = useMemo(() => {
     const ventasPeriodo = reportes.ingresos_pt_por_producto.reduce((acc, row) => acc + Number(row.importe_total ?? 0), 0);
     const cobrosPeriodo = movimientos
@@ -247,11 +297,6 @@ const TesoreriaPage = () => {
     setIsFormOpen(true);
   };
 
-  const changeEstado = async (id: string, estado: EstadoChequeTesoreria) => {
-    await updateChequeEstado(id, estado);
-    void loadCheques();
-  };
-
   const setFilterQuery = (value: string) => {
     setFiltroQuery(value);
     setEmitidosPage(1);
@@ -282,24 +327,6 @@ const TesoreriaPage = () => {
     setRecibidosPage(1);
   };
 
-  const proyeccionSeleccionada = tesoreria.proyeccionFlujo.find((row) => row.horizonte === detalleHorizonte) ?? tesoreria.proyeccionFlujo[0] ?? null;
-  const { emitidosPendientesDetalle, recibidosPendientesDetalle } = useMemo(() => {
-    const days = getRangeDays(detalleHorizonte);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const limit = new Date(todayStart.getTime() + days * dayMs);
-    const inRange = (value: string) => {
-      const fecha = new Date(value);
-      fecha.setHours(0, 0, 0, 0);
-      return fecha.getTime() >= todayStart.getTime() && fecha.getTime() <= limit.getTime();
-    };
-    return {
-      emitidosPendientesDetalle: tesoreria.chequesEmitidos.filter((cheque) => cheque.estado === 'PENDIENTE' && inRange(cheque.fecha_vencimiento)),
-      recibidosPendientesDetalle: tesoreria.chequesRecibidos.filter((cheque) => cheque.estado === 'PENDIENTE' && inRange(cheque.fecha_vencimiento)),
-    };
-  }, [detalleHorizonte, tesoreria.chequesEmitidos, tesoreria.chequesRecibidos]);
-  const detalleSinCheques = emitidosPendientesDetalle.length === 0 && recibidosPendientesDetalle.length === 0;
-
   return (
     <div className="space-y-6">
       <section className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 px-6 py-6 text-white shadow-xl shadow-slate-900/10">
@@ -314,8 +341,12 @@ const TesoreriaPage = () => {
         </div>
       ) : null}
 
-      {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
-      {chequesError ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{chequesError}</div> : null}
+      {error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
+      {chequesError ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{chequesError}</div> : null}
 
       <Card>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -426,216 +457,84 @@ const TesoreriaPage = () => {
         )}
       </Card>
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        {normalizedChequesEmitidos.length > 0 || chequesLoading ? (
-          <Card>
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">Cheques emitidos</h2>
-              <button type="button" onClick={openCreateForm} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">+ Registrar cheque</button>
-            </div>
-            <div className="mt-4 space-y-2 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
-              {chequesLoading ? <p className="text-sm text-slate-500">Cargando...</p> : null}
-              {!chequesLoading && normalizedChequesEmitidos.map((cheque) => (
-                <div key={cheque.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-900">{cheque.numero}</p>
-                      <p className="truncate text-xs text-slate-500">{cheque.tercero} · vence {formatDate(cheque.fecha_vencimiento)}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <select className="ui-input rounded-xl px-2 py-1.5 text-[11px]" value={cheque.estado} onChange={(event) => void changeEstado(cheque.id, event.target.value as EstadoChequeTesoreria)}>
-                        <option value="PENDIENTE">Pendiente</option>
-                        <option value="DEPOSITADO">Depositado</option>
-                        <option value="COBRADO">Cobrado</option>
-                        <option value="RECHAZADO">Rechazado</option>
-                        <option value="VENCIDO">Vencido</option>
-                      </select>
-                      <button className="rounded-xl border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100" onClick={() => startEdit(cheque)} type="button">Editar</button>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-700">{formatCurrency(cheque.importe)}</p>
-                    <div className="text-right">
-                      {cheque.estado === 'PENDIENTE' && isDueToday(cheque.fecha_vencimiento) ? <p className="text-[11px] font-semibold text-red-700">Depositar hoy</p> : null}
-                    </div>
-                  </div>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Cheques</p>
+            <h2 className="mt-1 text-lg font-semibold text-slate-900">Organización por zona y estado</h2>
+          </div>
+          <button type="button" onClick={openCreateForm} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">+ Registrar cheque</button>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {chequeCards.map((bucket) => (
+            <Card key={bucket.key} className="border-slate-200">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{bucket.title}</p>
+                  <p className="mt-2 text-3xl font-semibold text-slate-900">{bucket.items.length}</p>
                 </div>
-              ))}
-              <div className="flex items-center justify-between pt-1">
-                <button
-                  type="button"
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
-                  disabled={emitidosPage === 1 || chequesLoading}
-                  onClick={() => {
-                    setEmitidosPage((current) => Math.max(1, current - 1));
-                  }}
-                >
-                  Anterior
-                </button>
-                <span className="text-xs text-slate-500">Página {emitidosPage}</span>
-                <button
-                  type="button"
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
-                  disabled={emitidos.length < PAGE_SIZE || chequesLoading}
-                  onClick={() => {
-                    setEmitidosPage((current) => current + 1);
-                  }}
-                >
-                  Siguiente
-                </button>
+                <span className="rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">{formatCurrency(bucket.total)}</span>
               </div>
-            </div>
-          </Card>
-        ) : null}
-
-        {normalizedChequesRecibidos.length > 0 || chequesLoading ? (
-          <Card>
-            <h2 className="text-lg font-semibold">Cheques recibidos</h2>
-            <div className="mt-4 space-y-2 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
-              {chequesLoading ? <p className="text-sm text-slate-500">Cargando...</p> : null}
-              {!chequesLoading && normalizedChequesRecibidos.map((cheque) => (
-                <div key={cheque.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-900">{cheque.numero}</p>
-                      <p className="truncate text-xs text-slate-500">{cheque.tercero} · vence {formatDate(cheque.fecha_vencimiento)}</p>
+              <div className="mt-4 space-y-2">
+                {bucket.sample.length > 0 ? bucket.sample.map((cheque) => (
+                  <div key={cheque.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">{cheque.numero}</p>
+                        <p className="truncate text-xs text-slate-500">{cheque.tercero} · {formatDate(cheque.fecha_vencimiento)}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getChequeStateTone(cheque.estado)}`}>{getChequeStateLabel(cheque.estado)}</span>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <select className="ui-input rounded-xl px-2 py-1.5 text-[11px]" value={cheque.estado} onChange={(event) => void changeEstado(cheque.id, event.target.value as EstadoChequeTesoreria)}>
-                        <option value="PENDIENTE">Pendiente</option>
-                        <option value="DEPOSITADO">Depositado</option>
-                        <option value="COBRADO">Cobrado</option>
-                        <option value="RECHAZADO">Rechazado</option>
-                        <option value="VENCIDO">Vencido</option>
-                      </select>
-                      <button className="rounded-xl border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100" onClick={() => startEdit(cheque)} type="button">Editar</button>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-700">{formatCurrency(cheque.importe)}</p>
+                      <button type="button" onClick={() => startEdit(cheque)} className="rounded-xl border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">Editar</button>
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-700">{formatCurrency(cheque.importe)}</p>
-                    <div className="text-right">
-                      {(cheque.estado === 'A_DEPOSITAR' || (cheque.estado === 'PENDIENTE' && isDueToday(cheque.fecha_vencimiento))) ? <p className="text-[11px] font-semibold text-amber-700">{cheque.estado === 'A_DEPOSITAR' ? 'A depositar' : 'Depositar hoy'}</p> : null}
-                    </div>
+                )) : (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">
+                    Sin registros en esta categoría.
                   </div>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {horizonBuckets.map((bucket) => (
+            <Card key={bucket.label} className={bucket.label === 'Hoy' ? 'border-blue-200 bg-blue-50' : 'border-slate-200'}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{bucket.label}</p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-900">Proyección de flujo</h3>
                 </div>
-              ))}
-              <div className="flex items-center justify-between pt-1">
-                <button
-                  type="button"
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
-                  disabled={recibidosPage === 1 || chequesLoading}
-                  onClick={() => {
-                    setRecibidosPage((current) => Math.max(1, current - 1));
-                  }}
-                >
-                  Anterior
-                </button>
-                <span className="text-xs text-slate-500">Página {recibidosPage}</span>
-                <button
-                  type="button"
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
-                  disabled={recibidos.length < PAGE_SIZE || chequesLoading}
-                  onClick={() => {
-                    setRecibidosPage((current) => current + 1);
-                  }}
-                >
-                  Siguiente
-                </button>
+                <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">{formatCurrency(bucket.saldo)}</span>
               </div>
-            </div>
-          </Card>
-        ) : null}
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Recibidos pendientes</p>
+                  <p className="mt-1 text-lg font-semibold text-emerald-700">{bucket.recibidosPendientes.length}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Emitidos pendientes</p>
+                  <p className="mt-1 text-lg font-semibold text-rose-700">{bucket.emitidosPendientes.length}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Entradas estimadas</p>
+                  <p className="mt-1 text-lg font-semibold text-emerald-700">{formatCurrency(bucket.entradas)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Salidas estimadas</p>
+                  <p className="mt-1 text-lg font-semibold text-rose-700">{formatCurrency(bucket.salidas)}</p>
+                </div>
+              </div>
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Saldo neto proyectado</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">{formatCurrency(bucket.saldo)}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
       </section>
-
-      <section className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
-        <Card>
-          <h2 className="text-lg font-semibold">Proyección de flujo de caja</h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {tesoreria.proyeccionFlujo.map((row) => {
-              const active = row.horizonte === detalleHorizonte;
-              return (
-                <button
-                  key={`flow-${row.horizonte}`}
-                  type="button"
-                  onClick={() => setDetalleHorizonte(row.horizonte)}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${active ? 'border-blue-300 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-slate-900">{row.horizonte}</p>
-                    <span className="text-xs font-semibold text-blue-700">Ver detalle</span>
-                  </div>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{formatCurrency(row.saldo_estimado)}</p>
-                  <p className="mt-1 text-xs text-slate-500">Ingresos {formatCurrency(row.ingresos_estimados)} · Egresos {formatCurrency(row.egresos_estimados)}</p>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Detalle del plazo</p>
-                <h3 className="mt-1 text-lg font-semibold text-slate-900">{detalleHorizonte}</h3>
-              </div>
-              {proyeccionSeleccionada ? <p className="text-lg font-semibold text-slate-900">{formatCurrency(proyeccionSeleccionada.saldo_estimado)}</p> : null}
-            </div>
-
-            {detalleSinCheques ? (
-              <p className="mt-4 text-sm text-slate-600">No hay cheques pendientes en este plazo.</p>
-            ) : (
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Cheques emitidos pendientes</p>
-                  <div className="mt-3 space-y-2">
-                    {emitidosPendientesDetalle.length > 0 ? emitidosPendientesDetalle.map((cheque) => (
-                      <div key={cheque.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-slate-900">{cheque.numero}</span>
-                          <span className="text-xs text-slate-500">{formatDate(cheque.fecha_vencimiento)}</span>
-                        </div>
-                        <p className="mt-1 text-slate-600">{cheque.tercero}</p>
-                        <p className="mt-1 font-semibold text-slate-900">{formatCurrency(cheque.importe)}</p>
-                        <p className="mt-1 text-xs font-semibold text-red-700">Hoy hay un cheque que cubrir</p>
-                      </div>
-                    )) : <p className="text-sm text-slate-500">Sin cheques emitidos pendientes en este plazo.</p>}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Cheques recibidos pendientes</p>
-                  <div className="mt-3 space-y-2">
-                    {recibidosPendientesDetalle.length > 0 ? recibidosPendientesDetalle.map((cheque) => (
-                      <div key={cheque.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-slate-900">{cheque.numero}</span>
-                          <span className="text-xs text-slate-500">{formatDate(cheque.fecha_vencimiento)}</span>
-                        </div>
-                        <p className="mt-1 text-slate-600">{cheque.tercero}</p>
-                        <p className="mt-1 font-semibold text-slate-900">{formatCurrency(cheque.importe)}</p>
-                        <p className="mt-1 text-xs font-semibold text-amber-700">Cheque recibido {cheque.numero} listo para depositar</p>
-                      </div>
-                    )) : <p className="text-sm text-slate-500">Sin cheques recibidos pendientes en este plazo.</p>}
-                  </div>
-                </div>
-              </div>
-            )}
-            {proyeccionSeleccionada ? (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Ingresos</p>
-                  <p className="mt-2 text-lg font-semibold text-emerald-700">{formatCurrency(proyeccionSeleccionada.ingresos_estimados)}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Egresos</p>
-                  <p className="mt-2 text-lg font-semibold text-rose-700">{formatCurrency(proyeccionSeleccionada.egresos_estimados)}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Saldo proyectado</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900">{formatCurrency(proyeccionSeleccionada.saldo_estimado)}</p>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </Card>
 
         <Card>
           <h2 className="text-lg font-semibold">Alertas de tesorería</h2>
@@ -653,8 +552,6 @@ const TesoreriaPage = () => {
             ))}
           </div>
         </Card>
-      </section>
-
       {isFormOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm"

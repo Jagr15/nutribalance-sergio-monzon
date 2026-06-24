@@ -32,6 +32,8 @@ export interface UsuarioFormInput {
   email: string;
   role: Role | '';
   estado: 'activo' | 'inactivo';
+  password: string;
+  confirmPassword: string;
 }
 
 export interface UsuarioDomainContext {
@@ -46,6 +48,8 @@ export interface UsuarioDomainErrors {
   email?: string;
   role?: string;
   estado?: string;
+  password?: string;
+  confirmPassword?: string;
   general?: string;
 }
 
@@ -75,6 +79,8 @@ export const normalizeUsuarioInput = (input: UsuarioFormInput) => ({
   email: normalizeUsuarioEmail(input.email),
   role: input.role,
   estado: input.estado,
+  password: input.password.trim(),
+  confirmPassword: input.confirmPassword.trim(),
 });
 
 const buildCandidateUsers = (
@@ -130,6 +136,27 @@ export const validateUsuarioInput = (input: UsuarioFormInput, ctx: UsuarioDomain
 
   if (!normalized.estado) {
     errors.estado = 'Selecciona un estado.';
+  }
+
+  const isCreating = !ctx.editingUid;
+  if (isCreating) {
+    if (!input.password.trim()) {
+      errors.password = 'La contraseña es obligatoria al crear un usuario.';
+    } else if (input.password.length < 8) {
+      errors.password = 'La contraseña debe tener al menos 8 caracteres.';
+    }
+    if (!input.confirmPassword.trim()) {
+      errors.confirmPassword = 'Confirma la contraseña.';
+    } else if (input.password.trim() && input.confirmPassword !== input.password) {
+      errors.confirmPassword = 'Las contraseñas no coinciden.';
+    }
+  } else if (input.password.trim() || input.confirmPassword.trim()) {
+    if (input.password.trim() && input.password.length < 8) {
+      errors.password = 'La contraseña debe tener al menos 8 caracteres.';
+    }
+    if (input.password.trim() && input.confirmPassword.trim() && input.confirmPassword !== input.password) {
+      errors.confirmPassword = 'Las contraseñas no coinciden.';
+    }
   }
 
   const canAssignSuperadmin = ctx.currentUser.role === 'superadmin';

@@ -64,6 +64,14 @@ const resolveStockPtDbId = async (stockPtLegacyUid: string) => {
   return data?.id ?? null;
 };
 
+const formatRpcError = (error: unknown, fallback: string) => {
+  if (!error || typeof error !== 'object') return fallback;
+  const candidate = error as { message?: string; details?: string; hint?: string; code?: string };
+  const parts = [candidate.message, candidate.details, candidate.hint].filter(Boolean);
+  const message = parts.join(' | ').trim();
+  return message || fallback;
+};
+
 export const supabaseOrdenesExpedicionService = {
   async getAll(): Promise<OrdenExpedicion[]> {
     const { data, error } = await supabaseClient
@@ -88,18 +96,34 @@ export const supabaseOrdenesExpedicionService = {
       throw new Error('El cliente destino es obligatorio.');
     }
 
-    const { data, error } = await supabaseClient.rpc('registrar_orden_expedicion', {
-      p_stock_pt_id: stockPtDbId,
-      p_cliente_id: clienteDbId,
-      p_presentacion: payload.presentacion,
-      p_cantidad: payload.cantidad,
-      p_motivo: payload.motivo ?? null,
-      p_referencia: payload.referencia ?? null,
-    });
+    try {
+      const { data, error } = await supabaseClient.rpc('registrar_orden_expedicion', {
+        p_stock_pt_id: stockPtDbId,
+        p_cliente_id: clienteDbId,
+        p_presentacion: payload.presentacion,
+        p_cantidad: payload.cantidad,
+        p_motivo: payload.motivo ?? null,
+        p_referencia: payload.referencia ?? null,
+      });
 
-    if (error) throw error;
-    const updated = Array.isArray(data) ? data[0] : data;
-    if (!updated) throw new Error('No se pudo registrar la orden de expedición.');
-    return mapRow(updated as unknown as OrdenExpedicionRow);
+      if (error) throw error;
+      const updated = Array.isArray(data) ? data[0] : data;
+      if (!updated) throw new Error('No se pudo registrar la orden de expedición.');
+      return mapRow(updated as unknown as OrdenExpedicionRow);
+    } catch (error) {
+      const message = formatRpcError(error, 'No se pudo registrar la orden de expedición.');
+      console.warn('Error RPC registrar_orden_expedicion', {
+        payload: {
+          ...payload,
+          p_stock_pt_id: stockPtDbId,
+          p_cliente_id: clienteDbId,
+        },
+        error,
+      });
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(message, { cause: error });
+    }
   },
 };

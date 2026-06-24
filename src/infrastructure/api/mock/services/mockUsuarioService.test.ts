@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { saveSession, clearSession, type SessionUser } from '../../../../features/auth/session';
+import { authenticateDemoUser, saveSession, clearSession, type SessionUser } from '../../../../features/auth/session';
 import { mockUsuarioService, __resetMockUsuarioService } from './mockUsuarioService';
 
 const storage = new Map<string, string>();
@@ -49,6 +49,8 @@ describe('mockUsuarioService', () => {
         role: 'SUPERADMIN',
         esta_activo: true,
         fecha_creacion: '2026-06-18T00:00:00.000Z',
+        password: 'secret123',
+        confirmPassword: 'secret123',
       })
     ).rejects.toThrow(/SUPERADMIN/);
   });
@@ -63,9 +65,13 @@ describe('mockUsuarioService', () => {
       role: 'SUPERADMIN',
       esta_activo: true,
       fecha_creacion: '2026-06-18T00:00:00.000Z',
+      password: 'secret123',
+      confirmPassword: 'secret123',
     });
 
     expect(created.role).toBe('SUPERADMIN');
+    expect(authenticateDemoUser('nuevo_admin', 'secret123')).not.toBeNull();
+    expect(authenticateDemoUser('nuevo@nutribalance.com', 'secret123')).not.toBeNull();
   });
 
   it('rechaza duplicados y respeta unicidad case-insensitive', async () => {
@@ -78,6 +84,8 @@ describe('mockUsuarioService', () => {
       role: 'OPERARIO',
       esta_activo: true,
       fecha_creacion: '2026-06-18T00:00:00.000Z',
+      password: 'secret123',
+      confirmPassword: 'secret123',
     });
 
     await expect(
@@ -88,6 +96,8 @@ describe('mockUsuarioService', () => {
         role: 'OPERARIO',
         esta_activo: true,
         fecha_creacion: '2026-06-18T00:00:00.000Z',
+        password: 'secret123',
+        confirmPassword: 'secret123',
       })
     ).rejects.toThrow(/username/i);
 
@@ -99,8 +109,32 @@ describe('mockUsuarioService', () => {
         role: 'OPERARIO',
         esta_activo: true,
         fecha_creacion: '2026-06-18T00:00:00.000Z',
+        password: 'secret123',
+        confirmPassword: 'secret123',
       })
     ).rejects.toThrow(/email/i);
+  });
+
+  it('permite editar sin contraseña y conservar acceso', async () => {
+    setSession(superadminSession);
+
+    const created = await mockUsuarioService.create({
+      nombre_completo: 'Usuario Test',
+      username: 'usuario_test',
+      email: 'usuario@test.com',
+      role: 'OPERARIO',
+      esta_activo: true,
+      fecha_creacion: '2026-06-18T00:00:00.000Z',
+      password: 'clave1234',
+      confirmPassword: 'clave1234',
+    });
+
+    const updated = await mockUsuarioService.update(created.uid, {
+      nombre_completo: 'Usuario Test Editado',
+    });
+
+    expect(updated.nombre_completo).toBe('Usuario Test Editado');
+    expect(authenticateDemoUser('usuario_test', 'clave1234')).not.toBeNull();
   });
 
   it('bloquea la desactivacion del ultimo superadmin y del propio usuario', async () => {

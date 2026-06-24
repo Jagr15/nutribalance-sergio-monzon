@@ -3,6 +3,8 @@ import type { AlertaOperativa } from '../types/alerta';
 export type AlertCategoryTone = 'red' | 'amber';
 export type AlertCategoryKey = 'financiera' | 'produccion' | 'general';
 
+const normalizeText = (value: unknown) => String(value ?? '').toLowerCase();
+
 const escapeHtml = (value: string) =>
   value
     .replaceAll('&', '&amp;')
@@ -19,15 +21,23 @@ export const isProductAlert = (alerta: AlertaOperativa) => {
 };
 
 export const isFinancialAlert = (alerta: AlertaOperativa) => {
-  const hayEnTituloODesc = [alerta.titulo, alerta.descripcion, alerta.area]
-    .filter((value): value is string => typeof value === 'string')
-    .some((value) => /flujo de caja|tesorer[ií]a|cuentas por cobrar|cuentas por pagar|descubierto|costos|ingresos|finanzas|margen|caja/i.test(value));
-  return alerta.area === 'costos' || alerta.area === 'tesoreria' || hayEnTituloODesc;
+  const text = [
+    alerta.titulo,
+    alerta.descripcion,
+    alerta.area,
+    alerta.datoAsociado?.cheque,
+    alerta.datoAsociado?.cliente,
+    alerta.datoAsociado?.estado,
+  ].map(normalizeText).join(' | ');
+  const excluded = /insumo|prote[ií]na|f[oó]rmula|humedad|peso volum[eé]trico|\bpv\b|stock|inventario|producci[oó]n|silo|trazabilidad|lote|operativo|comercial|seguimiento comercial/;
+  if (excluded.test(text)) return false;
+  const allowed = /cheque|cheques|tesorer[ií]a|flujo de caja|cuentas por cobrar|cuentas por pagar|descubierto|presupuesto|caja|cartera|vencimiento|vencida|cobranza|pago|saldo|finanzas|costo|costos/;
+  return allowed.test(text);
 };
 
 export const getAlertCategory = (alerta: AlertaOperativa): AlertCategoryKey => {
-  if (isFinancialAlert(alerta)) return 'financiera';
   if (isProductAlert(alerta)) return 'produccion';
+  if (isFinancialAlert(alerta)) return 'financiera';
   return 'general';
 };
 
@@ -48,11 +58,12 @@ export const buildAlertCategoryHtml = (
   description: string,
   alerts: AlertaOperativa[],
   tone: AlertCategoryTone,
+  options: { emptyLabel?: string; counterLabel?: string } = {},
 ) => {
   const count = alerts.length;
   const examples = alerts.slice(0, 3);
   const emptyState = count === 0
-    ? '<div style="margin-top:12px;padding:14px;border:1px dashed #cbd5e1;border-radius:16px;background:#f8fafc;color:#64748b;font-size:13px;">Sin alertas críticas</div>'
+    ? `<div style="margin-top:12px;padding:14px;border:1px dashed #cbd5e1;border-radius:16px;background:#f8fafc;color:#64748b;font-size:13px;">${escapeHtml(options.emptyLabel ?? 'Sin alertas críticas')}</div>`
     : '';
 
   return `
@@ -65,7 +76,7 @@ export const buildAlertCategoryHtml = (
             <p style="margin:0;color:#334155;font-size:13px;line-height:1.5;">${escapeHtml(description)}</p>
           </div>
           <div style="min-width:74px;padding:10px 12px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0;text-align:right;">
-            <p style="margin:0;color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:.16em;">Críticas</p>
+            <p style="margin:0;color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:.16em;">${escapeHtml(options.counterLabel ?? 'Críticas')}</p>
             <p style="margin:4px 0 0;color:${tone === 'red' ? '#b91c1c' : '#c2410c'};font-size:28px;font-weight:900;line-height:1;">${count}</p>
           </div>
         </div>

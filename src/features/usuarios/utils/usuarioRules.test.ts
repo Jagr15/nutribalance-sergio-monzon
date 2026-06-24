@@ -53,12 +53,14 @@ describe('usuarioRules', () => {
 
   it('normaliza texto y email antes de guardar', () => {
     expect(
-      normalizeUsuarioInput({
+    normalizeUsuarioInput({
         nombre_completo: '  Sergio Ramos  ',
         username: '  sergio_admin ',
         email: '  SERGIO@NUTRIBALANCE.COM ',
         role: 'SUPERADMIN',
         estado: 'activo',
+        password: 'secret123',
+        confirmPassword: 'secret123',
       })
     ).toEqual({
       nombre_completo: 'Sergio Ramos',
@@ -66,6 +68,8 @@ describe('usuarioRules', () => {
       email: 'sergio@nutribalance.com',
       role: 'SUPERADMIN',
       estado: 'activo',
+      password: 'secret123',
+      confirmPassword: 'secret123',
     });
   });
 
@@ -77,6 +81,8 @@ describe('usuarioRules', () => {
         email: 'correo-invalido',
         role: 'SUPERADMIN',
         estado: 'activo',
+        password: 'short',
+        confirmPassword: 'diff',
       },
       { existingUsers: users, currentUser: adminSession }
     );
@@ -96,6 +102,8 @@ describe('usuarioRules', () => {
         email: 'nuevo@nutribalance.com',
         role: 'SUPERADMIN',
         estado: 'activo',
+        password: 'secret123',
+        confirmPassword: 'secret123',
       },
       { existingUsers: users, currentUser: superadminSession }
     );
@@ -112,6 +120,8 @@ describe('usuarioRules', () => {
         email: 'SERGIO@NUTRIBALANCE.COM',
         role: 'ADMIN',
         estado: 'activo',
+        password: '',
+        confirmPassword: '',
       },
       { existingUsers: users, currentUser: superadminSession }
     );
@@ -126,6 +136,8 @@ describe('usuarioRules', () => {
         email: 'sergio@nutribalance.com',
         role: 'ADMIN',
         estado: 'activo',
+        password: '',
+        confirmPassword: '',
       },
       { existingUsers: users, currentUser: superadminSession, editingUid: 'u-001' }
     );
@@ -143,6 +155,8 @@ describe('usuarioRules', () => {
         email: 'sergio@nutribalance.com',
         role: 'SUPERADMIN',
         estado: 'inactivo',
+        password: '',
+        confirmPassword: '',
       },
       { existingUsers: users, currentUser: superadminSession, editingUid: 'u-001' }
     );

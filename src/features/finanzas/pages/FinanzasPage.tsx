@@ -52,12 +52,14 @@ const PAGE_NOW = new Date().getTime();
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
 const formatPct = (value: number) => `${value.toFixed(1)}%`;
-const DEPRECATED_KEYWORDS = ['prueba', 'test', 'demo', 'www', 'tttt'];
-const BUDGET_CONFIG_KEY = 'finanzas_control_presupuestal_v1';
+const BUDGET_CONFIG_KEY = 'finanzas_control_presupuestal_v2';
+const BUDGET_CONFIG_LEGACY_KEY = 'finanzas_control_presupuestal_v1';
 
 type MovimientosHistoryFilter = 'ALL' | 'CONFIRMADO' | 'PENDIENTE' | 'ANULADO';
 type BudgetPeriodicidad = 'semanal' | 'quincenal' | 'mensual';
 type BudgetConfig = {
+  id: string;
+  nombre: string;
   periodicidad: BudgetPeriodicidad;
   rubros: string[];
   monto_maximo: number | null;
@@ -76,54 +78,54 @@ const statusClassByPresupuesto = (estado: 'En control' | 'Atención' | 'Excedido
   return 'border-emerald-200 bg-emerald-50 text-emerald-700';
 };
 
-const presupuestoEstadoCustom = (real: number, presupuesto: number) => {
-  if (presupuesto <= 0) return 'En control';
-  const ratio = (real / presupuesto) * 100;
-  if (ratio <= 80) return 'En control';
-  if (ratio <= 100) return 'Atención';
-  return 'Excedido';
-};
-
-const isRubrorVisible = (rubro: string) => {
-  const normalized = rubro.trim().toLowerCase();
-  if (!normalized) return false;
-  if (DEPRECATED_KEYWORDS.includes(normalized)) return false;
-  return true;
-};
-
-const hasDeprecatedText = (value?: string | null) => {
-  const normalized = (value ?? '').trim().toLowerCase();
-  if (!normalized) return true;
-  return DEPRECATED_KEYWORDS.some((keyword) => normalized.includes(keyword));
-};
-
-const isRubroFinancieroVisible = (rubro: RubroFinancieroAdmin) => !hasDeprecatedText(rubro.nombre);
-
 const estadoLabelByClient = (diasAtraso: number | null, proximoVencimiento: string | null) => {
   if (diasAtraso && diasAtraso > 0) return 'Vencida';
   if (proximoVencimiento) return 'Próxima';
   return 'Al día';
 };
 
-const readBudgetConfig = (): BudgetConfig => {
-  if (typeof window === 'undefined') {
-    return { periodicidad: 'mensual', rubros: [], monto_maximo: null };
-  }
+const createDefaultBudgetConfig = (name = 'Presupuesto principal'): BudgetConfig => ({
+  id: `budget-${Date.now()}`,
+  nombre: name,
+  periodicidad: 'mensual',
+  rubros: [],
+  monto_maximo: null,
+});
+
+const readBudgetConfigs = (): BudgetConfig[] => {
+  const fallback = [createDefaultBudgetConfig()];
+  const legacyFallback = createDefaultBudgetConfig();
+  if (typeof window === 'undefined') return fallback;
   try {
-    const raw = window.localStorage.getItem(BUDGET_CONFIG_KEY);
-    if (!raw) return { periodicidad: 'mensual', rubros: [], monto_maximo: null };
-    const parsed = JSON.parse(raw) as Partial<BudgetConfig>;
-    return {
-      periodicidad: parsed.periodicidad === 'semanal' || parsed.periodicidad === 'quincenal' || parsed.periodicidad === 'mensual' ? parsed.periodicidad : 'mensual',
-      rubros: Array.isArray(parsed.rubros) ? parsed.rubros.filter((item): item is string => typeof item === 'string') : [],
-      monto_maximo: typeof parsed.monto_maximo === 'number' && Number.isFinite(parsed.monto_maximo) ? parsed.monto_maximo : null,
+    const raw = window.localStorage.getItem(BUDGET_CONFIG_KEY) ?? window.localStorage.getItem(BUDGET_CONFIG_LEGACY_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as unknown;
+    const parseOne = (value: unknown, index: number): BudgetConfig | null => {
+      if (!value || typeof value !== 'object') return null;
+      const candidate = value as Partial<BudgetConfig>;
+      const periodicidad = candidate.periodicidad === 'semanal' || candidate.periodicidad === 'quincenal' || candidate.periodicidad === 'mensual'
+        ? candidate.periodicidad
+        : 'mensual';
+      return {
+        id: typeof candidate.id === 'string' && candidate.id ? candidate.id : `budget-${Date.now()}-${index}`,
+        nombre: typeof candidate.nombre === 'string' && candidate.nombre.trim() ? candidate.nombre.trim() : `Presupuesto ${index + 1}`,
+        periodicidad,
+        rubros: Array.isArray(candidate.rubros) ? candidate.rubros.filter((item): item is string => typeof item === 'string') : [],
+        monto_maximo: typeof candidate.monto_maximo === 'number' && Number.isFinite(candidate.monto_maximo) ? candidate.monto_maximo : null,
+      };
     };
+    if (Array.isArray(parsed)) {
+      const normalized = parsed.map(parseOne).filter((item): item is BudgetConfig => Boolean(item));
+      return normalized.length > 0 ? normalized : fallback;
+    }
+    const single = parseOne(parsed, 0) ?? legacyFallback;
+    return [single];
   } catch {
-    return { periodicidad: 'mensual', rubros: [], monto_maximo: null };
+    return fallback;
   }
 };
 
-const writeBudgetConfig = (config: BudgetConfig) => {
+const writeBudgetConfigs = (config: BudgetConfig[]) => {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(BUDGET_CONFIG_KEY, JSON.stringify(config));
 };
@@ -141,9 +143,15 @@ const FinanzasPage = () => {
   const [rubroError, setRubroError] = useState<string | null>(null);
   const [rubrosSavedMessage, setRubrosSavedMessage] = useState<string | null>(null);
   const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false);
+  const [isHistorialModalOpen, setIsHistorialModalOpen] = useState(false);
   const [isRubrosModalOpen, setIsRubrosModalOpen] = useState(false);
+  const [isRubrosFullModalOpen, setIsRubrosFullModalOpen] = useState(false);
   const [isBudgetEditorOpen, setIsBudgetEditorOpen] = useState(false);
-  const [budgetConfig, setBudgetConfig] = useState<BudgetConfig>(() => readBudgetConfig());
+  const [budgetConfigs, setBudgetConfigs] = useState<BudgetConfig[]>(() => readBudgetConfigs());
+  const [budgetDraft, setBudgetDraft] = useState<BudgetConfig>(() => createDefaultBudgetConfig());
+  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
+  const [budgetFeedback, setBudgetFeedback] = useState<string | null>(null);
+  const [budgetSavedMessage, setBudgetSavedMessage] = useState<string | null>(null);
 
   useEffect(() => {
     void finanzasService.getRubrosFinancieros().then((rows) => {
@@ -170,7 +178,6 @@ const FinanzasPage = () => {
 
   const variacionesOrdenadas = useMemo(
     () => [...tesoreria.variacionesPorRubro]
-      .filter((row) => isRubrorVisible(row.rubro))
       .sort((a, b) => {
       if (variacionesSort === 'desviacion') return Math.abs(b.variacion_pct) - Math.abs(a.variacion_pct);
       if (variacionesSort === 'menor_desviacion') return Math.abs(a.variacion_pct) - Math.abs(b.variacion_pct);
@@ -193,24 +200,8 @@ const FinanzasPage = () => {
 
   const presupuestoRows = tesoreria.presupuestoVsReal;
   const presupuestosGenerados = presupuestoRows.some((row) => row.generado);
-  const presupuestoRowsVisibles = useMemo(() => (
-    [...presupuestoRows]
-      .filter((row) => isRubrorVisible(row.rubro))
-      .filter((row) => row.presupuesto !== 0 || row.real !== 0)
-      .sort((a, b) => Math.abs(b.variacion_abs) - Math.abs(a.variacion_abs))
-  ), [presupuestoRows]);
-  const presupuestoRowsGestion = useMemo(() => (
-    presupuestoRowsVisibles.map((row) => ({
-      rubro: row.rubro,
-      presupuesto: row.presupuesto,
-      ejecutado: row.real,
-      disponible: row.presupuesto - row.real,
-      porcentaje: row.presupuesto > 0 ? (row.real / row.presupuesto) * 100 : 0,
-      estado: presupuestoEstadoCustom(row.real, row.presupuesto) as 'En control' | 'Atención' | 'Excedido',
-    }))
-  ), [presupuestoRowsVisibles]);
   const gastosPorRubroVisibles = useMemo(
-    () => tesoreria.gastosPorRubro.filter((row) => isRubrorVisible(row.rubro)),
+    () => tesoreria.gastosPorRubro,
     [tesoreria.gastosPorRubro],
   );
   const topGastosPorRubro = useMemo(
@@ -223,27 +214,60 @@ const FinanzasPage = () => {
     ? (gastoDominante.monto / topGastosPorRubro.reduce((acc, row) => acc + row.monto, 0)) * 100
     : 0;
   const ingresosPtVisibles = useMemo(
-    () => ingresosPtPorProducto.filter((row) => !hasDeprecatedText(row.producto) && row.importe_total > 0),
+    () => ingresosPtPorProducto.filter((row) => row.importe_total > 0),
     [ingresosPtPorProducto],
   );
   const rubrosFinancierosVisibles = useMemo(
-    () => rubrosFinancieros.filter(isRubroFinancieroVisible),
+    () => rubrosFinancieros,
     [rubrosFinancieros],
   );
+  const rubrosFinancierosPreview = useMemo(
+    () => rubrosFinancierosVisibles.slice(0, 5),
+    [rubrosFinancierosVisibles],
+  );
+  const budgetRubrosOptions = useMemo(
+    () => rubrosFinancieros.map((rubro) => ({
+      id: rubro.nombre,
+      label: rubro.nombre,
+      activo: rubro.activo,
+    })),
+    [rubrosFinancieros],
+  );
+  const budgetRows = useMemo(() => budgetConfigs.map((config) => {
+    const rubrosSeleccionados = config.rubros.length > 0
+      ? tesoreria.gastosPorRubro.filter((row) => config.rubros.includes(row.rubro))
+      : tesoreria.gastosPorRubro;
+    const ejecutado = rubrosSeleccionados.reduce((acc, row) => acc + row.monto, 0);
+    const disponible = config.monto_maximo !== null ? config.monto_maximo - ejecutado : null;
+    const avance = config.monto_maximo && config.monto_maximo > 0 ? (ejecutado / config.monto_maximo) * 100 : 0;
+    const estado: 'En control' | 'Atención' | 'Excedido' = config.monto_maximo !== null && config.monto_maximo > 0 && ejecutado > config.monto_maximo
+      ? 'Excedido'
+      : avance >= 90
+        ? 'Atención'
+        : 'En control';
+    return {
+      ...config,
+      ejecutado,
+      disponible,
+      avance,
+      estado,
+    };
+  }), [budgetConfigs, tesoreria.gastosPorRubro]);
+  const budgetExceeded = budgetRows.some((row) => row.estado === 'Excedido');
   const carteraClientesVisibles = useMemo(
-    () => tesoreria.carteraClientes.filter((row) => row.saldo_pendiente > 0 && !hasDeprecatedText(row.cliente_nombre)),
+    () => tesoreria.carteraClientes.filter((row) => row.saldo_pendiente > 0),
     [tesoreria.carteraClientes],
   );
   const chequesEmitidosVisibles = useMemo(
-    () => tesoreria.chequesEmitidos.filter((row) => row.importe > 0 && !hasDeprecatedText(row.tercero) && !hasDeprecatedText(row.numero)),
+    () => tesoreria.chequesEmitidos.filter((row) => row.importe > 0),
     [tesoreria.chequesEmitidos],
   );
   const chequesRecibidosVisibles = useMemo(
-    () => tesoreria.chequesRecibidos.filter((row) => row.importe > 0 && !hasDeprecatedText(row.tercero) && !hasDeprecatedText(row.numero)),
+    () => tesoreria.chequesRecibidos.filter((row) => row.importe > 0),
     [tesoreria.chequesRecibidos],
   );
   const alertasTesoreriaVisibles = useMemo(
-    () => tesoreria.alertasTesoreria.filter((row) => !hasDeprecatedText(row.titulo) && !hasDeprecatedText(row.tipo)),
+    () => tesoreria.alertasTesoreria,
     [tesoreria.alertasTesoreria],
   );
   const hasUsefulIngresosPt = ingresosPtVisibles.length > 0;
@@ -271,7 +295,6 @@ const FinanzasPage = () => {
       .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
       .filter((row) => {
         const haystack = `${row.descripcion} ${row.categoria ?? ''} ${row.tipo} ${row.estado}`.toLowerCase();
-        if (hasDeprecatedText(row.descripcion) || hasDeprecatedText(row.categoria) || hasDeprecatedText(row.origen_operativo)) return false;
         if (!query) return true;
         return haystack.includes(query);
       })
@@ -283,15 +306,6 @@ const FinanzasPage = () => {
       .filter((row) => movimientosHistoryFilter === 'ALL' ? true : row.estado === movimientosHistoryFilter);
   }, [movimientos, movimientosHistoryFilter]);
   const hasMoreThanTenMovimientos = movimientos.length > 10;
-  const gastosRealesConfig = useMemo(() => {
-    const rubrosSeleccionados = budgetConfig.rubros.length > 0
-      ? tesoreria.gastosPorRubro.filter((row) => budgetConfig.rubros.includes(row.rubro))
-      : tesoreria.gastosPorRubro;
-    return rubrosSeleccionados.reduce((acc, row) => acc + row.monto, 0);
-  }, [budgetConfig.rubros, tesoreria.gastosPorRubro]);
-  const budgetExceeded = budgetConfig.monto_maximo !== null && budgetConfig.monto_maximo > 0 && gastosRealesConfig > budgetConfig.monto_maximo;
-  const budgetRubrosOptions = useMemo(() => rubrosFinancierosVisibles.map((rubro) => rubro.nombre), [rubrosFinancierosVisibles]);
-
   const handleRubroSubmit = async () => {
     setRubroError(null);
     setRubrosSavedMessage(null);
@@ -306,20 +320,23 @@ const FinanzasPage = () => {
         activo: normalized.activo,
         area: normalized.area,
       });
-      setRubrosFinancieros((current) => {
-        const row = {
-          id: saved.id,
-          nombre: saved.nombre,
-          tipo: toRubroTipo(saved.tipo),
-          activo: saved.activo,
-          editable: true,
-          origen: 'personalizado',
-          area: saved.area ?? null,
-          categoria_financiera_id: saved.id,
-        } satisfies RubroFinancieroAdmin;
-        return current.some((item) => item.id === saved.id) ? current.map((item) => (item.id === saved.id ? row : item)) : [...current, row];
-      });
-      setRubrosSavedMessage(editingRubroId ? 'Rubro actualizado correctamente.' : 'Rubro creado correctamente.');
+      const row = {
+        id: saved.id,
+        nombre: saved.nombre,
+        tipo: toRubroTipo(saved.tipo),
+        activo: saved.activo,
+        editable: true,
+        origen: 'personalizado',
+        area: saved.area ?? null,
+        categoria_financiera_id: saved.id,
+      } satisfies RubroFinancieroAdmin;
+      setRubrosFinancieros((current) => (current.some((item) => item.id === saved.id) ? current.map((item) => (item.id === saved.id ? row : item)) : [...current, row]));
+      if (editingRubroId) {
+        setRubrosSavedMessage('Rubro actualizado correctamente.');
+      } else {
+        setRubrosSavedMessage('Rubro creado correctamente. Puedes verlo en Ver todos los rubros.');
+        setIsRubrosFullModalOpen(true);
+      }
       setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
       setEditingRubroId(null);
     } catch (error: unknown) {
@@ -329,10 +346,74 @@ const FinanzasPage = () => {
 
   const handleCloseRubrosModal = () => {
     setIsRubrosModalOpen(false);
+    setIsRubrosFullModalOpen(false);
     setEditingRubroId(null);
     setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
     setRubroError(null);
     setRubrosSavedMessage(null);
+  };
+
+  const openBudgetEditor = (budget?: BudgetConfig) => {
+    const current = budget ?? {
+      id: `budget-${Date.now()}`,
+      nombre: `Presupuesto ${budgetConfigs.length + 1}`,
+      periodicidad: 'mensual' as BudgetPeriodicidad,
+      rubros: [],
+      monto_maximo: null,
+    };
+    setEditingBudgetId(budget?.id ?? null);
+    setBudgetDraft(current);
+    setBudgetFeedback(null);
+    setIsBudgetEditorOpen(true);
+  };
+
+  const closeBudgetEditor = () => {
+    setEditingBudgetId(null);
+    setBudgetDraft({
+      id: `budget-${Date.now()}`,
+      nombre: 'Presupuesto principal',
+      periodicidad: 'mensual',
+      rubros: [],
+      monto_maximo: null,
+    });
+    setBudgetFeedback(null);
+    setIsBudgetEditorOpen(false);
+  };
+
+  const handleSaveBudgetConfig = () => {
+    const normalizedRubros = Array.from(new Set(budgetDraft.rubros));
+    const nextConfig: BudgetConfig = {
+      id: budgetDraft.id || `budget-${Date.now()}`,
+      nombre: budgetDraft.nombre.trim() || 'Presupuesto sin nombre',
+      periodicidad: budgetDraft.periodicidad,
+      rubros: normalizedRubros,
+      monto_maximo: budgetDraft.monto_maximo,
+    };
+
+    if (!nextConfig.periodicidad) {
+      setBudgetFeedback('Selecciona una periodicidad.');
+      return;
+    }
+    if (nextConfig.monto_maximo === null || !Number.isFinite(nextConfig.monto_maximo) || nextConfig.monto_maximo <= 0) {
+      setBudgetFeedback('El monto máximo debe ser mayor a 0.');
+      return;
+    }
+    if (nextConfig.rubros.length === 0) {
+      setBudgetFeedback('Selecciona al menos un rubro.');
+      return;
+    }
+
+    setBudgetConfigs((current) => {
+      const updated = editingBudgetId && current.some((item) => item.id === editingBudgetId)
+        ? current.map((item) => (item.id === editingBudgetId ? { ...nextConfig, id: editingBudgetId } : item))
+        : [...current, nextConfig];
+      writeBudgetConfigs(updated);
+      return updated;
+    });
+    setBudgetFeedback('Configuración guardada correctamente.');
+    setBudgetSavedMessage('Configuración de presupuesto actualizada.');
+    setIsBudgetEditorOpen(false);
+    setEditingBudgetId(null);
   };
 
   const handleEditRubro = (rubro: RubroFinancieroAdmin) => {
@@ -355,10 +436,6 @@ const FinanzasPage = () => {
     });
     setRubrosSavedMessage(rubro.activo ? `Rubro ${rubro.nombre} desactivado.` : `Rubro ${rubro.nombre} activado.`);
   };
-
-  useEffect(() => {
-    writeBudgetConfig(budgetConfig);
-  }, [budgetConfig]);
 
   const ingresosPtMax = Math.max(1, ...ingresosPtPorProducto.map((row) => row.importe_total));
 
@@ -432,7 +509,7 @@ const FinanzasPage = () => {
                 </div>
 
                 <div className="space-y-3">
-                  {rubrosFinancierosVisibles.map((rubro) => (
+                  {rubrosFinancierosPreview.map((rubro) => (
                     <div key={rubro.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -472,6 +549,15 @@ const FinanzasPage = () => {
                       </div>
                     </div>
                   ))}
+                  {rubrosFinancierosVisibles.length > rubrosFinancierosPreview.length ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsRubrosFullModalOpen(true)}
+                      className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Ver todos los rubros
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
@@ -584,9 +670,101 @@ const FinanzasPage = () => {
         </div>
       ) : null}
 
+      {isRubrosFullModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6"
+          onClick={handleCloseRubrosModal}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-6xl max-h-[calc(100vh-3rem)] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rubros-completos-title"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Costos</p>
+                <h3 id="rubros-completos-title" className="mt-1 text-xl font-semibold text-slate-900">Todos los rubros financieros</h3>
+                <p className="mt-1 text-sm text-slate-500">Consulta todos los rubros, su estado y sus acciones disponibles.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRubrosFullModalOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Cerrar modal"
+              >
+                <FiX size={16} />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50">
+                <table className="w-full min-w-[680px] text-sm">
+                  <thead className="border-b border-slate-200 bg-slate-100 text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">Nombre</th>
+                      <th className="px-4 py-3 text-left font-semibold">Tipo</th>
+                      <th className="px-4 py-3 text-left font-semibold">Estado</th>
+                      <th className="px-4 py-3 text-left font-semibold">Área</th>
+                      <th className="px-4 py-3 text-right font-semibold">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+              {rubrosFinancierosVisibles.map((rubro) => (
+                      <tr key={rubro.id} className="align-top">
+                        <td className="px-4 py-3 font-medium text-slate-900">{rubro.nombre}</td>
+                        <td className="px-4 py-3 text-slate-700">{rubroTipoLabels[rubro.tipo]}</td>
+                        <td className="px-4 py-3">
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${rubro.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {rubro.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-700">{rubro.area ?? '-'}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditRubro(rubro)}
+                              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                            >
+                              <FiEdit2 size={13} />
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRubro(rubro)}
+                              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                                rubro.activo
+                                  ? 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                  : 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                              }`}
+                            >
+                              <FiPower size={13} />
+                              {rubro.activo ? 'Desactivar' : 'Activar'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {!loadError && infoMessage ? (
         <Card className="border-slate-200 bg-slate-50 text-slate-700">
           {infoMessage}
+        </Card>
+      ) : null}
+
+      {budgetSavedMessage ? (
+        <Card className="border-emerald-200 bg-emerald-50 text-emerald-800">
+          {budgetSavedMessage}
         </Card>
       ) : null}
 
@@ -601,7 +779,7 @@ const FinanzasPage = () => {
             <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setIsMovimientoModalOpen(true)}
+                onClick={() => setIsHistorialModalOpen(true)}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
               >
                 Ver historial completo
@@ -620,13 +798,13 @@ const FinanzasPage = () => {
               >
                 Editar presupuesto
               </button>
-                <button
-                  type="button"
-                  onClick={() => setIsMovimientoModalOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
-                >
-                  <FiPlus size={14} />
-                  + Registrar movimiento
+              <button
+                type="button"
+                onClick={() => setIsMovimientoModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
+              >
+                <FiPlus size={14} />
+                + Registrar movimiento
                 </button>
               </div>
             </div>
@@ -664,8 +842,8 @@ const FinanzasPage = () => {
         </div>
       ) : null}
 
-      {isMovimientoModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6" onClick={() => setIsMovimientoModalOpen(false)} role="presentation">
+      {isHistorialModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6" onClick={() => setIsHistorialModalOpen(false)} role="presentation">
           <div className="w-full max-w-7xl max-h-[calc(100vh-3rem)] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="historial-completo-title">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -684,7 +862,7 @@ const FinanzasPage = () => {
                     {estado === 'ALL' ? 'Todos' : estado === 'ANULADO' ? 'Acoplado' : estado === 'CONFIRMADO' ? 'Confirmado' : 'Pendiente'}
                   </button>
                 ))}
-                <button type="button" onClick={() => setIsMovimientoModalOpen(false)} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100">
+                <button type="button" onClick={() => setIsHistorialModalOpen(false)} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100">
                   <FiX size={16} />
                 </button>
               </div>
@@ -697,7 +875,7 @@ const FinanzasPage = () => {
       ) : null}
 
       {isBudgetEditorOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6" onClick={() => setIsBudgetEditorOpen(false)} role="presentation">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6" onClick={closeBudgetEditor} role="presentation">
           <div
             className="w-full max-w-5xl max-h-[calc(100vh-3rem)] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20"
             onClick={(event) => event.stopPropagation()}
@@ -708,12 +886,14 @@ const FinanzasPage = () => {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Control presupuestal</p>
-                <h3 id="editar-presupuesto-title" className="mt-1 text-xl font-semibold text-slate-900">Editar presupuesto</h3>
-                <p className="mt-1 text-sm text-slate-500">Configuración local del control. TODO: persistir en backend cuando exista soporte específico.</p>
+                <h3 id="editar-presupuesto-title" className="mt-1 text-xl font-semibold text-slate-900">
+                  {editingBudgetId ? 'Editar presupuesto' : 'Nuevo presupuesto'}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">Configura nombre, periodicidad, monto máximo y rubros incluidos. Los cambios se guardan en el navegador.</p>
               </div>
               <button
                 type="button"
-                onClick={() => setIsBudgetEditorOpen(false)}
+                onClick={closeBudgetEditor}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
               >
                 <FiX size={16} />
@@ -723,8 +903,17 @@ const FinanzasPage = () => {
             <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
                 <label className="block">
+                  <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Nombre del presupuesto</span>
+                  <input
+                    value={budgetDraft.nombre}
+                    onChange={(event) => setBudgetDraft((current) => ({ ...current, nombre: event.target.value }))}
+                    className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+                    placeholder="Ej: Presupuesto operativo"
+                  />
+                </label>
+                <label className="block">
                   <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Periodicidad</span>
-                  <select value={budgetConfig.periodicidad} onChange={(event) => setBudgetConfig((current) => ({ ...current, periodicidad: event.target.value as BudgetPeriodicidad }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm">
+                  <select value={budgetDraft.periodicidad} onChange={(event) => setBudgetDraft((current) => ({ ...current, periodicidad: event.target.value as BudgetPeriodicidad }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm">
                     <option value="semanal">Semanal</option>
                     <option value="quincenal">Quincenal</option>
                     <option value="mensual">Mensual</option>
@@ -732,35 +921,42 @@ const FinanzasPage = () => {
                 </label>
                 <label className="block">
                   <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Monto máximo de gastos</span>
-                  <input type="number" step="0.01" value={budgetConfig.monto_maximo ?? ''} onChange={(event) => setBudgetConfig((current) => ({ ...current, monto_maximo: event.target.value === '' ? null : Number(event.target.value) }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" placeholder="Ej: 250000" />
+                  <input type="number" step="0.01" value={budgetDraft.monto_maximo ?? ''} onChange={(event) => setBudgetDraft((current) => ({ ...current, monto_maximo: event.target.value === '' ? null : Number(event.target.value) }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" placeholder="Ej: 250000" />
                 </label>
                 <label className="block">
                   <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Rubros incluidos</span>
                   <div className="mt-2 grid gap-2">
                     {budgetRubrosOptions.map((rubro) => {
-                      const checked = budgetConfig.rubros.includes(rubro);
+                      const checked = budgetDraft.rubros.includes(rubro.id);
                       return (
-                        <label key={rubro} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm">
+                        <label key={rubro.id} className={`flex items-center gap-3 rounded-2xl border px-4 py-2 text-sm ${rubro.activo ? 'border-slate-200 bg-white' : 'border-slate-200 bg-slate-100 text-slate-400'}`}>
                           <input
                             type="checkbox"
                             checked={checked}
-                            onChange={(event) => setBudgetConfig((current) => ({
+                            disabled={!rubro.activo}
+                            onChange={(event) => setBudgetDraft((current) => ({
                               ...current,
-                              rubros: event.target.checked ? [...current.rubros, rubro] : current.rubros.filter((item) => item !== rubro),
+                              rubros: event.target.checked ? [...current.rubros, rubro.id] : current.rubros.filter((item) => item !== rubro.id),
                             }))}
                             className="h-4 w-4 rounded border-slate-300 text-blue-600"
                           />
-                          <span className="text-slate-700">{rubro}</span>
+                          <span className="text-slate-700">{rubro.label}</span>
+                          {!rubro.activo ? <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Inactivo</span> : null}
                         </label>
                       );
                     })}
-                    {budgetRubrosOptions.length === 0 ? <p className="text-sm text-slate-500">No hay rubros visibles para incluir.</p> : null}
+                    {budgetRubrosOptions.length === 0 ? <p className="text-sm text-slate-500">No hay rubros disponibles para incluir.</p> : null}
                   </div>
                 </label>
                 <div className="flex justify-end gap-3">
-                  <button type="button" onClick={() => setBudgetConfig({ periodicidad: 'mensual', rubros: [], monto_maximo: null })} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700">Restablecer</button>
-                  <button type="button" onClick={() => setIsBudgetEditorOpen(false)} className="rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20">Guardar configuración</button>
+                  <button type="button" onClick={() => setBudgetDraft(createDefaultBudgetConfig())} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700">Restablecer</button>
+                  <button type="button" onClick={handleSaveBudgetConfig} className="rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20">Guardar configuración</button>
                 </div>
+                {budgetFeedback ? (
+                  <div className={`mt-4 rounded-2xl px-4 py-3 text-sm ${budgetFeedback.includes('correctamente') ? 'border border-emerald-200 bg-emerald-50 text-emerald-700' : 'border border-amber-200 bg-amber-50 text-amber-800'}`}>
+                    {budgetFeedback}
+                  </div>
+                ) : null}
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -773,19 +969,59 @@ const FinanzasPage = () => {
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl bg-slate-50 p-3">
                     <p className="text-xs uppercase tracking-widest text-slate-500">Periodicidad</p>
-                    <p className="mt-1 font-semibold text-slate-900">{budgetConfig.periodicidad}</p>
+                    <p className="mt-1 font-semibold text-slate-900">{budgetDraft.periodicidad}</p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 p-3">
                     <p className="text-xs uppercase tracking-widest text-slate-500">Monto máximo</p>
-                    <p className="mt-1 font-semibold text-slate-900">{budgetConfig.monto_maximo !== null ? formatCurrency(budgetConfig.monto_maximo) : 'Sin definir'}</p>
+                    <p className="mt-1 font-semibold text-slate-900">{budgetDraft.monto_maximo !== null ? formatCurrency(budgetDraft.monto_maximo) : 'Sin definir'}</p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 p-3">
                     <p className="text-xs uppercase tracking-widest text-slate-500">Rubros</p>
-                    <p className="mt-1 font-semibold text-slate-900">{budgetConfig.rubros.length > 0 ? budgetConfig.rubros.length : 'Todos'}</p>
+                    <p className="mt-1 font-semibold text-slate-900">{budgetDraft.rubros.length > 0 ? budgetDraft.rubros.length : 'Todos'}</p>
                   </div>
                 </div>
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  TODO: persistir esta configuración cuando exista soporte de backend para presupuesto editable.
+                  La configuración se persiste en localStorage al guardar.
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-base font-semibold text-slate-900">Presupuestos guardados</h4>
+                    <p className="text-sm text-slate-500">Puedes crear o editar más de uno.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openBudgetEditor()}
+                    className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    Agregar presupuesto
+                  </button>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {budgetRows.map((row) => (
+                    <div key={row.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-slate-900">{row.nombre}</p>
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${statusClassByPresupuesto(row.estado)}`}>
+                              {row.estado}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">{row.periodicidad} · {row.rubros.length > 0 ? `${row.rubros.length} rubros` : 'Todos los rubros'}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openBudgetEditor(row)}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -868,7 +1104,7 @@ const FinanzasPage = () => {
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
               <h3 className="text-lg font-semibold">Control presupuestal</h3>
-              <p className="text-sm text-slate-500">Compara el presupuesto estimado contra lo realmente ejecutado por rubro.</p>
+              <p className="text-sm text-slate-500">Gestiona presupuestos múltiples con control local, edición y creación rápida.</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {presupuestosGenerados ? (
@@ -878,31 +1114,32 @@ const FinanzasPage = () => {
               ) : null}
               <button
                 type="button"
-              onClick={() => setIsBudgetEditorOpen(true)}
+                onClick={() => openBudgetEditor()}
                 className="inline-flex items-center gap-2 rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
               >
                 <FiEdit2 size={14} />
-                Editar presupuesto
+                Nuevo presupuesto
               </button>
             </div>
           </div>
-          {presupuestoRowsGestion.some((row) => row.estado !== 'En control') ? (
+          {budgetRows.some((row) => row.estado !== 'En control') ? (
             <div className="mb-4 space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               <p className="font-semibold">Alertas presupuestarias</p>
               <ul className="space-y-1 text-sm">
-                {presupuestoRowsGestion.filter((row) => row.estado !== 'En control').map((row) => (
-                  <li key={`alert-${row.rubro}`}>
-                    {row.rubro}: {row.estado === 'Excedido' ? 'supera el presupuesto mensual' : 'supera el 80% del presupuesto'}
+                {budgetRows.filter((row) => row.estado !== 'En control').map((row) => (
+                  <li key={`alert-${row.id}`}>
+                    {row.nombre}: {row.estado === 'Excedido' ? 'supera el presupuesto' : 'supera el 90% del presupuesto'}
                   </li>
                 ))}
               </ul>
             </div>
           ) : null}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[920px] text-sm">
               <thead className="border-b border-slate-200 text-slate-500">
                 <tr>
-                  <th className="py-2 text-left font-semibold">Rubro</th>
+                  <th className="py-2 text-left font-semibold">Nombre</th>
+                  <th className="py-2 text-left font-semibold">Periodicidad</th>
                   <th className="py-2 text-right font-semibold">Presupuesto</th>
                   <th className="py-2 text-right font-semibold">Ejecutado</th>
                   <th className="py-2 text-right font-semibold">Disponible</th>
@@ -912,18 +1149,18 @@ const FinanzasPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {presupuestoRowsGestion.map((row) => {
-                  const avancePct = row.porcentaje;
+                {budgetRows.map((row) => {
                   return (
-                    <tr key={row.rubro} className="align-top">
-                      <td className="py-2 font-medium text-slate-900">{row.rubro}</td>
-                      <td className="py-2 text-right text-slate-700">{formatCurrency(row.presupuesto)}</td>
+                    <tr key={row.id} className="align-top">
+                      <td className="py-2 font-medium text-slate-900">{row.nombre}</td>
+                      <td className="py-2 text-slate-700 capitalize">{row.periodicidad}</td>
+                      <td className="py-2 text-right text-slate-700">{row.monto_maximo !== null ? formatCurrency(row.monto_maximo) : 'Sin definir'}</td>
                       <td className="py-2 text-right text-slate-700">{formatCurrency(row.ejecutado)}</td>
-                      <td className={`py-2 text-right font-semibold ${row.disponible < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                        {formatCurrency(row.disponible)}
+                      <td className={`py-2 text-right font-semibold ${row.disponible !== null && row.disponible < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {row.disponible !== null ? formatCurrency(row.disponible) : 'Sin límite'}
                       </td>
                       <td className="py-2 text-right font-semibold text-slate-700">
-                        {formatPct(avancePct)}
+                        {formatPct(row.avance)}
                       </td>
                       <td className="py-2 text-right">
                         <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClassByPresupuesto(row.estado)}`}>
@@ -933,7 +1170,7 @@ const FinanzasPage = () => {
                       <td className="py-2 text-right">
                         <button
                           type="button"
-                        onClick={() => setIsBudgetEditorOpen(true)}
+                          onClick={() => openBudgetEditor(row)}
                           className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                         >
                           Editar
@@ -942,22 +1179,22 @@ const FinanzasPage = () => {
                     </tr>
                   );
                 })}
-                {presupuestoRowsGestion.length === 0 ? (
+                {budgetRows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-6 text-center text-slate-500">Sin datos de presupuesto.</td>
+                    <td colSpan={8} className="py-6 text-center text-slate-500">Sin presupuestos configurados.</td>
                   </tr>
                 ) : null}
               </tbody>
             </table>
           </div>
           <div className="mt-4 space-y-3">
-            {presupuestoRowsGestion.map((row) => {
-              const progresso = row.porcentaje;
+            {budgetRows.map((row) => {
+              const progresso = row.avance;
               return (
-                <div key={`bar-${row.rubro}`}>
+                <div key={`bar-${row.id}`}>
                   <div className="flex justify-between text-xs text-slate-600">
-                    <span>{row.rubro}</span>
-                    <span>{formatCurrency(row.presupuesto)} vs {formatCurrency(row.ejecutado)}</span>
+                    <span>{row.nombre}</span>
+                    <span>{row.monto_maximo !== null ? `${formatCurrency(row.monto_maximo)} vs ${formatCurrency(row.ejecutado)}` : `${formatCurrency(row.ejecutado)} ejecutado`}</span>
                   </div>
                   <div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div
@@ -966,7 +1203,7 @@ const FinanzasPage = () => {
                     />
                   </div>
                   <div className="mt-1 flex justify-between text-[11px] text-slate-500">
-                    <span>Presupuesto {formatCurrency(row.presupuesto)}</span>
+                    <span>{row.monto_maximo !== null ? `Presupuesto ${formatCurrency(row.monto_maximo)}` : 'Sin tope configurado'}</span>
                     <span>Avance {formatPct(progresso)}</span>
                   </div>
                 </div>
@@ -981,19 +1218,28 @@ const FinanzasPage = () => {
               <h3 className="text-lg font-semibold">Rubros financieros</h3>
               <p className="text-sm text-slate-500">Crear, editar y activar o desactivar rubros operativos.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingRubroId(null);
-                setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
-                setRubroError(null);
-                setRubrosSavedMessage(null);
-              }}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-            >
-              <FiPlus size={14} />
-              Nuevo rubro
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingRubroId(null);
+                  setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
+                  setRubroError(null);
+                  setRubrosSavedMessage(null);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                <FiPlus size={14} />
+                Nuevo rubro
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsRubrosFullModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+              >
+                Ver todos los rubros
+              </button>
+            </div>
           </div>
 
           {rubroError ? (
@@ -1010,8 +1256,8 @@ const FinanzasPage = () => {
 
           <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="space-y-3">
-              {rubrosFinancieros.map((rubro) => (
-                <div key={rubro.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  {rubrosFinancierosPreview.map((rubro) => (
+                    <div key={rubro.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -1180,6 +1426,13 @@ const FinanzasPage = () => {
                       <div className="h-3 w-3 rounded-full" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
                     </div>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setIsRubrosFullModalOpen(true)}
+                    className="inline-flex w-full items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                  >
+                    Ver todos los rubros
+                  </button>
                 </div>
               </div>
               {gastoDominante && gastoDominantePct > 80 ? (

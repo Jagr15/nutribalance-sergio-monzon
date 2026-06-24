@@ -28,10 +28,10 @@ export const useTesoreria = () => {
       .then((data) => {
         if (!mounted) return;
         setTesoreria(data);
+        setError(null);
       })
       .catch((err: unknown) => {
         if (!mounted) return;
-        setTesoreria(EMPTY_TESORERIA);
         setError(err instanceof Error ? err.message : 'No se pudo cargar la información de tesorería.');
       })
       .finally(() => {

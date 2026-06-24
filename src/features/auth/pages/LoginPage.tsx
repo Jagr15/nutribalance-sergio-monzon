@@ -76,8 +76,8 @@ const LoginPage = () => {
                 </div>
 
                 <div className="space-y-5">
-                  <div className="max-w-[520px] md:max-w-[560px]">
-                    <BrandLogo variant="full" className="w-full max-w-[34rem]" />
+                  <div className="w-[170px] sm:w-[180px] md:w-[190px]">
+                    <BrandLogo variant="full" className="w-full max-w-none" />
                   </div>
                   <div>
                     <h1 className="text-4xl md:text-5xl font-black leading-tight text-emerald-950">Ditmona Agro</h1>
@@ -115,7 +115,7 @@ const LoginPage = () => {
                     Modo Demo
                   </div>
                 ) : null}
-                <BrandLogo variant="full" className="w-full max-w-[440px] md:max-w-[500px]" />
+                <BrandLogo variant="full" className="w-[170px] sm:w-[180px] md:w-[190px] max-w-none" />
               </div>
               <h2 className="text-2xl font-bold text-emerald-950">Acceso operativo</h2>
               <p className="mt-2 text-sm text-slate-500 leading-relaxed">

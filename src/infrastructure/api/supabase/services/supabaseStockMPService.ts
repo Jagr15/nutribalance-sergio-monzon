@@ -23,7 +23,7 @@ interface StockLoteRow {
   fecha_ingreso: string;
   created_at: string;
   updated_at: string;
-  insumos: { legacy_uid: string | null } | null;
+  insumos: { legacy_uid: string | null; nombre: string | null } | null;
   proveedores: { legacy_uid: string | null } | null;
   usuarios: { legacy_uid: string | null } | null;
 }
@@ -67,6 +67,7 @@ const mapStock = (row: StockLoteRow): StockMateriaPrima => ({
   uid: row.legacy_uid ?? crypto.randomUUID(),
   insumo_id: row.insumo_id,
   id_insumo: row.insumos?.legacy_uid ?? '',
+  nombre_insumo: row.insumos?.nombre ?? undefined,
   id_proveedor: row.proveedores?.legacy_uid ?? '',
   lote: row.lote,
   cantidad_actual: Number(row.cantidad_actual),
@@ -87,7 +88,7 @@ export const supabaseStockMPService = {
     const { data, error } = await supabaseClient
       .from('stock_lotes_mp')
       .select(
-        'legacy_uid,insumo_id,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid),proveedores(legacy_uid),usuarios(legacy_uid)'
+        'legacy_uid,insumo_id,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid,nombre),proveedores(legacy_uid),usuarios(legacy_uid)'
       )
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
@@ -217,7 +218,7 @@ export const supabaseStockMPService = {
         id_usuario: usuario?.id ?? null,
       })
       .select(
-        'legacy_uid,insumo_id,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid),proveedores(legacy_uid),usuarios(legacy_uid)'
+        'legacy_uid,insumo_id,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid,nombre),proveedores(legacy_uid),usuarios(legacy_uid)'
       )
       .single();
 
@@ -246,7 +247,7 @@ export const supabaseStockMPService = {
       .update(updateInput)
       .eq('legacy_uid', uid)
       .select(
-        'legacy_uid,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid),proveedores(legacy_uid),usuarios(legacy_uid)'
+        'legacy_uid,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid,nombre),proveedores(legacy_uid),usuarios(legacy_uid)'
       )
       .single();
 

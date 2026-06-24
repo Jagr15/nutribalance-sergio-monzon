@@ -206,7 +206,14 @@ export const finanzasService = {
   },
 
   async getTreasuryInsights(): Promise<FinanzasTesoreriaInsights> {
-    const [presupuestosResult, flujoResult, comprobantesResult, chequesResult, ventasPtResult, saldoResult, clientes] = await Promise.all([
+    const [
+      presupuestosResult,
+      flujoResult,
+      comprobantesResult,
+      chequesResult,
+      ventasPtResult,
+      saldoResult,
+    ] = await Promise.allSettled([
       supabaseClient
         .from('presupuestos_mensuales')
         .select('anio,mes,monto_presupuestado,categorias_financieras(nombre),centros_costo(nombre)')
@@ -236,24 +243,41 @@ export const finanzasService = {
         .from('cuentas_bancarias')
         .select('saldo_actual')
         .is('deleted_at', null),
-      ApiService.clientes.getAll(),
     ]);
+    const clientesResult = await ApiService.clientes.getAll().then(
+      (data) => ({ status: 'fulfilled' as const, value: data }),
+      () => ({ status: 'rejected' as const }),
+    );
 
-    if (presupuestosResult.error) throw presupuestosResult.error;
-    if (flujoResult.error) throw flujoResult.error;
-    if (comprobantesResult.error) throw comprobantesResult.error;
-    if (chequesResult.error) throw chequesResult.error;
-    if (ventasPtResult.error) throw ventasPtResult.error;
-    if (saldoResult.error) throw saldoResult.error;
+    const partialWarnings: string[] = [];
+    const unwrap = <T>(result: PromiseSettledResult<unknown>, fallback: T): T => {
+      if (result.status === 'rejected') {
+        partialWarnings.push('Consulta secundaria');
+        return fallback;
+      }
+      const value = result.value as { data?: unknown; error?: unknown };
+      if (value && value.error) {
+        partialWarnings.push('Consulta secundaria');
+        return fallback;
+      }
+      return (value?.data ?? fallback) as T;
+    };
+    const unwrapClientes = () => {
+      if (clientesResult.status === 'rejected') {
+        partialWarnings.push('Consulta secundaria');
+        return [];
+      }
+      return Array.isArray(clientesResult.value) ? clientesResult.value : [];
+    };
 
-    const presupuestos = ((presupuestosResult.data ?? []) as unknown as PresupuestoDbRow[]).map((row) => ({
+    const presupuestos = (unwrap<PresupuestoDbRow[]>(presupuestosResult, []) as PresupuestoDbRow[]).map((row) => ({
       anio: row.anio,
       mes: row.mes,
       monto_presupuestado: row.monto_presupuestado,
       categoria: row.categorias_financieras?.nombre ?? null,
       centro_costo: row.centros_costo?.nombre ?? null,
     }));
-    const flujo = ((flujoResult.data ?? []) as unknown as FlujoCajaRubroDbRow[]).map((row) => ({
+    const flujo = (unwrap<FlujoCajaRubroDbRow[]>(flujoResult, []) as FlujoCajaRubroDbRow[]).map((row) => ({
       fecha: row.fecha,
       tipo: row.tipo,
       origen_operativo: row.origen_operativo,
@@ -262,15 +286,21 @@ export const finanzasService = {
       categoria: row.categoria ?? null,
       centro_costo: row.centro_costo ?? null,
     }));
-    const comprobantes = (comprobantesResult.data ?? []) as ComprobanteCarteraDbRow[];
-    const cheques = ((chequesResult.data ?? []) as ChequeTesoreriaDbRow[]).map((row) => ({
+    const comprobantes = unwrap<ComprobanteCarteraDbRow[]>(comprobantesResult, []) as ComprobanteCarteraDbRow[];
+    const cheques = (unwrap<ChequeTesoreriaDbRow[]>(chequesResult, []) as ChequeTesoreriaDbRow[]).map((row) => ({
       ...row,
       importe: Number(row.importe ?? 0),
     }));
-    const ventasPt = (ventasPtResult.data ?? []) as StockPTMovimientoVentaRow[];
-    const saldoActual = ((saldoResult.data ?? []) as CuentasBancariasSaldoRow[]).reduce((acc, row) => acc + Number(row.saldo_actual ?? 0), 0);
+    const ventasPt = unwrap<StockPTMovimientoVentaRow[]>(ventasPtResult, []) as StockPTMovimientoVentaRow[];
+    const saldoActual = (unwrap<CuentasBancariasSaldoRow[]>(saldoResult, []) as CuentasBancariasSaldoRow[]).reduce((acc, row) => acc + Number(row.saldo_actual ?? 0), 0);
+    const clientes = unwrapClientes();
 
-    return buildTesoreriaInsights(
+    const rubros = await finanzasService.getRubrosFinancieros().catch(() => {
+      partialWarnings.push('Consulta secundaria');
+      return [];
+    });
+
+    const insights = buildTesoreriaInsights(
       presupuestos,
       flujo,
       clientes,
@@ -278,8 +308,15 @@ export const finanzasService = {
       ventasPt as unknown as MovimientoStockPT[],
       cheques,
       saldoActual,
-      { rubros: await finanzasService.getRubrosFinancieros() },
+      { rubros },
     );
+
+    if (partialWarnings.length > 0) {
+      console.warn('[tesoreria] partial data loaded', {
+        warnings: partialWarnings.length,
+      });
+    }
+    return insights;
   },
 
   async getPresupuestosMensuales(): Promise<PresupuestoMensualGestionRow[]> {

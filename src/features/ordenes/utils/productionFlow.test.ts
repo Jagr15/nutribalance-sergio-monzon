@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Ingrediente } from '../../formulas/types';
 import type { StockLoteForFlow } from './productionFlow';
-import { planFifoConsumption, buildFinalizationPlan } from './productionFlow';
+import { planFifoConsumption, buildFinalizationPlan, buildFinalizationStockCheck } from './productionFlow';
+import { TipoUnidad } from '../../../shared/types/global.interface';
 
 const ingredientes: Ingrediente[] = [
   { id_insumo: 'i-1', nombre_insumo: 'Maíz', porcentaje: 60 },
@@ -136,5 +137,39 @@ describe('productionFlow - finalization plan', () => {
     expect(() =>
       buildFinalizationPlan('OP-TEST-002', 'Producto Test', 'PT-TEST-002', 'Silo Lechera', 1000, 980, plan.detalle, map)
     ).toThrowError(/No se encontró lote físico/);
+  });
+
+  it('usa stock agregado por insumo aunque el id del detalle no coincida con el lote exacto', () => {
+    const ingredienteDesfasado: Ingrediente[] = [
+      { id_insumo: 'legacy-maiz', nombre_insumo: 'HARINA DE SOJA', porcentaje: 100 },
+    ];
+    const lotesDesfasados: StockLoteForFlow[] = [
+      {
+        id: 'db-qa-1',
+        legacy_uid: 'qa-stock-soja',
+        lote: 'QA STOCK SOJA',
+        insumo_id: 'uuid-soja',
+        insumo_legacy_uid: 'legacy-soja',
+        insumo_nombre: 'Harina de Soja',
+        fecha_ingreso: '2026-06-01T00:00:00Z',
+        cantidad_actual: 1000,
+        cantidad_comprometida: 0,
+        costo_unitario: 1,
+      },
+    ];
+
+    const result = buildFinalizationStockCheck(100, 100, ingredienteDesfasado.map((item) => ({
+      id_lote: 'lote-inexistente',
+      id_insumo: item.id_insumo,
+      nombre_insumo: item.nombre_insumo,
+      cantidad_usada: 50,
+      tipo_unidad: TipoUnidad.KG,
+      costo_unitario: 1,
+      costo_total: 50,
+    })), lotesDesfasados);
+
+    expect(result.stockSuficiente).toBe(true);
+    expect(result.faltantes).toHaveLength(0);
+    expect(result.totalRequerido).toBe(50);
   });
 });

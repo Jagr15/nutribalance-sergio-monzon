@@ -53,6 +53,28 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
           ApiService.silos.getAll(),
           ApiService.stockMP.getAllLotes(),
         ]);
+        if (import.meta.env.DEV) {
+          console.table(
+            orden.detalle_insumos.map((item) => ({
+              id_lote: item.id_lote,
+              id_insumo: item.id_insumo,
+              nombre_insumo: item.nombre_insumo,
+              cantidad_usada: item.cantidad_usada,
+            }))
+          );
+          console.table(
+            lotesData.map((lote) => ({
+              id: lote.uid,
+              legacy_uid: lote.uid,
+              insumo_id: lote.insumo_id,
+              id_insumo: lote.id_insumo,
+              insumo_legacy_uid: lote.id_insumo,
+              nombre_insumo: lote.nombre_insumo ?? '',
+              cantidad_actual: lote.cantidad_actual,
+              cantidad_comprometida: lote.cantidad_comprometida ?? 0,
+            }))
+          );
+        }
         setSilos(silosData);
         setStockLotes(
           lotesData.map((lote) => ({
@@ -61,7 +83,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
             lote: lote.lote,
             insumo_id: lote.insumo_id,
             insumo_legacy_uid: lote.id_insumo,
-            insumo_nombre: lote.id_insumo,
+            insumo_nombre: lote.nombre_insumo ?? lote.id_insumo,
             fecha_ingreso: lote.fecha_ingreso.toISOString(),
             cantidad_actual: lote.cantidad_actual,
             cantidad_comprometida: lote.cantidad_comprometida,
@@ -75,7 +97,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
       }
     };
     void load();
-  }, []);
+  }, [orden.detalle_insumos]);
 
   const stockCheck = useMemo<FinalizationStockCheckResult | null>(() => {
     if (!orden.detalle_insumos || orden.detalle_insumos.length === 0 || stockLotes.length === 0) {

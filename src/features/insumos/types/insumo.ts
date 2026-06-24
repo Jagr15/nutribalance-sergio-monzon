@@ -42,6 +42,7 @@ export interface StockMateriaPrima {
     uid: string;
     insumo_id?: string;
     id_insumo: string;
+    nombre_insumo?: string;
     id_proveedor: string;
     lote: string;
     cantidad_actual: number; 

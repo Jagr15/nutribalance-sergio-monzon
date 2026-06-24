@@ -26,6 +26,15 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const describeExpeditionCandidate = () => ({
+    selectedStockId,
+    selectedClienteId,
+    presentacion,
+    cantidad,
+    motivo: motivo.trim() || null,
+    referencia: referencia.trim() || null,
+  });
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -76,6 +85,28 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
 
     try {
       setIsSubmitting(true);
+      if (import.meta.env.DEV) {
+        console.table(
+          stockPT.map((item) => ({
+            uid: item.uid,
+            id_orden: item.id_orden,
+            numero_orden: item.numero_orden,
+            id_formula: item.id_formula,
+            nombre_producto: item.nombre_producto,
+            lote: item.lote,
+            cantidad_total: item.cantidad_total,
+            estado: item.estado,
+          }))
+        );
+        console.table(
+          clientes.map((cliente) => ({
+            uid: cliente.uid,
+            nombre: cliente.nombre,
+            estado: cliente.estaActivo,
+          }))
+        );
+        console.debug('Expedición candidata', describeExpeditionCandidate());
+      }
       await ApiService.ordenesExpedicion.create({
         stock_pt_id: selectedStock.uid,
         cliente_id: selectedClienteId,
@@ -87,7 +118,9 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       await onSuccess?.();
       onClose();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'No se pudo registrar la orden de expedición.');
+      const message = submitError instanceof Error ? submitError.message : 'No se pudo registrar la orden de expedición.';
+      console.warn('Fallo al registrar expedición', { error: submitError, payload: describeExpeditionCandidate(), selectedStock, selectedClienteId });
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }

@@ -166,6 +166,36 @@ const UsuarioModal = ({ usuario, currentUser, existingUsers, onClose, onSave }: 
               </select>
               {errors.estado ? <p className="text-xs text-red-600">{errors.estado}</p> : null}
             </label>
+
+            <label className="space-y-1.5">
+              <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                Contraseña {usuario ? '(opcional)' : ''}
+              </span>
+              <input
+                className="ui-input w-full rounded-2xl px-4 py-3 text-sm"
+                value={form.password}
+                onChange={(event) => updateField('password', event.target.value)}
+                placeholder={usuario ? 'Dejar vacío para mantener la actual' : 'Mínimo 8 caracteres'}
+                type="password"
+                autoComplete={usuario ? 'new-password' : 'new-password'}
+              />
+              {errors.password ? <p className="text-xs text-red-600">{errors.password}</p> : usuario ? <p className="text-xs text-slate-500">Solo completa este campo si quieres cambiar la contraseña.</p> : null}
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                Confirmar contraseña {usuario ? '(opcional)' : ''}
+              </span>
+              <input
+                className="ui-input w-full rounded-2xl px-4 py-3 text-sm"
+                value={form.confirmPassword}
+                onChange={(event) => updateField('confirmPassword', event.target.value)}
+                placeholder={usuario ? 'Repite solo si cambias la contraseña' : 'Repite la contraseña'}
+                type="password"
+                autoComplete={usuario ? 'new-password' : 'new-password'}
+              />
+              {errors.confirmPassword ? <p className="text-xs text-red-600">{errors.confirmPassword}</p> : null}
+            </label>
           </div>
 
           <footer className="flex items-center justify-end gap-3 border-t border-slate-200 pt-4">

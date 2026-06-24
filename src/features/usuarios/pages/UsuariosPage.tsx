@@ -3,7 +3,7 @@ import { FiEdit2, FiPlus, FiPower, FiUsers } from 'react-icons/fi';
 import { Card } from '../../../shared/components/card';
 import { usePermissions } from '../../auth/usePermissions';
 import { getSessionUser } from '../../auth/session';
-import { usuarioService } from '../services/usuarioService';
+import { usuarioService, type UsuarioWritePayload } from '../services/usuarioService';
 import UsuarioModal from '../components/UsuarioModal';
 import type { Usuario } from '../types/usuario';
 import type { UsuarioFormValues } from '../utils/usuarioForm';
@@ -105,7 +105,9 @@ const UsuariosPage = () => {
         role: values.role as Usuario['role'],
         esta_activo: values.estado === 'activo',
         fecha_creacion: selectedUsuario?.fecha_creacion ?? new Date().toISOString(),
-      } satisfies Omit<Usuario, 'uid'>;
+        password: values.password,
+        confirmPassword: values.confirmPassword,
+      } satisfies UsuarioWritePayload;
 
       if (selectedUsuario) {
         await usuarioService.update(selectedUsuario.uid, payload);

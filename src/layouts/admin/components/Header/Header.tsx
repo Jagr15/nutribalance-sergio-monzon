@@ -5,17 +5,28 @@ import { useAlertas } from "../../../../features/alertas/hooks/useAlertas";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../../app/config/routes";
 import { BrandLogo } from "../../../../shared/components/BrandLogo";
-import { buildAlertCategoryHtml, isFinancialAlert, isProductAlert } from "../../../../features/alertas/utils/alertasClasificacion";
+import { buildAlertCategoryHtml, getAlertCategory } from "../../../../features/alertas/utils/alertasClasificacion";
 
 export const Header = () => {
   const currentUser = getSessionUser();
   const { alertas } = useAlertas();
   const navigate = useNavigate();
-  const criticalAlerts = alertas.filter((alerta) => alerta.prioridad === "critica" && alerta.estado !== "atendida" && alerta.estado !== "descartada");
-  const financialAlerts = criticalAlerts.filter(isFinancialAlert);
-  const operationalAlerts = criticalAlerts.filter(isProductAlert);
+  const activeAlerts = alertas.filter((alerta) => alerta.estado !== "atendida" && alerta.estado !== "descartada");
+  const financialAlerts = activeAlerts.filter((alerta) => getAlertCategory(alerta) === "financiera");
+  const operationalAlerts = activeAlerts.filter((alerta) => getAlertCategory(alerta) === "produccion");
+  const financialCriticalAlerts = financialAlerts.filter((alerta) => alerta.prioridad === "critica");
+  const financialUpcomingAlerts = financialAlerts.filter((alerta) => alerta.prioridad !== "critica");
   const financialCount = financialAlerts.length;
   const operationalCount = operationalAlerts.length;
+
+  if (import.meta.env.DEV) {
+    console.debug('[header-alertas]', {
+      total: activeAlerts.length,
+      financialCandidates: financialAlerts.map((alerta) => ({ titulo: alerta.titulo, area: alerta.area, prioridad: alerta.prioridad })),
+      financialFiltered: financialAlerts.map((alerta) => ({ titulo: alerta.titulo, area: alerta.area, prioridad: alerta.prioridad })),
+      operationalFiltered: operationalAlerts.map((alerta) => ({ titulo: alerta.titulo, area: alerta.area, prioridad: alerta.prioridad })),
+    });
+  }
 
   const showInfo = (feature: string) => {
     void Swal.fire({
@@ -32,7 +43,7 @@ export const Header = () => {
     const { title, description, alerts, tone, confirmButtonText, navigateTo } = kind === "financial"
       ? {
           title: "Campana financiera",
-          description: "Alertas críticas relacionadas con cheques, presupuesto, descubierto, cartera y vencimientos financieros.",
+          description: "Alertas financieras activas relacionadas con cheques, presupuesto, descubierto, cartera y vencimientos.",
           alerts: financialAlerts,
           tone: "amber" as const,
           confirmButtonText: "Ver finanzas",
@@ -47,6 +58,19 @@ export const Header = () => {
           navigateTo: ROUTES.ALERTAS,
         };
 
+    const financialExtra = kind === "financial" ? `
+      <div style="margin-top:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+        <div style="padding:12px 14px;border-radius:16px;border:1px solid #fee2e2;background:#fff7ed;">
+          <p style="margin:0 0 4px;color:#b45309;font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;">Críticas</p>
+          <p style="margin:0;color:#9a3412;font-size:24px;font-weight:900;line-height:1;">${financialCriticalAlerts.length}</p>
+        </div>
+        <div style="padding:12px 14px;border-radius:16px;border:1px solid #fde68a;background:#fffbeb;">
+          <p style="margin:0 0 4px;color:#b45309;font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;">Próximas</p>
+          <p style="margin:0;color:#92400e;font-size:24px;font-weight:900;line-height:1;">${financialUpcomingAlerts.length}</p>
+        </div>
+      </div>
+    ` : '';
+
     void Swal.fire({
       title,
       html: `
@@ -60,8 +84,12 @@ export const Header = () => {
                 : "Incluye stock, producción, inventario, trazabilidad y órdenes operativas.",
               alerts,
               tone,
+              kind === "financial"
+                ? { emptyLabel: "Sin alertas financieras activas.", counterLabel: "Activas" }
+                : { emptyLabel: "Sin alertas operativas activas.", counterLabel: "Activas" },
             )}
           </div>
+          ${financialExtra}
         </div>
       `,
       background: "#ffffff",
@@ -91,9 +119,9 @@ export const Header = () => {
   };
 
   return (
-    <header className="min-h-[104px] md:min-h-[112px] border-b border-slate-200 flex items-center justify-between px-4 md:px-8 py-3 bg-white gap-3">
-      <div className="flex items-center gap-5 min-w-0">
-        <BrandLogo variant="compact" className="shrink-0 max-w-[9rem]" />
+    <header className="min-h-[128px] md:min-h-[140px] border-b border-slate-200 flex items-center justify-between px-4 md:px-8 py-4 bg-white gap-3">
+      <div className="flex items-center gap-4 md:gap-6 min-w-0">
+        <BrandLogo variant="compact" className="shrink-0 w-[154px] md:w-[172px] max-w-none" />
         <div className="min-w-0 leading-tight">
           <h2 className="text-xl md:text-[1.7rem] font-black truncate">Ditmona Agro</h2>
           <p className="hidden md:block text-sm text-slate-500">Sistema de Producción e Inventario</p>

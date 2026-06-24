@@ -24,6 +24,8 @@ export const createEmptyUsuarioFormValues = (usuario?: Usuario): UsuarioFormInpu
   email: usuario?.email ?? '',
   role: usuario?.role ?? '',
   estado: usuario ? (usuario.esta_activo ? 'activo' : 'inactivo') : 'activo',
+  password: '',
+  confirmPassword: '',
 });
 
 export const normalizeUsuarioFormValues = normalizeUsuarioInput;

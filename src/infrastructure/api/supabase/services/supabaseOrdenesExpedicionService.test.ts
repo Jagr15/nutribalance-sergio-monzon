@@ -128,4 +128,50 @@ describe('supabaseOrdenesExpedicionService', () => {
     });
     expect(row.legacy_uid).toBe('exp-1');
   });
+
+  it('propaga el mensaje real del RPC al fallar', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'stock_pt') {
+        return {
+          select: () => ({
+            eq: () => ({
+              is: () => ({
+                maybeSingle: async () => ({ data: { id: 'pt-db-1' }, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'clientes') {
+        return {
+          select: () => ({
+            eq: () => ({
+              is: () => ({
+                maybeSingle: async () => ({ data: { id: 'cli-db-1' }, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`tabla inesperada: ${table}`);
+    });
+
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'No hay saldo suficiente en el lote de PT.',
+        details: 'constraint stock_pt_cantidad_total_chk',
+        hint: 'Revisar stock disponible.',
+      },
+    });
+
+    await expect(supabaseOrdenesExpedicionService.create({
+      stock_pt_id: 'pt-001',
+      cliente_id: 'cli-001',
+      presentacion: 'GRANEL',
+      cantidad: 25,
+      motivo: 'Venta',
+      referencia: 'R-1',
+    })).rejects.toThrow('No hay saldo suficiente en el lote de PT.');
+  });
 });

@@ -7,7 +7,7 @@ interface ProveedorRow {
   producto_que_provee: string | null;
   contacto_nombre: string;
   telefono: string;
-  email: string;
+  email: string | null;
   direccion: string;
   documento: string | null;
   esta_activo: boolean;
@@ -59,7 +59,7 @@ export const supabaseProveedorService = {
         producto_que_provee: payload.producto_que_provee ?? null,
         contacto_nombre: payload.contacto_nombre,
         telefono: payload.telefono,
-        email: payload.email,
+        email: payload.email ?? null,
         direccion: payload.direccion,
         documento: payload.documento ?? null,
         esta_activo: payload.esta_activo,
@@ -72,18 +72,20 @@ export const supabaseProveedorService = {
   },
 
   async update(uid: string, payload: Partial<Proveedor>): Promise<Proveedor> {
+    const updatePayload = {
+      ...(payload.nombre_empresa !== undefined ? { nombre_empresa: payload.nombre_empresa } : {}),
+      ...(payload.producto_que_provee !== undefined ? { producto_que_provee: payload.producto_que_provee ?? null } : {}),
+      ...(payload.contacto_nombre !== undefined ? { contacto_nombre: payload.contacto_nombre } : {}),
+      ...(payload.telefono !== undefined ? { telefono: payload.telefono } : {}),
+      ...(payload.email !== undefined ? { email: payload.email ?? null } : {}),
+      ...(payload.direccion !== undefined ? { direccion: payload.direccion } : {}),
+      ...(payload.documento !== undefined ? { documento: payload.documento ?? null } : {}),
+      ...(payload.esta_activo !== undefined ? { esta_activo: payload.esta_activo } : {}),
+    };
+
     const { data, error } = await supabaseClient
       .from('proveedores')
-      .update({
-        nombre_empresa: payload.nombre_empresa,
-        producto_que_provee: payload.producto_que_provee,
-        contacto_nombre: payload.contacto_nombre,
-        telefono: payload.telefono,
-        email: payload.email,
-        direccion: payload.direccion,
-        documento: payload.documento,
-        esta_activo: payload.esta_activo,
-      })
+      .update(updatePayload)
       .eq('legacy_uid', uid)
       .select('legacy_uid,nombre_empresa,producto_que_provee,contacto_nombre,telefono,email,direccion,documento,esta_activo')
       .single<ProveedorRow>();
