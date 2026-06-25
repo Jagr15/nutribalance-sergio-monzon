@@ -8,12 +8,17 @@ import type {
   UltimoPrecioPagadoInsumo,
 } from '../../features/insumos/types';
 import type { OrdenProduccion } from '../../features/ordenes/types';
-import type { OrdenExpedicion, RegistrarOrdenExpedicionPayload } from '../../features/ordenes/types';
+import type { ActualizarOrdenExpedicionPayload, OrdenExpedicion, RegistrarOrdenExpedicionPayload } from '../../features/ordenes/types';
 import type {
   MovimientoStockPT,
   RegistrarSalidaStockPTData,
   StockProductoTerminado,
   StockProductoTerminadoResumen,
+} from '../../features/productos/types';
+import type {
+  ActualizarEmpaqueProductoPayload,
+  CrearEmpaqueProductoPayload,
+  EmpaqueProducto,
 } from '../../features/productos/types';
 import type {
   MovimientoMPAuditoria,
@@ -111,6 +116,11 @@ export interface OrdenesService {
 export interface OrdenesExpedicionService {
   getAll: () => Promise<OrdenExpedicion[]>;
   create: (data: RegistrarOrdenExpedicionPayload) => Promise<OrdenExpedicion>;
+  update: (id: string, data: ActualizarOrdenExpedicionPayload) => Promise<OrdenExpedicion>;
+  iniciarPreparacion: (id: string) => Promise<OrdenExpedicion>;
+  marcarLista: (id: string) => Promise<OrdenExpedicion>;
+  despachar: (id: string) => Promise<OrdenExpedicion>;
+  cancelar: (id: string) => Promise<OrdenExpedicion>;
 }
 
 export interface StockPTService {
@@ -118,6 +128,13 @@ export interface StockPTService {
   getResumen: () => Promise<StockProductoTerminadoResumen[]>;
   getMovimientos: () => Promise<MovimientoStockPT[]>;
   registrarSalida: (data: RegistrarSalidaStockPTData) => Promise<StockProductoTerminado>;
+}
+
+export interface EmpaquesProductoService {
+  listByProducto: (productoId: string) => Promise<EmpaqueProducto[]>;
+  create: (data: CrearEmpaqueProductoPayload) => Promise<EmpaqueProducto>;
+  update: (id: string, data: ActualizarEmpaqueProductoPayload) => Promise<EmpaqueProducto>;
+  toggleActive: (id: string, activo: boolean) => Promise<EmpaqueProducto>;
 }
 
 export interface TrazabilidadService {
@@ -133,6 +150,7 @@ export interface ApiServices {
   formulas: FormulasService;
   stockMP: StockMPService;
   stockPT: StockPTService;
+  empaquesProducto: EmpaquesProductoService;
   trazabilidad: TrazabilidadService;
   silos: SilosService;
   ordenes: OrdenesService;

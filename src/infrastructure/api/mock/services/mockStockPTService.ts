@@ -285,3 +285,49 @@ export const mockStockPTService = {
     return mockApiCall(nextStock, 300);
   },
 };
+
+export const applyMockSalidaAjuste = (payload: {
+  stock_pt_id: string;
+  deltaKg: number;
+  motivo: string;
+  referencia?: string | null;
+  cliente_id?: string | null;
+  cliente_nombre?: string | null;
+}) => {
+  const index = stockPTMock.findIndex((item) => item.uid === payload.stock_pt_id);
+  if (index === -1) {
+    throw new Error('El stock PT no existe.');
+  }
+
+  const current = stockPTMock[index];
+  const nextSaldo = Number((Number(current.cantidad_total) - payload.deltaKg).toFixed(3));
+  if (nextSaldo < 0) {
+    throw new Error('No hay saldo suficiente en el lote de PT.');
+  }
+
+  const nextStock: StockProductoTerminado = {
+    ...current,
+    cantidad_total: nextSaldo,
+    estado: recomputeEstado({ ...current, cantidad_total: nextSaldo }),
+    updateAt: nowIso(),
+  };
+  stockPTMock[index] = nextStock;
+  pushMovimiento({
+    stock_pt_id: nextStock.uid,
+    producto_id: nextStock.id_formula ?? nextStock.nombre_producto,
+    nombre_producto: nextStock.nombre_producto,
+    lote: nextStock.lote,
+    numero_orden: nextStock.numero_orden,
+    silo: nextStock.nombre_silo,
+    tipo: 'SALIDA',
+    cantidad: payload.deltaKg,
+    unidad: nextStock.unidad_medida,
+    costo_unitario: nextStock.costo_unitario_estimado ?? null,
+    valor_total: Number((payload.deltaKg * Number(nextStock.costo_unitario_estimado ?? 0)).toFixed(6)),
+    motivo: payload.motivo,
+    referencia: payload.referencia ?? null,
+    cliente_id: payload.cliente_id ?? null,
+    cliente_nombre: payload.cliente_nombre ?? null,
+  });
+  return nextStock;
+};

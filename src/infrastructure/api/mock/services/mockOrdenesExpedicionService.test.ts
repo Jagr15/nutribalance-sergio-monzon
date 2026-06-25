@@ -22,6 +22,7 @@ describe('mockOrdenesExpedicionService', () => {
       cliente_id: 'cli-001',
       presentacion: 'GRANEL',
       cantidad: 10,
+      unidad_cantidad: 'kg',
       motivo: 'Venta',
       referencia: 'EXP-TEST',
     });
@@ -42,6 +43,21 @@ describe('mockOrdenesExpedicionService', () => {
       cliente_id: '',
       presentacion: 'BOLSA',
       cantidad: 1,
+      unidad_cantidad: 'kg',
     })).rejects.toThrow('El cliente destino es obligatorio.');
+  });
+
+  it('convierte toneladas a kg', async () => {
+    const stock = (await mockStockPTService.getAll())[0]!;
+    const created = await mockOrdenesExpedicionService.create({
+      stock_pt_id: stock.uid,
+      cliente_id: 'cli-001',
+      presentacion: 'GRANEL',
+      cantidad: 1.25,
+      unidad_cantidad: 'tonelada',
+    });
+
+    expect(created.cantidad_original).toBe(1.25);
+    expect(created.cantidad_kg).toBe(1250);
   });
 });

@@ -13,12 +13,18 @@ create table if not exists public.ordenes_expedicion (
   cliente_id uuid references public.clientes(id) on delete set null,
   presentacion text not null,
   cantidad numeric(14,3) not null,
+  cantidad_original numeric(14,3) not null default 0,
+  unidad_cantidad text not null default 'kg',
+  cantidad_kg numeric(14,3) not null default 0,
   estado text not null default 'REGISTRADA',
   motivo text,
   referencia text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint ordenes_expedicion_cantidad_chk check (cantidad > 0),
+  constraint ordenes_expedicion_cantidad_original_chk check (cantidad_original > 0),
+  constraint ordenes_expedicion_unidad_cantidad_chk check (unidad_cantidad in ('kg', 'tonelada')),
+  constraint ordenes_expedicion_cantidad_kg_chk check (cantidad_kg > 0),
   constraint ordenes_expedicion_estado_chk check (estado in ('PENDIENTE', 'REGISTRADA', 'ANULADA')),
   constraint ordenes_expedicion_presentacion_chk check (presentacion in ('GRANEL', 'BIG_BAG', 'BOLSA'))
 );
@@ -33,6 +39,8 @@ create or replace function public.registrar_orden_expedicion(
   p_cliente_id uuid,
   p_presentacion text,
   p_cantidad numeric,
+  p_cantidad_original numeric default null,
+  p_unidad_cantidad text default null,
   p_motivo text default null,
   p_referencia text default null
 )
@@ -47,6 +55,12 @@ declare
 begin
   if p_cantidad is null or p_cantidad <= 0 then
     raise exception 'La cantidad a expedir debe ser mayor a cero.';
+  end if;
+  if p_cantidad_original is null or p_cantidad_original <= 0 then
+    raise exception 'La cantidad original debe ser mayor a cero.';
+  end if;
+  if upper(trim(coalesce(p_unidad_cantidad, 'kg'))) not in ('KG', 'TONELADA') then
+    raise exception 'La unidad de medida no es válida.';
   end if;
 
   if p_cliente_id is null then
@@ -89,6 +103,9 @@ begin
     cliente_id,
     presentacion,
     cantidad,
+    cantidad_original,
+    unidad_cantidad,
+    cantidad_kg,
     estado,
     motivo,
     referencia
@@ -101,6 +118,9 @@ begin
     v_stock_pt.lote,
     p_cliente_id,
     v_presentacion,
+    p_cantidad,
+    p_cantidad_original,
+    lower(trim(coalesce(p_unidad_cantidad, 'kg'))),
     p_cantidad,
     'REGISTRADA',
     coalesce(p_motivo, 'Despacho de producto terminado'),
@@ -119,5 +139,43 @@ begin
   select *
   from public.ordenes_expedicion
   where legacy_uid = v_legacy_uid;
+end;
+$$;
+
+create or replace function public.actualizar_orden_expedicion(
+  p_orden_id uuid,
+  p_presentacion text default null,
+  p_cantidad numeric default null,
+  p_cantidad_original numeric default null,
+  p_unidad_cantidad text default null,
+  p_motivo text default null,
+  p_referencia text default null
+)
+returns setof public.ordenes_expedicion
+language plpgsql
+as $$
+declare
+  v_orden public.ordenes_expedicion%rowtype;
+begin
+  select * into v_orden from public.ordenes_expedicion where id = p_orden_id for update;
+  if not found then
+    raise exception 'La orden de expedición no existe.';
+  end if;
+  if v_orden.estado = 'ANULADA' then
+    raise exception 'No se puede editar una orden cancelada.';
+  end if;
+
+  update public.ordenes_expedicion set
+    presentacion = coalesce(p_presentacion, presentacion),
+    cantidad = coalesce(p_cantidad, cantidad),
+    cantidad_original = coalesce(p_cantidad_original, cantidad_original),
+    unidad_cantidad = coalesce(lower(trim(p_unidad_cantidad)), unidad_cantidad),
+    cantidad_kg = coalesce(p_cantidad, cantidad_kg),
+    motivo = coalesce(p_motivo, motivo),
+    referencia = coalesce(p_referencia, referencia),
+    updated_at = now()
+  where id = p_orden_id;
+
+  return query select * from public.ordenes_expedicion where id = p_orden_id;
 end;
 $$;

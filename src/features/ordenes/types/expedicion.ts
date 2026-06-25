@@ -1,7 +1,9 @@
 export const EstadoExpedicion = {
-  PENDIENTE: 'PENDIENTE',
-  REGISTRADA: 'REGISTRADA',
-  ANULADA: 'ANULADA',
+  PENDIENTE: 'pendiente',
+  PREPARANDO: 'preparando',
+  LISTA: 'lista',
+  DESPACHADA: 'despachada',
+  CANCELADA: 'cancelada',
 } as const;
 
 export type EstadoExpedicion = (typeof EstadoExpedicion)[keyof typeof EstadoExpedicion];
@@ -26,6 +28,9 @@ export interface OrdenExpedicion {
   cliente_nombre: string | null;
   presentacion: PresentacionExpedicion;
   cantidad: number;
+  cantidad_original: number;
+  unidad_cantidad: 'kg' | 'tonelada';
+  cantidad_kg: number;
   estado: EstadoExpedicion;
   motivo: string | null;
   referencia: string | null;
@@ -38,6 +43,9 @@ export interface RegistrarOrdenExpedicionPayload {
   cliente_id: string;
   presentacion: PresentacionExpedicion;
   cantidad: number;
+  unidad_cantidad: 'kg' | 'tonelada';
   motivo?: string | null;
   referencia?: string | null;
 }
+
+export type ActualizarOrdenExpedicionPayload = Partial<RegistrarOrdenExpedicionPayload>;

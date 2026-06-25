@@ -36,7 +36,10 @@ describe('supabaseOrdenesExpedicionService', () => {
                 clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
                 presentacion: 'GRANEL',
                 cantidad: 25,
-                estado: 'REGISTRADA',
+                cantidad_original: 25,
+                unidad_cantidad: 'kg',
+                cantidad_kg: 25,
+                estado: 'pendiente',
                 motivo: 'Venta',
                 referencia: 'R-1',
                 created_at: '2026-06-18T10:00:00Z',
@@ -100,7 +103,10 @@ describe('supabaseOrdenesExpedicionService', () => {
         clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
         presentacion: 'GRANEL',
         cantidad: 25,
-        estado: 'REGISTRADA',
+        cantidad_original: 25,
+        unidad_cantidad: 'kg',
+        cantidad_kg: 25,
+        estado: 'pendiente',
         motivo: 'Venta',
         referencia: 'R-1',
         created_at: '2026-06-18T10:00:00Z',
@@ -114,6 +120,7 @@ describe('supabaseOrdenesExpedicionService', () => {
       cliente_id: 'cli-001',
       presentacion: 'GRANEL',
       cantidad: 25,
+      unidad_cantidad: 'kg',
       motivo: 'Venta',
       referencia: 'R-1',
     });
@@ -123,6 +130,8 @@ describe('supabaseOrdenesExpedicionService', () => {
       p_cliente_id: 'cli-db-1',
       p_presentacion: 'GRANEL',
       p_cantidad: 25,
+      p_cantidad_original: 25,
+      p_unidad_cantidad: 'kg',
       p_motivo: 'Venta',
       p_referencia: 'R-1',
     });
@@ -170,8 +179,126 @@ describe('supabaseOrdenesExpedicionService', () => {
       cliente_id: 'cli-001',
       presentacion: 'GRANEL',
       cantidad: 25,
+      unidad_cantidad: 'kg',
       motivo: 'Venta',
       referencia: 'R-1',
     })).rejects.toThrow('No hay saldo suficiente en el lote de PT.');
+  });
+
+  it('actualiza una orden existente', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'stock_pt' || table === 'clientes') {
+        return {
+          select: () => ({
+            eq: () => ({
+              is: () => ({
+                maybeSingle: async () => ({ data: { id: `${table}-db-1` }, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`tabla inesperada: ${table}`);
+    });
+
+    mockRpc.mockResolvedValue({
+      data: [{
+        id: 'id-1',
+        legacy_uid: 'exp-1',
+        numero_expedicion: 'EXP-2026-000001',
+        stock_pt_id: 'pt-db-1',
+        producto_id: 'prod-1',
+        nombre_producto: 'Producto 1',
+        lote_pt: 'L-1',
+        cliente_id: 'cli-db-1',
+        clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
+        presentacion: 'GRANEL',
+        cantidad: 1250,
+        cantidad_original: 1.25,
+        unidad_cantidad: 'tonelada',
+        cantidad_kg: 1250,
+        estado: 'despachada',
+        motivo: 'Venta',
+        referencia: 'R-1',
+        created_at: '2026-06-18T10:00:00Z',
+        updated_at: '2026-06-18T10:05:00Z',
+      }],
+      error: null,
+    });
+
+    const row = await supabaseOrdenesExpedicionService.update('id-1', {
+      cantidad: 1.25,
+      unidad_cantidad: 'tonelada',
+      motivo: 'Venta',
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith('actualizar_orden_expedicion', expect.objectContaining({
+      p_orden_id: 'id-1',
+      p_cantidad_original: 1.25,
+      p_unidad_cantidad: 'tonelada',
+    }));
+    expect(row.cantidad_kg).toBe(1250);
+  });
+
+  it('despacha una orden', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        id: 'id-1',
+        legacy_uid: 'exp-1',
+        numero_expedicion: 'EXP-2026-000001',
+        stock_pt_id: 'pt-db-1',
+        producto_id: 'prod-1',
+        nombre_producto: 'Producto 1',
+        lote_pt: 'L-1',
+        cliente_id: 'cli-db-1',
+        clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
+        presentacion: 'GRANEL',
+        cantidad: 25,
+        cantidad_original: 25,
+        unidad_cantidad: 'kg',
+        cantidad_kg: 25,
+        estado: 'despachada',
+        motivo: 'Venta',
+        referencia: 'R-1',
+        created_at: '2026-06-18T10:00:00Z',
+        updated_at: '2026-06-18T10:05:00Z',
+      }],
+      error: null,
+    });
+
+    const row = await supabaseOrdenesExpedicionService.despachar('id-1');
+    expect(mockRpc).toHaveBeenCalledWith('despachar_orden_expedicion', { p_orden_id: 'id-1' });
+    expect(row.estado).toBe('despachada');
+  });
+
+  it('cancela una orden pendiente', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        id: 'id-1',
+        legacy_uid: 'exp-1',
+        numero_expedicion: 'EXP-2026-000001',
+        stock_pt_id: 'pt-db-1',
+        producto_id: 'prod-1',
+        nombre_producto: 'Producto 1',
+        lote_pt: 'L-1',
+        cliente_id: 'cli-db-1',
+        clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
+        presentacion: 'GRANEL',
+        cantidad: 25,
+        cantidad_original: 25,
+        unidad_cantidad: 'kg',
+        cantidad_kg: 25,
+        estado: 'cancelada',
+        motivo: 'Venta',
+        referencia: 'R-1',
+        created_at: '2026-06-18T10:00:00Z',
+        updated_at: '2026-06-18T10:05:00Z',
+      }],
+      error: null,
+    });
+
+    const row = await supabaseOrdenesExpedicionService.cancelar('id-1');
+    expect(mockRpc).toHaveBeenCalledWith('cancelar_orden_expedicion', { p_orden_id: 'id-1' });
+    expect(row.estado).toBe('cancelada');
   });
 });

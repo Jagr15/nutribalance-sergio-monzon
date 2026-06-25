@@ -3,23 +3,29 @@ import { createPortal } from 'react-dom';
 import { FiX, FiTruck, FiPackage, FiUser, FiFileText } from 'react-icons/fi';
 import { ApiService } from '../../../infrastructure/api';
 import type { Cliente } from '../../clientes/types/cliente';
-import type { StockProductoTerminado } from '../../productos/types';
+import type { EmpaqueProducto, StockProductoTerminado } from '../../productos/types';
+import type { OrdenExpedicion } from '../types';
 import { PresentacionExpedicion } from '../types';
+import { calcularEmpaques } from '../utils/empaques';
 
 interface Props {
   onClose: () => void;
   onSuccess?: () => Promise<void> | void;
+  orden?: OrdenExpedicion | null;
 }
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
 
-const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
+const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = null }) => {
   const [stockPT, setStockPT] = useState<StockProductoTerminado[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [selectedStockId, setSelectedStockId] = useState('');
-  const [selectedClienteId, setSelectedClienteId] = useState('');
+  const [empaques, setEmpaques] = useState<EmpaqueProducto[]>([]);
+  const [selectedStockId, setSelectedStockId] = useState(orden?.stock_pt_id ?? '');
+  const [selectedClienteId, setSelectedClienteId] = useState(orden?.cliente_id ?? '');
   const [presentacion, setPresentacion] = useState<keyof typeof PresentacionExpedicion>('GRANEL');
-  const [cantidad, setCantidad] = useState<number | ''>('');
+  const [modoCalculo, setModoCalculo] = useState<'EMPAQUES' | 'KG'>('EMPAQUES');
+  const [selectedEmpaqueId, setSelectedEmpaqueId] = useState('');
+  const [valorEntrada, setValorEntrada] = useState<number | ''>(orden?.cantidad_original ?? '');
   const [motivo, setMotivo] = useState('');
   const [referencia, setReferencia] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -30,7 +36,9 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     selectedStockId,
     selectedClienteId,
     presentacion,
-    cantidad,
+    modoCalculo,
+    selectedEmpaqueId,
+    valorEntrada,
     motivo: motivo.trim() || null,
     referencia: referencia.trim() || null,
   });
@@ -45,8 +53,9 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         const disponibles = stockData.filter((item) => Number(item.cantidad_total ?? 0) > 0);
         setStockPT(disponibles);
         setClientes(clientesData);
-        setSelectedStockId(disponibles[0]?.uid ?? '');
-        setSelectedClienteId(clientesData[0]?.uid ?? '');
+        setSelectedStockId((current) => current || (disponibles[0]?.uid ?? ''));
+        setSelectedClienteId((current) => current || (clientesData[0]?.uid ?? ''));
+        if (orden) setPresentacion(orden.presentacion);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'No se pudo cargar la información para expedición.');
       } finally {
@@ -55,12 +64,57 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     };
 
     void load();
-  }, []);
+  }, [orden]);
 
   const selectedStock = useMemo(
     () => stockPT.find((item) => item.uid === selectedStockId) ?? null,
     [stockPT, selectedStockId]
   );
+  useEffect(() => {
+    const loadEmpaques = async () => {
+      if (!selectedStock) {
+        setEmpaques([]);
+        setSelectedEmpaqueId('');
+        return;
+      }
+      try {
+        const productoId = selectedStock.id_formula ?? selectedStock.nombre_producto;
+        const rows = await ApiService.empaquesProducto.listByProducto(productoId);
+        const activos = rows.filter((item) => item.activo);
+        setEmpaques(activos);
+        setSelectedEmpaqueId((current) => {
+          if (activos.length === 0) return '';
+          return current && activos.some((item) => item.id === current) ? current : activos[0].id;
+        });
+        if (activos.length === 0) {
+          setModoCalculo('KG');
+        }
+      } catch {
+        setEmpaques([]);
+        setSelectedEmpaqueId('');
+        setModoCalculo('KG');
+      }
+    };
+    void loadEmpaques();
+  }, [selectedStock]);
+
+  const isEditable = !orden || orden.estado === 'pendiente';
+  const selectedEmpaque = empaques.find((item) => item.id === selectedEmpaqueId) ?? null;
+  const calculo =
+    valorEntrada === ''
+      ? null
+      : selectedEmpaque
+        ? calcularEmpaques(modoCalculo, Number(valorEntrada), selectedEmpaque)
+        : modoCalculo === 'KG' && Number(valorEntrada) > 0
+          ? {
+              tipo_empaque: 'BOLSA' as const,
+              capacidad_kg: 1 as const,
+              cantidad_empaques: 1,
+              total_kg: Number(valorEntrada),
+              sobrante_kg: 0,
+              faltante_kg: 0,
+            }
+          : null;
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
@@ -70,15 +124,27 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       setError('Seleccioná un producto terminado disponible.');
       return;
     }
+    if (!isEditable) {
+      setError('La orden ya no puede editarse.');
+      return;
+    }
     if (!selectedClienteId) {
       setError('Seleccioná un cliente destino.');
       return;
     }
-    if (cantidad === '' || Number.isNaN(Number(cantidad)) || Number(cantidad) <= 0) {
-      setError('La cantidad a expedir debe ser mayor a 0.');
+    if (valorEntrada === '' || Number.isNaN(Number(valorEntrada)) || Number(valorEntrada) <= 0) {
+      setError('La cantidad debe ser mayor a 0.');
       return;
     }
-    if (Number(cantidad) > Number(selectedStock.cantidad_total ?? 0)) {
+    if (empaques.length > 0 && !selectedEmpaque) {
+      setError('Seleccioná un empaque válido.');
+      return;
+    }
+    if (!calculo || calculo.total_kg <= 0) {
+      setError('El cálculo de empaque debe dar un total mayor a 0.');
+      return;
+    }
+    if (calculo.total_kg > Number(selectedStock.cantidad_total ?? 0)) {
       setError('La cantidad no puede superar el stock disponible.');
       return;
     }
@@ -107,14 +173,17 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         );
         console.debug('Expedición candidata', describeExpeditionCandidate());
       }
-      await ApiService.ordenesExpedicion.create({
+      const payload = {
         stock_pt_id: selectedStock.uid,
         cliente_id: selectedClienteId,
         presentacion,
-        cantidad: Number(cantidad),
+        cantidad: calculo.total_kg,
+        unidad_cantidad: 'kg' as const,
         motivo: motivo.trim() || undefined,
         referencia: referencia.trim() || undefined,
-      });
+      } as const;
+      if (orden) await ApiService.ordenesExpedicion.update(orden.id, payload);
+      else await ApiService.ordenesExpedicion.create(payload);
       await onSuccess?.();
       onClose();
     } catch (submitError) {
@@ -143,7 +212,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         <header className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.35em] text-cyan-500">Órdenes de Expedición</p>
-            <h3 className="text-xl font-black text-slate-900">Nueva orden de expedición</h3>
+            <h3 className="text-xl font-black text-slate-900">{orden ? 'Editar orden de expedición' : 'Nueva orden de expedición'}</h3>
           </div>
           <button
             type="button"
@@ -167,6 +236,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
               <select
                 value={selectedStockId}
                 onChange={(e) => setSelectedStockId(e.target.value)}
+                disabled={!isEditable}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
               >
                 {stockPT.map((item) => (
@@ -185,6 +255,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
               <select
                 value={selectedClienteId}
                 onChange={(e) => setSelectedClienteId(e.target.value)}
+                disabled={!isEditable}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
               >
                 <option value="">Seleccionar cliente</option>
@@ -216,7 +287,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             </div>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <label className="space-y-2">
               <span className="ml-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
                 <FiTruck size={12} /> Presentación
@@ -224,6 +295,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
               <select
                 value={presentacion}
                 onChange={(e) => setPresentacion(e.target.value as keyof typeof PresentacionExpedicion)}
+                disabled={!isEditable}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
               >
                 <option value="GRANEL">A granel</option>
@@ -234,14 +306,55 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
 
             <label className="space-y-2">
               <span className="ml-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
-                <FiPackage size={12} /> Cantidad a expedir
+                <FiPackage size={12} /> Modo de cálculo
+              </span>
+              <select
+                value={modoCalculo}
+                onChange={(e) => setModoCalculo(e.target.value as 'EMPAQUES' | 'KG')}
+                disabled={!isEditable}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
+              >
+                <option value="EMPAQUES">Número de empaques</option>
+                <option value="KG">Kg requeridos</option>
+              </select>
+            </label>
+
+            <label className="space-y-2">
+              <span className="ml-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                <FiPackage size={12} /> Empaque
+              </span>
+              {empaques.length > 0 ? (
+                <select
+                  value={selectedEmpaqueId}
+                  onChange={(e) => setSelectedEmpaqueId(e.target.value)}
+                  disabled={!isEditable}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
+                >
+                  <option value="">Seleccionar empaque</option>
+                  {empaques.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.tipo_empaque === 'BOLSA' ? 'Bolsa' : 'Big Bag'} · {item.capacidad_kg} kg
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                  Este producto todavía no tiene empaques configurados. Podés registrar la orden en kg.
+                </div>
+              )}
+            </label>
+
+            <label className="space-y-2">
+              <span className="ml-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                <FiPackage size={12} /> {modoCalculo === 'EMPAQUES' ? 'Cantidad de empaques' : 'Kg requeridos'}
               </span>
               <input
                 type="number"
                 min="0"
                 step="0.001"
-                value={cantidad}
-                onChange={(e) => setCantidad(e.target.value === '' ? '' : Number(e.target.value))}
+                value={valorEntrada}
+                onChange={(e) => setValorEntrada(e.target.value === '' ? '' : Number(e.target.value))}
+                disabled={!isEditable}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
               />
             </label>
@@ -254,11 +367,22 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                 type="text"
                 value={referencia}
                 onChange={(e) => setReferencia(e.target.value)}
+                disabled={!isEditable}
                 placeholder="Remito, factura o nota"
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
               />
             </label>
           </div>
+
+          {calculo ? (
+            <div className="rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
+              <div><strong>Tipo:</strong> {selectedEmpaque ? (calculo.tipo_empaque === 'BOLSA' ? 'Bolsa' : 'Big Bag') : 'Kg directo'}</div>
+              <div><strong>Capacidad por empaque:</strong> {selectedEmpaque ? `${calculo.capacidad_kg} kg` : '1 kg'}</div>
+              <div><strong>Número de empaques:</strong> {selectedEmpaque ? calculo.cantidad_empaques : 'N/A'}</div>
+              <div><strong>Total kg:</strong> {calculo.total_kg} kg</div>
+              <div><strong>Sobrante:</strong> {selectedEmpaque ? `${calculo.sobrante_kg} kg` : '0 kg'}</div>
+            </div>
+          ) : null}
 
           <label className="space-y-2">
             <span className="ml-1 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Motivo opcional</span>
@@ -266,6 +390,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
               type="text"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
+              disabled={!isEditable}
               placeholder="Despacho comercial, prueba, ajuste..."
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
             />
@@ -292,11 +417,11 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess }) => {
           </button>
           <button
             type="button"
-            disabled={!selectedStock || !selectedClienteId || isSubmitting}
+            disabled={!selectedStock || !selectedClienteId || isSubmitting || !isEditable}
             onClick={handleSubmit}
             className="flex-[2] rounded-xl bg-cyan-600 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-cyan-900/20 transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSubmitting ? 'Registrando...' : 'Guardar expedición'}
+            {isSubmitting ? 'Guardando...' : orden ? 'Guardar cambios' : 'Guardar expedición'}
           </button>
         </footer>
       </div>
