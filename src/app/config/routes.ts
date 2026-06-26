@@ -8,6 +8,7 @@ export const ROUTES = {
   PRODUCTOS: '/productos',
   COSTOS: '/costos',
   MOVIMIENTOS_FINANCIEROS: '/costos/movimientos',
+  PRESUPUESTOS: '/presupuestos',
   ESTADOS_FINANCIEROS: '/estados-financieros',
   TESORERIA: '/tesoreria',
   INSUMOS: '/insumos',

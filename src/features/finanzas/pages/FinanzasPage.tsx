@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FiEdit2, FiPlus, FiPower, FiRotateCcw, FiX } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../../../shared/components/card';
 import { useFinanzas } from '../hooks/useFinanzas';
 import { FlujoCharts } from '../components/FlujoCharts';
@@ -8,6 +9,7 @@ import { MovimientosTable } from '../components/MovimientosTable';
 import { RegistrarMovimientoForm } from '../components/RegistrarMovimientoForm';
 import { usePermissions } from '../../auth/usePermissions';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
+import { ROUTES } from '../../../app/config/routes';
 import {
   enrichIngresosPtPorProducto,
   RUBRO_AREA_DEFAULT,
@@ -134,6 +136,7 @@ const writeBudgetConfigs = (config: BudgetConfig[]) => {
 const FinanzasPage = () => {
   const { kpis, reportes, tesoreria, movimientos, costosComparativos, loading, loadError, infoMessage, refresh, createMovimiento } = useFinanzas();
   const { canAccess } = usePermissions();
+  const navigate = useNavigate();
   const [variacionesSort, setVariacionesSort] = useState<(typeof variacionesSortOptions)[number]['value']>('desviacion');
   const [ingresosSort, setIngresosSort] = useState<IngresoPtSortMode>('venta_real');
   const [movimientosQuery, setMovimientosQuery] = useState('');
@@ -153,6 +156,7 @@ const FinanzasPage = () => {
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [budgetFeedback, setBudgetFeedback] = useState<string | null>(null);
   const [budgetSavedMessage, setBudgetSavedMessage] = useState<string | null>(null);
+  const rubroFormRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
     void finanzasService.getRubrosFinancieros().then((rows) => {
@@ -428,6 +432,14 @@ const FinanzasPage = () => {
     });
     setRubroError(null);
     setRubrosSavedMessage(null);
+  };
+
+  const handleNewRubro = () => {
+    setEditingRubroId(null);
+    setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
+    setRubroError(null);
+    setRubrosSavedMessage(null);
+    window.setTimeout(() => rubroFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   };
 
   const handleToggleRubro = (rubro: RubroFinancieroAdmin) => {
@@ -801,7 +813,7 @@ const FinanzasPage = () => {
                 </button>
               <button
                 type="button"
-                onClick={() => setIsBudgetEditorOpen(true)}
+                onClick={() => navigate(ROUTES.PRESUPUESTOS)}
                 className="inline-flex items-center gap-2 rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
               >
                 Editar presupuesto
@@ -1232,12 +1244,7 @@ const FinanzasPage = () => {
             <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setEditingRubroId(null);
-                  setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
-                  setRubroError(null);
-                  setRubrosSavedMessage(null);
-                }}
+                onClick={handleNewRubro}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
               >
                 <FiPlus size={14} />
@@ -1310,6 +1317,7 @@ const FinanzasPage = () => {
             </div>
 
             <form
+              ref={rubroFormRef}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
               onSubmit={(event) => {
                 event.preventDefault();

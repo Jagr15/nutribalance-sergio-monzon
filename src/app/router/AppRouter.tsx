@@ -19,6 +19,7 @@ const ClientesPage = lazy(() => import('../../features/clientes/pages/ClientesPa
 const ProductosPage = lazy(() => import('../../features/productos/pages/ProductosPage'));
 const CostosPage = lazy(() => import('../../features/costos/pages/CostosPage'));
 const EstadosFinancierosPage = lazy(() => import('../../features/finanzas/pages/EstadosFinancierosPage'));
+const PresupuestosPage = lazy(() => import('../../features/finanzas/pages/PresupuestosPage'));
 const MovimientosFinancierosPage = lazy(() => import('../../features/finanzas/pages/MovimientosFinancierosPage'));
 const TesoreriaPage = lazy(() => import('../../features/tesoreria/pages/TesoreriaPage'));
 const StockGeneralPage = lazy(() => import('../../features/inventario/pages/StockGeneralPage'));
@@ -90,6 +91,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.PRODUCTOS} element={<ModuleRoute module="productos"><ProductosPage /></ModuleRoute>} />
           <Route path={ROUTES.COSTOS} element={<ModuleRoute module="finanzas"><CostosPage /></ModuleRoute>} />
           <Route path={ROUTES.MOVIMIENTOS_FINANCIEROS} element={<ModuleRoute module="finanzas"><MovimientosFinancierosPage /></ModuleRoute>} />
+          <Route path={ROUTES.PRESUPUESTOS} element={<ModuleRoute module="finanzas"><PresupuestosPage /></ModuleRoute>} />
           <Route path={ROUTES.ESTADOS_FINANCIEROS} element={<ModuleRoute module="finanzas"><EstadosFinancierosPage /></ModuleRoute>} />
           <Route path={ROUTES.TESORERIA} element={<ModuleRoute module="tesoreria"><TesoreriaPage /></ModuleRoute>} />
           <Route path={ROUTES.USUARIOS} element={<ModuleRoute module="usuarios"><UsuariosPage /></ModuleRoute>} />
