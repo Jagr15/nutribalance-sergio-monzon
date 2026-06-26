@@ -84,6 +84,11 @@ const TesoreriaPage = () => {
     setFormError(null);
   };
 
+  const updateChequeInList = (list: ChequeTesoreriaRow[], nextCheque: ChequeTesoreriaRow) =>
+    list.map((item) => (item.id === nextCheque.id ? nextCheque : item));
+
+  const isChequeClosed = (estado: EstadoChequeTesoreria) => ['DEPOSITADO', 'COBRADO', 'RECHAZADO', 'VENCIDO'].includes(estado);
+
   useEffect(() => () => {
     if (highlightTimerRef.current) {
       window.clearTimeout(highlightTimerRef.current);
@@ -108,6 +113,10 @@ const TesoreriaPage = () => {
     setFormError(null);
     try {
       const savedCheque = editingId ? await updateCheque(editingId, form) : await createCheque(form);
+      setCheques((current) => updateChequeInList(
+        editingId ? current : [savedCheque, ...current.filter((cheque) => cheque.id !== savedCheque.id)],
+        savedCheque,
+      ));
       const refreshedCheques = await loadAllCheques();
       const foundAfterRefresh = refreshedCheques.some((cheque) => cheque.id === savedCheque.id);
       console.log('[tesoreria] created id', savedCheque.id);
@@ -162,10 +171,10 @@ const TesoreriaPage = () => {
 
   const nextDirectState = (cheque: ChequeTesoreriaRow): EstadoChequeTesoreria | null => {
     if (cheque.tipo === 'RECIBIDO') {
-      if (cheque.estado === 'DEPOSITADO' || cheque.estado === 'COBRADO') return null;
+      if (isChequeClosed(cheque.estado) || cheque.estado === 'A_DEPOSITAR') return null;
       return 'DEPOSITADO';
     }
-    if (cheque.estado === 'COBRADO') return null;
+    if (isChequeClosed(cheque.estado)) return null;
     return 'DEPOSITADO';
   };
 
@@ -176,7 +185,8 @@ const TesoreriaPage = () => {
       return;
     }
     try {
-      await updateChequeEstado(cheque.id, next);
+      const updatedCheque = await updateChequeEstado(cheque.id, next);
+      setCheques((current) => updateChequeInList(current, updatedCheque));
       const refreshed = await loadAllCheques();
       setCheques(refreshed);
       setHighlightedChequeId(cheque.id);
@@ -454,17 +464,17 @@ const TesoreriaPage = () => {
                 {(activeTab === 'RECIBIDOS' ? filteredChequesRecibidos : filteredChequesEmitidos).map((cheque) => {
                   const isHighlighted = highlightedChequeId === cheque.id;
                   const band = cheque.tipo === 'RECIBIDO'
-                    ? cheque.estado === 'COBRADO' || cheque.estado === 'DEPOSITADO'
+                    ? cheque.estado === 'COBRADO' || cheque.estado === 'DEPOSITADO' || cheque.estado === 'RECHAZADO'
                       ? 'bg-emerald-50'
                       : cheque.estado === 'PENDIENTE'
                         ? 'bg-amber-50'
                         : 'bg-slate-50'
-                    : cheque.estado === 'DEPOSITADO' || cheque.estado === 'COBRADO'
+                    : cheque.estado === 'DEPOSITADO' || cheque.estado === 'COBRADO' || cheque.estado === 'RECHAZADO'
                       ? 'bg-slate-100'
                       : cheque.estado === 'PENDIENTE'
                         ? 'bg-rose-50'
                         : 'bg-amber-50';
-                  const directState = nextDirectState(cheque);
+                  const directState = isChequeClosed(cheque.estado) ? null : nextDirectState(cheque);
                   return (
                     <tr key={cheque.id} className={`${band} ${isHighlighted ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
                       <td className="px-3 py-2 font-semibold text-slate-900">{cheque.numero}</td>

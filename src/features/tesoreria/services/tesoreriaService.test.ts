@@ -166,4 +166,27 @@ describe('tesoreriaService', () => {
     expect(updateMock).not.toHaveBeenCalled();
     expect(updated.estado).toBe('DEPOSITADO');
   });
+
+  it('no vuelve a actualizar un cheque rechazado si ya quedó rechazado', async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: {
+        id: 'chq-9',
+        numero: '0009',
+        tipo: 'RECIBIDO',
+        tercero: 'Cliente Demo',
+        importe: 500,
+        fecha_emision: '2026-06-18',
+        fecha_vencimiento: '2026-06-20',
+        fecha_acreditacion: null,
+        estado: 'RECHAZADO',
+        cliente_id: null,
+        cliente_nombre: 'Cliente Demo',
+      },
+      error: null,
+    });
+
+    const updated = await tesoreriaService.updateChequeEstado('chq-9', 'RECHAZADO');
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(updated.estado).toBe('RECHAZADO');
+  });
 });
