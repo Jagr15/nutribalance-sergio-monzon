@@ -219,14 +219,14 @@ const EstadosFinancierosPage = () => {
               <p className="text-sm text-slate-600">{importMessage ?? 'Pendiente de validación.'}</p>
               {importErrors.length > 0 ? (
                 <div className="max-h-44 overflow-auto rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                  {importErrors.map((item) => <p key={item}>{item}</p>)}
+                  {importErrors.map((item, index) => <p key={`${index}-${item}`}>{item}</p>)}
                 </div>
               ) : null}
               {importPreview.length > 0 ? (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Vista previa</p>
                   {importPreview.map((row) => (
-                    <div key={`${row.legacy_uid ?? row.fecha}-${row.descripcion}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
+                    <div key={`${row.legacy_uid ?? ''}-${row.fecha}-${row.tipo}-${row.descripcion}-${row.monto}-${row.origen_operativo ?? ''}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
                       <p className="font-semibold text-slate-900">{row.descripcion}</p>
                       <p className="text-slate-500">{row.fecha} · {row.tipo} · {row.origen_operativo} · {row.monto}</p>
                     </div>
@@ -257,13 +257,13 @@ const EstadosFinancierosPage = () => {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Ingresos</p>
                 <div className="mt-2 space-y-2">
-                  {data.estadoResultados.ingresos.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-emerald-700">{money(row.amount)}</span></div>)}
+                  {data.estadoResultados.ingresos.map((row, index) => <div key={`${row.label}-${index}`} className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-emerald-700">{money(row.amount)}</span></div>)}
                 </div>
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-rose-700">Egresos</p>
                 <div className="mt-2 space-y-2">
-                  {data.estadoResultados.egresos.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-rose-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-rose-700">{money(row.amount)}</span></div>)}
+                  {data.estadoResultados.egresos.map((row, index) => <div key={`${row.label}-${index}`} className="flex items-center justify-between rounded-xl bg-rose-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-rose-700">{money(row.amount)}</span></div>)}
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -280,15 +280,15 @@ const EstadosFinancierosPage = () => {
           <div className="mt-4 space-y-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Activos</p>
-              <div className="mt-2 space-y-2">{data.balanceGeneral.activos.length > 0 ? data.balanceGeneral.activos.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold">{money(row.amount)}</span></div>) : <EmptyState title="Sin activos" description="No hay valores acumulados para activos en este periodo." />}</div>
+              <div className="mt-2 space-y-2">{data.balanceGeneral.activos.length > 0 ? data.balanceGeneral.activos.map((row, index) => <div key={`${row.label}-${index}`} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold">{money(row.amount)}</span></div>) : <EmptyState title="Sin activos" description="No hay valores acumulados para activos en este periodo." />}</div>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Pasivos</p>
-              <div className="mt-2 space-y-2">{data.balanceGeneral.pasivos.length > 0 ? data.balanceGeneral.pasivos.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold">{money(row.amount)}</span></div>) : <EmptyState title="Sin pasivos" description="No hay pasivos detectados en el periodo seleccionado." />}</div>
+              <div className="mt-2 space-y-2">{data.balanceGeneral.pasivos.length > 0 ? data.balanceGeneral.pasivos.map((row, index) => <div key={`${row.label}-${index}`} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold">{money(row.amount)}</span></div>) : <EmptyState title="Sin pasivos" description="No hay pasivos detectados en el periodo seleccionado." />}</div>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Patrimonio</p>
-              <div className="mt-2 space-y-2">{data.balanceGeneral.patrimonio.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-blue-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-blue-700">{money(row.amount)}</span></div>)}</div>
+              <div className="mt-2 space-y-2">{data.balanceGeneral.patrimonio.map((row, index) => <div key={`${row.label}-${index}`} className="flex items-center justify-between rounded-xl bg-blue-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-blue-700">{money(row.amount)}</span></div>)}</div>
             </div>
           </div>
         </Card>
@@ -305,11 +305,11 @@ const EstadosFinancierosPage = () => {
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Auxiliar de ingresos</p>
-              <div className="mt-2 space-y-2">{librosFiltrados.auxiliarIngresos.length > 0 ? librosFiltrados.auxiliarIngresos.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-emerald-700">{money(row.amount)}</span></div>) : <EmptyState title="Sin ingresos auxiliares" description="No hay ingresos en el periodo." />}</div>
+              <div className="mt-2 space-y-2">{librosFiltrados.auxiliarIngresos.length > 0 ? librosFiltrados.auxiliarIngresos.map((row, index) => <div key={`${row.label}-${index}`} className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-emerald-700">{money(row.amount)}</span></div>) : <EmptyState title="Sin ingresos auxiliares" description="No hay ingresos en el periodo." />}</div>
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Auxiliar de egresos</p>
-              <div className="mt-2 space-y-2">{librosFiltrados.auxiliarEgresos.length > 0 ? librosFiltrados.auxiliarEgresos.map((row) => <div key={row.label} className="flex items-center justify-between rounded-xl bg-rose-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-rose-700">{money(row.amount)}</span></div>) : <EmptyState title="Sin egresos auxiliares" description="No hay egresos en el periodo." />}</div>
+              <div className="mt-2 space-y-2">{librosFiltrados.auxiliarEgresos.length > 0 ? librosFiltrados.auxiliarEgresos.map((row, index) => <div key={`${row.label}-${index}`} className="flex items-center justify-between rounded-xl bg-rose-50 px-3 py-2 text-sm"><span>{row.label}</span><span className="font-semibold text-rose-700">{money(row.amount)}</span></div>) : <EmptyState title="Sin egresos auxiliares" description="No hay egresos en el periodo." />}</div>
             </div>
           </div>
         </Card>
