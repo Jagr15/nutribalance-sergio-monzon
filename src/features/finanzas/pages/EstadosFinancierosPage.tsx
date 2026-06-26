@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
 import { Card } from '../../../shared/components/card';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { useEstadosFinancieros } from '../hooks/useEstadosFinancieros';
 import type { PeriodoFiltro } from '../utils/estadosFinancieros';
 import { historicoContableService, parseHistoricoCsv, type MovimientoHistoricoImportRow } from '../services/historicoContableService';
 
 const money = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
-const dateLabel = (value: string) => new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+const dateLabel = (value: string) => formatDateDDMMYYYY(value);
 
 const toDateInputValue = (date: Date) => date.toISOString().slice(0, 10);
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);

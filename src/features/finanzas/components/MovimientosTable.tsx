@@ -1,8 +1,6 @@
 import type { MovimientoFinanciero } from '../types';
 import { DataTable, EmptyState, StatusBadge, TableBody, TableCell, TableHeader, TableRow } from '../../../shared/components/table';
-
-const formatDateCompact = (value: string) =>
-  new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: '2-digit' }).format(new Date(value));
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
@@ -47,7 +45,7 @@ export const MovimientosTable = ({
           <TableBody>
             {visibleMovimientos.map((m) => (
               <TableRow key={m.uid}>
-                <TableCell className="whitespace-nowrap text-slate-600">{formatDateCompact(m.fecha)}</TableCell>
+                <TableCell className="whitespace-nowrap text-slate-600">{formatDateDDMMYYYY(m.fecha)}</TableCell>
                 <TableCell><StatusBadge value={m.tipo} /></TableCell>
                 <TableCell className="max-w-[320px] whitespace-normal break-words text-slate-900">{m.descripcion}</TableCell>
                 <TableCell className="max-w-[220px] whitespace-normal break-words text-slate-500">{m.categoria || '-'}</TableCell>

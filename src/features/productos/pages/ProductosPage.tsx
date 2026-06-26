@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { Card } from '../../../shared/components/card';
 import { ROUTES } from '../../../app/config/routes';
 import { ApiService } from '../../../infrastructure/api';
@@ -40,7 +41,7 @@ const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
 const formatDate = (value: string) => {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return 'Sin dato';
-  return d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatDateDDMMYYYY(d);
 };
 
 const mapEstado = (estado: StockProductoTerminado['estado']): EstadoProductoUi => {

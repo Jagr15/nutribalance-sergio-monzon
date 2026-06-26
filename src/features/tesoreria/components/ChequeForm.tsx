@@ -1,5 +1,6 @@
 import type { ChequeTesoreriaFormValues } from '../services/tesoreriaService';
 import type { EstadoChequeTesoreria, TipoChequeTesoreria } from '../../finanzas/types';
+import { formatNumericInput, parseNumericInput } from '../../../shared/utils/formatters';
 
 const tipoOptions: Array<{ value: TipoChequeTesoreria; label: string }> = [
   { value: 'EMITIDO', label: 'Emitido' },
@@ -68,7 +69,21 @@ export const ChequeForm = ({
       </label>
       <label className="block">
         <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Importe</span>
-        <input required type="number" min="0.01" step="0.01" className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" value={value.importe} onChange={(event) => onChange({ ...value, importe: Number(event.target.value) })} />
+        <input
+          required
+          type="number"
+          min="0.01"
+          step="0.01"
+          className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+          value={formatNumericInput(value.importe)}
+          onFocus={(event) => {
+            if (event.currentTarget.value === '0') onChange({ ...value, importe: 0 });
+          }}
+          onChange={(event) => {
+            const parsed = parseNumericInput(event.target.value);
+            onChange({ ...value, importe: parsed ?? 0 });
+          }}
+        />
       </label>
       <label className="block">
         <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Estado</span>

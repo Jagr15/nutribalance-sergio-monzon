@@ -1,22 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FiPlus, FiSearch, FiTruck } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiTruck, FiCheckCircle, FiXCircle } from 'react-icons/fi';
 import { ApiService } from '../../../infrastructure/api';
 import { Card } from '../../../shared/components/card';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import type { OrdenExpedicion } from '../types';
 import OrdenExpedicionModal from '../components/OrdenExpedicionModal';
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
 
 const estadoBadge: Record<string, string> = {
-  PENDIENTE: 'bg-amber-50 text-amber-700',
-  REGISTRADA: 'bg-emerald-50 text-emerald-700',
-  ANULADA: 'bg-slate-100 text-slate-500',
+  pendiente: 'bg-amber-50 text-amber-700',
+  preparando: 'bg-sky-50 text-sky-700',
+  lista: 'bg-violet-50 text-violet-700',
+  despachada: 'bg-emerald-50 text-emerald-700',
+  cancelada: 'bg-slate-100 text-slate-500',
 };
 
 const estadoLabel: Record<string, string> = {
-  PENDIENTE: 'Pendiente',
-  REGISTRADA: 'Confirmada',
-  ANULADA: 'Cancelada',
+  pendiente: 'Pendiente',
+  preparando: 'Preparando',
+  lista: 'Lista',
+  despachada: 'Despachada',
+  cancelada: 'Cancelada',
 };
 
 const OrdenesSalidaPage: React.FC = () => {
@@ -25,6 +30,7 @@ const OrdenesSalidaPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [ordenEnEdicion, setOrdenEnEdicion] = useState<OrdenExpedicion | null>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -58,7 +64,27 @@ const OrdenesSalidaPage: React.FC = () => {
     ].some((value) => (value ?? '').toLowerCase().includes(q)));
   }, [ordenesSalida, searchTerm]);
 
-  const totalKg = filtered.reduce((acc, item) => acc + Number(item.cantidad ?? 0), 0);
+  const totalKg = filtered.reduce((acc, item) => acc + Number(item.cantidad_kg ?? item.cantidad ?? 0), 0);
+
+  const handleDespachar = useCallback(async (ordenId: string) => {
+    await ApiService.ordenesExpedicion.despachar(ordenId);
+    await load();
+  }, [load]);
+
+  const handleCancelar = useCallback(async (ordenId: string) => {
+    await ApiService.ordenesExpedicion.cancelar(ordenId);
+    await load();
+  }, [load]);
+
+  const handlePreparar = useCallback(async (ordenId: string) => {
+    await ApiService.ordenesExpedicion.iniciarPreparacion(ordenId);
+    await load();
+  }, [load]);
+
+  const handleLista = useCallback(async (ordenId: string) => {
+    await ApiService.ordenesExpedicion.marcarLista(ordenId);
+    await load();
+  }, [load]);
 
   return (
     <div className="p-8 space-y-6 animate-in fade-in duration-700">
@@ -77,7 +103,10 @@ const OrdenesSalidaPage: React.FC = () => {
         </div>
         <button
           type="button"
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setOrdenEnEdicion(null);
+            setIsModalOpen(true);
+          }}
           className="inline-flex items-center gap-2 rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-600/20 transition hover:bg-cyan-500"
         >
           <FiPlus />
@@ -96,7 +125,7 @@ const OrdenesSalidaPage: React.FC = () => {
         </Card>
         <Card>
           <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Estados</p>
-          <p className="mt-2 text-sm text-slate-700">Pendiente, confirmada y cancelada.</p>
+          <p className="mt-2 text-sm text-slate-700">Pendiente, preparando, lista, despachada y cancelada.</p>
         </Card>
       </div>
 
@@ -133,6 +162,7 @@ const OrdenesSalidaPage: React.FC = () => {
                   <th className="px-6 py-4">Cantidad</th>
                   <th className="px-6 py-4">Estado</th>
                   <th className="px-6 py-4">Fecha</th>
+                  <th className="px-6 py-4" />
                 </tr>
               </thead>
               <tbody>
@@ -145,13 +175,48 @@ const OrdenesSalidaPage: React.FC = () => {
                     <td className="px-6 py-4 text-slate-700">{orden.cliente_nombre || 'Sin cliente'}</td>
                     <td className="px-6 py-4 text-slate-700">{orden.nombre_producto}</td>
                     <td className="px-6 py-4 text-slate-700">{orden.lote_pt}</td>
-                    <td className="px-6 py-4 text-slate-700">{formatKg(Number(orden.cantidad ?? 0))}</td>
+                    <td className="px-6 py-4 text-slate-700">
+                      <div>{Number(orden.cantidad_original ?? orden.cantidad).toLocaleString('es-AR')} {orden.unidad_cantidad}</div>
+                      <div className="text-xs text-slate-500">{formatKg(Number(orden.cantidad_kg ?? orden.cantidad ?? 0))}</div>
+                    </td>
                     <td className="px-6 py-4">
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${estadoBadge[orden.estado] ?? 'bg-slate-100 text-slate-600'}`}>
                         {estadoLabel[orden.estado] ?? orden.estado}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-600">{new Intl.DateTimeFormat('es-AR').format(new Date(orden.created_at))}</td>
+                    <td className="px-6 py-4 text-slate-600">{formatDateDDMMYYYY(orden.created_at)}</td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {orden.estado === 'pendiente' || orden.estado === 'preparando' || orden.estado === 'lista' ? (
+                          <>
+                            {orden.estado === 'pendiente' ? (
+                              <button type="button" onClick={() => void handlePreparar(orden.id)} className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-500">
+                                <FiTruck size={12} />
+                                Iniciar
+                              </button>
+                            ) : null}
+                            {orden.estado === 'preparando' ? (
+                              <button type="button" onClick={() => void handleLista(orden.id)} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-500">
+                                <FiCheckCircle size={12} />
+                                Marcar lista
+                              </button>
+                            ) : null}
+                            {orden.estado === 'lista' ? (
+                              <button type="button" onClick={() => void handleDespachar(orden.id)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500">
+                                <FiCheckCircle size={12} />
+                                Despachar
+                              </button>
+                            ) : null}
+                            <button type="button" onClick={() => void handleCancelar(orden.id)} className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">
+                              <FiXCircle size={12} />
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-slate-400">Sin acciones</span>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -164,6 +229,7 @@ const OrdenesSalidaPage: React.FC = () => {
         <OrdenExpedicionModal
           onClose={() => setIsModalOpen(false)}
           onSuccess={load}
+          orden={ordenEnEdicion}
         />
       ) : null}
     </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { RubroFinancieroCatalogo } from '../types';
+import { parseNumericInput } from '../../../shared/utils/formatters';
 
 export const RegistrarMovimientoForm = ({
   onSubmit,
@@ -33,14 +34,14 @@ export const RegistrarMovimientoForm = ({
     setFieldErrors({});
     setSubmitError(null);
   };
-  const montoNum = Number(monto);
+  const montoNum = parseNumericInput(monto);
   const hasMontoValue = monto.trim() !== '';
   const isFormValid =
     tipo !== '' &&
     descripcion.trim() !== '' &&
     hasMontoValue &&
     Number.isFinite(montoNum) &&
-    montoNum > 0 &&
+    (montoNum ?? 0) > 0 &&
     categoriaId !== '' &&
     rubrosActivos.length > 0;
 
@@ -54,13 +55,13 @@ export const RegistrarMovimientoForm = ({
         const nextFieldErrors: typeof fieldErrors = {};
         const descripcionLimpia = descripcion.trim();
         const montoLimpio = monto.trim();
-        const montoValor = Number(montoLimpio);
+        const montoValor = parseNumericInput(montoLimpio);
         const tipoValido = tipo !== '' ? tipo : null;
 
         if (!tipoValido) nextFieldErrors.tipo = 'Selecciona un tipo de movimiento.';
         if (!descripcionLimpia) nextFieldErrors.descripcion = 'La descripción es obligatoria.';
         if (!montoLimpio) nextFieldErrors.monto = 'El monto es obligatorio.';
-        else if (!Number.isFinite(montoValor) || montoValor <= 0) nextFieldErrors.monto = 'El monto debe ser mayor a 0.';
+        else if (montoValor === null || montoValor <= 0) nextFieldErrors.monto = 'El monto debe ser mayor a 0.';
         if (categoriaId === '') nextFieldErrors.categoriaId = 'Selecciona un rubro financiero.';
         if (rubrosActivos.length === 0) nextFieldErrors.categoriaId = 'No hay rubros activos disponibles.';
 
@@ -70,7 +71,7 @@ export const RegistrarMovimientoForm = ({
         try {
           setIsSubmitting(true);
           if (!tipoValido) return;
-          await onSubmit({ tipo: tipoValido, descripcion: descripcionLimpia, monto: montoValor, origen_operativo: 'Manual', categoria_id: categoriaId || undefined });
+        await onSubmit({ tipo: tipoValido, descripcion: descripcionLimpia, monto: montoValor ?? 0, origen_operativo: 'Manual', categoria_id: categoriaId || undefined });
           resetForm();
           onSuccess?.();
         } catch (error: unknown) {
@@ -115,10 +116,12 @@ export const RegistrarMovimientoForm = ({
             step="0.01"
             value={monto}
             onChange={(e) => {
-              setMonto(e.target.value);
+              const next = e.target.value === '' ? '' : e.target.value.replace(/^0+(?=\d)/, '');
+              setMonto(next);
               setFieldErrors((current) => ({ ...current, monto: undefined }));
             }}
             placeholder="Ej: 85000"
+            onFocus={(e) => { if (e.currentTarget.value === '0') setMonto(''); }}
             className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
             aria-invalid={Boolean(fieldErrors.monto)}
           />

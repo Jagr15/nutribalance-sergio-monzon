@@ -9,6 +9,7 @@ import type { OrdenProduccion } from '../types/orden';
 import { ApiService } from '../../../infrastructure/api';
 import type { Silo } from '../../silos/types';
 import { getProductoTerminadoSilos, findSiloByName } from '../../silos/utils/siloFilters';
+import { parseNumericInput } from '../../../shared/utils/formatters';
 import {
   buildFinalizationStockCheck,
   type FinalizationStockCheckResult,
@@ -280,7 +281,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
               <input 
                 type="number"
                 value={cantidadReal}
-                onChange={(e) => setCantidadReal(Number(e.target.value))}
+                onChange={(e) => setCantidadReal(parseNumericInput(e.target.value) ?? 0)}
                 onFocus={(e) => e.target.select()}
                 className="w-full bg-emerald-500/[0.02] border border-emerald-500/10 rounded-xl py-2.5 px-4 text-[13px] text-emerald-600 font-mono font-black outline-none focus:border-emerald-500/30 transition-all duration-200 ease-out [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
@@ -293,7 +294,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
               <input 
                 type="number"
                 value={merma}
-                onChange={(e) => setMerma(Number(e.target.value))}
+                onChange={(e) => setMerma(parseNumericInput(e.target.value) ?? 0)}
                 onFocus={(e) => e.target.select()}
                 className="w-full bg-red-500/[0.02] border border-red-500/10 rounded-xl py-2.5 px-4 text-[13px] text-red-400 font-mono font-black outline-none focus:border-red-500/30 transition-all duration-200 ease-out [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />

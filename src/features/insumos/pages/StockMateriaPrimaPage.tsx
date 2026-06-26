@@ -13,6 +13,7 @@ import type {
 } from '../types';
 import type { Proveedor } from '../../proveedores/types';
 import Swal from 'sweetalert2';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 
 const formatterMoneda = new Intl.NumberFormat('es-AR', {
   style: 'currency',
@@ -24,10 +25,7 @@ const formatterNumero = new Intl.NumberFormat('es-AR', {
   maximumFractionDigits: 3,
 });
 
-const formatterFecha = new Intl.DateTimeFormat('es-AR', {
-  dateStyle: 'short',
-  timeStyle: 'short',
-});
+const formatterFecha = (value: string | Date | null | undefined) => formatDateDDMMYYYY(value);
 
 const StockMateriaPrimaPage: React.FC = () => {
   const { lotes, isLoading, loadError, getAll, remove } = useStockMateriaPrima();
@@ -145,7 +143,7 @@ const StockMateriaPrimaPage: React.FC = () => {
   const recentPurchases = historialCompras.slice(0, 10);
   const showLoadingCards = isBusy && comprasRegistradas === 0 && resumen.length === 0;
 
-  const formatDate = (value: string) => formatterFecha.format(new Date(value));
+  const formatDate = (value: string | Date | null | undefined) => formatterFecha(value);
   const formatCurrency = (value: number) => formatterMoneda.format(value);
   const formatNumber = (value: number) => formatterNumero.format(value);
 

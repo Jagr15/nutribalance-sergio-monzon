@@ -8,16 +8,13 @@ import UsuarioModal from '../components/UsuarioModal';
 import type { Usuario } from '../types/usuario';
 import type { UsuarioFormValues } from '../utils/usuarioForm';
 import { isSensitiveUsuarioRole } from '../utils/usuarioRules';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 
 const formatDate = (value?: string) => {
   if (!value) return 'Sin fecha';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Sin fecha';
-  return new Intl.DateTimeFormat('es-AR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
+  return formatDateDDMMYYYY(date);
 };
 
 const roleLabel: Record<string, string> = {

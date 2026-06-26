@@ -11,6 +11,7 @@ import type { Cliente } from '../../clientes/types/cliente';
 import type { MovimientoStockPT } from '../../productos/types';
 import type { OrdenProduccion } from '../../ordenes/types';
 import type { AlertaOperativa } from '../../alertas/types/alerta';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 
 type AreaEstado = 'OK' | 'Atención' | 'Riesgo';
 
@@ -154,7 +155,7 @@ const DashboardExecutivePage = () => {
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       doc.text('Reporte Ejecutivo DITMON AGRO', 14, 20);
-      doc.text(new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date()), width - 14, 20, { align: 'right' });
+      doc.text(formatDateDDMMYYYY(new Date()), width - 14, 20, { align: 'right' });
       y = 34;
       section('Salud general del negocio');
       line('Producción', productionState);

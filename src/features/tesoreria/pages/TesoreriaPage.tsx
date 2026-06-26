@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { Card } from '../../../shared/components/card';
 import { useFinanzas } from '../../finanzas/hooks/useFinanzas';
 import { useTesoreria } from '../hooks/useTesoreria';
@@ -9,7 +10,7 @@ import type { ChequeTesoreriaFormValues } from '../services/tesoreriaService';
 import type { ChequeTesoreriaRow, EstadoChequeTesoreria } from '../../finanzas/types';
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
-const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value)) : 'Sin dato';
+const formatDate = (value?: string | null) => value ? formatDateDDMMYYYY(value) : 'Sin dato';
 const dayMs = 24 * 60 * 60 * 1000;
 
 const todayIso = () => new Date().toISOString().slice(0, 10);

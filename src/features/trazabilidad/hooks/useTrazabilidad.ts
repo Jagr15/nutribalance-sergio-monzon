@@ -8,6 +8,7 @@ import type { MovimientoStockPT } from '../../productos/types';
 import type { OrdenProduccion } from '../../ordenes/types';
 import type { TrazabilidadLoteInsumoResultado, TrazabilidadPorOP } from '../types';
 import { buildTrazabilidadLoteInsumo } from '../utils/trazabilidadLoteInsumo';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 
 export const useTrazabilidad = () => {
   const [loading, setLoading] = useState(true);
@@ -66,7 +67,7 @@ export const useTrazabilidad = () => {
         .map((lote) => ({
           uid: lote.uid,
           label: `${lote.lote} · ${insumos.find((insumo) => insumo.uid === lote.id_insumo)?.nombre ?? lote.id_insumo}`,
-          secondary: `${new Date(lote.fecha_ingreso).toLocaleDateString('es-AR')} · ${lote.cantidad_actual.toLocaleString('es-AR')} kg`,
+          secondary: `${formatDateDDMMYYYY(lote.fecha_ingreso)} · ${lote.cantidad_actual.toLocaleString('es-AR')} kg`,
         })),
     [insumos, lotes],
   );

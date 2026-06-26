@@ -7,6 +7,7 @@ import { KpiGrid } from '../components/KpiGrid';
 import { MovimientosTable } from '../components/MovimientosTable';
 import { RegistrarMovimientoForm } from '../components/RegistrarMovimientoForm';
 import { usePermissions } from '../../auth/usePermissions';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import {
   enrichIngresosPtPorProducto,
   RUBRO_AREA_DEFAULT,
@@ -69,7 +70,7 @@ const formatDate = (value?: string | null) => {
   if (!value) return 'Sin dato';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Sin dato';
-  return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+  return formatDateDDMMYYYY(date);
 };
 
 const statusClassByPresupuesto = (estado: 'En control' | 'Atención' | 'Excedido') => {

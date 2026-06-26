@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { Card } from "../../../shared/components/card";
+import { formatDateDDMMYYYY } from "../../../shared/utils/formatters";
 import { clienteService } from "../services/clienteService";
 import { EstadoCliente, type Cliente, type ClienteCreatePayload, type EstadoCliente as EstadoClienteType } from "../types/cliente";
 
@@ -38,7 +39,7 @@ const formatDate = (value?: string | null) => {
   if (!value) return "—";
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
+  return formatDateDDMMYYYY(date);
 };
 
 const normalizeText = (value?: string | null) => value?.trim() || "—";
@@ -707,7 +708,7 @@ const ClientesPage = () => {
           <p className="text-xs uppercase tracking-widest text-slate-500">Última venta registrada</p>
           <h2 className="text-xl font-black mt-3 text-blue-300">
             {ultimaVentaRegistrada
-              ? new Date(ultimaVentaRegistrada).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" })
+              ? formatDateDDMMYYYY(new Date(ultimaVentaRegistrada))
               : "Sin dato"}
           </h2>
         </Card>

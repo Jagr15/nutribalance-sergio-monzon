@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { FiDownload, FiArrowLeft } from 'react-icons/fi';
 import { Card } from '../../../shared/components/card';
 import { DataTable, EmptyState, StatusBadge, TableBody, TableCell, TableHeader, TableRow } from '../../../shared/components/table';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { useFinanzas } from '../hooks/useFinanzas';
 import { ROUTES } from '../../../app/config/routes';
 import type { MovimientoFinanciero, TipoMovimientoFinanciero } from '../types';
 
 const money = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
-const dateLabel = (value: string) => new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
+const dateLabel = (value: string) => formatDateDDMMYYYY(value);
 const dateInputToKey = (value: string) => (value ? new Date(`${value}T00:00:00`).getTime() : null);
 
 const matches = (row: MovimientoFinanciero, query: string) => {

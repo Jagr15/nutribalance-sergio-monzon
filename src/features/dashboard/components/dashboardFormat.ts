@@ -1,11 +1,8 @@
 export const fmtARS = (v: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v);
 
-export const fmtDateTime = (value: Date | string | null | undefined) => {
-  if (!value) return 'Sin actualización';
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Sin actualización';
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
-};
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
+
+export const fmtDateTime = (value: Date | string | null | undefined) => formatDateDDMMYYYY(value);
 
 export const fmtRelativeMinutes = (value: Date | null) => {
   if (!value) return 'Sin actualización';

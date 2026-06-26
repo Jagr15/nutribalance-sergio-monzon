@@ -8,6 +8,7 @@ import { EstadoOrden } from '../types/orden';
 import type { Formula } from '../../formulas/types';
 import { useCalculoOrden, type CalculoOrdenResultado } from '../hooks/useCalculoOrden';
 import Swal from 'sweetalert2';
+import { parseNumericInput } from '../../../shared/utils/formatters';
 
 interface Props {
   onClose: () => void;
@@ -232,7 +233,7 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                   placeholder="0.00"
                   className="w-full bg-transparent py-3.5 pl-12 pr-4 text-sm text-slate-900 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={pesoObjetivo}
-                  onChange={(e) => setPesoObjetivo(e.target.value === "" ? "" : Number(e.target.value))} 
+                  onChange={(e) => setPesoObjetivo(e.target.value === "" ? "" : parseNumericInput(e.target.value) ?? 0)} 
                 />
               </div>
               <select 

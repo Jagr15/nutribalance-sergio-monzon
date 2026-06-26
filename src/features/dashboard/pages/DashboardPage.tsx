@@ -24,6 +24,7 @@ import {
 } from '../utils/dashboardExecutiveInsights';
 import { buildDashboardTemporalInsights, filterAlertasByPeriodo } from '../utils/dashboardTemporalInsights';
 import { fmtARS, fmtDateTime, fmtRelativeMinutes, getTrendTone } from '../components/dashboardFormat';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { KPIBox } from '../components/dashboardShared';
 
 type BusinessHealthLevel = 'excelente' | 'estable' | 'atencion' | 'critico';
@@ -265,7 +266,7 @@ export const DashboardPage = () => {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
       doc.text('Dashboard Ejecutivo', 14, 20);
-      doc.text(`Generado: ${new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date())}`, width - 14, 20, { align: 'right' });
+      doc.text(`Generado: ${formatDateDDMMYYYY(new Date())}`, width - 14, 20, { align: 'right' });
 
       cursorY = 32;
       addPageIfNeeded(36);
@@ -706,7 +707,7 @@ export const DashboardPage = () => {
                         <div className="flex items-start justify-between gap-3 text-xs">
                           <div className="min-w-0">
                             <p className="font-semibold text-slate-800 truncate">{item.producto_nombre}</p>
-                            <p className="text-slate-500">{item.movimientos} salidas · Último {item.ultima_fecha ? new Date(item.ultima_fecha).toLocaleDateString('es-AR') : 'Sin dato'}</p>
+                            <p className="text-slate-500">{item.movimientos} salidas · Último {item.ultima_fecha ? formatDateDDMMYYYY(item.ultima_fecha) : 'Sin dato'}</p>
                           </div>
                           <div className="text-right shrink-0">
                             <p className="font-semibold text-cyan-700">{item.kg.toLocaleString('es-AR')} kg</p>
@@ -952,7 +953,7 @@ export const DashboardPage = () => {
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-cyan-700">{item.kg.toLocaleString('es-AR')} kg</p>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-400">{new Date(item.fecha).toLocaleDateString('es-AR')}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-slate-400">{formatDateDDMMYYYY(item.fecha)}</p>
                 </div>
               </div>
             ))}
@@ -1198,7 +1199,7 @@ export const DashboardPage = () => {
                       <div className="flex items-start justify-between gap-3 text-xs">
                         <div className="min-w-0">
                           <p className="font-semibold text-slate-800 truncate">{item.nombre_producto}</p>
-                          <p className="text-slate-500">{item.cantidad_movimientos} movimientos · Última salida {item.ultima_salida ? new Date(item.ultima_salida).toLocaleDateString('es-AR') : 'Sin dato'}</p>
+                          <p className="text-slate-500">{item.cantidad_movimientos} movimientos · Última salida {item.ultima_salida ? formatDateDDMMYYYY(item.ultima_salida) : 'Sin dato'}</p>
                         </div>
                         <p className="font-semibold text-blue-700 shrink-0">{item.kg_salidos.toLocaleString('es-AR')} kg</p>
                       </div>
@@ -1257,7 +1258,7 @@ export const DashboardPage = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-900 truncate">{item.cliente_nombre}</p>
-                        <p className="text-xs text-slate-500 truncate">{item.producto_nombre} · {new Date(item.fecha).toLocaleDateString('es-AR')}</p>
+                        <p className="text-xs text-slate-500 truncate">{item.producto_nombre} · {formatDateDDMMYYYY(item.fecha)}</p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-sm font-semibold text-emerald-700">{item.kg.toLocaleString('es-AR')} kg</p>
