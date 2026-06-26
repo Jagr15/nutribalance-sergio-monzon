@@ -23,10 +23,13 @@ type DashboardStockResumenRow = {
   valor_inventario_mp: unknown;
   stock_total_pt: unknown;
   valor_inventario_pt: unknown;
+  stock_comprometido_mp?: unknown;
+  stock_disponible_mp?: unknown;
 };
 type DashboardStockLotesRow = {
   cantidad_actual: unknown;
   cantidad_comprometida: unknown;
+  id_insumo?: unknown;
 };
 type DashboardProduccionResumenRow = {
   ordenes_pendientes: unknown;
@@ -52,13 +55,15 @@ const settledValue = <T>(result: PromiseSettledResult<T>, fallback: T): T =>
   result.status === 'fulfilled' ? result.value : fallback;
 
 const buildFallbackDashboard = async () => {
-  const [stockLotes, stockPT, insumos, ordenes, formulas] = await Promise.all([
+  const [stockLotesRaw, stockPTRaw] = await Promise.all([
     ApiService.stockMP.getAllLotes(),
     ApiService.stockPT.getResumen(),
-    ApiService.insumos.getAllInsumos(),
-    ApiService.ordenes.getAll(),
-    ApiService.formulas.findAll(),
   ]);
+  const stockLotes = stockLotesRaw ?? [];
+  const stockPT = stockPTRaw ?? [];
+  const insumos = (await (ApiService.insumos?.getAllInsumos ? Promise.resolve(ApiService.insumos.getAllInsumos()).catch(() => []) : Promise.resolve([]))) ?? [];
+  const formulas = (await (ApiService.formulas?.findAll ? Promise.resolve(ApiService.formulas.findAll()).catch(() => []) : Promise.resolve([]))) ?? [];
+  const ordenes = await (ApiService.ordenes?.getAll ? ApiService.ordenes.getAll().catch(() => []) : Promise.resolve([]));
 
   const insumoById = new Map(insumos.map((i) => [i.uid, i]));
   const stockTotalMp = stockLotes.reduce((acc, lote) => acc + num(lote.cantidad_actual), 0);
@@ -69,18 +74,19 @@ const buildFallbackDashboard = async () => {
     const disponible = num(lote.cantidad_actual) - num(lote.cantidad_comprometida);
     return umbral > 0 && disponible <= umbral;
   }).length;
-  const valorInventarioMp = stockLotes.reduce((acc, lote) => acc + num(lote.cantidad_actual) * num(lote.costo_unitario), 0);
+  const valorInventarioMp = stockLotes.reduce((acc, lote) => acc + num(lote.cantidad_actual) * num(insumoById.get(lote.id_insumo)?.costo_por_kg ?? insumoById.get(lote.id_insumo)?.ref_costo_unitario), 0);
   const stockTotalPt = stockPT.reduce((acc, lote) => acc + num((lote as { stock_actual?: unknown }).stock_actual), 0);
 
-  const ordenesPendientes = ordenes.filter((o) => o.estado === EstadoOrden.PENDIENTE).length;
-  const ordenesEnProceso = ordenes.filter((o) => o.estado === EstadoOrden.EN_PROCESO).length;
-  const ordenesFinalizadas = ordenes.filter((o) => o.estado === EstadoOrden.FINALIZADO).length;
-  const produccionTotal = ordenes
+  const ordenesList = Array.isArray(ordenes) ? ordenes : [];
+  const ordenesPendientes = ordenesList.filter((o) => o.estado === EstadoOrden.PENDIENTE).length;
+  const ordenesEnProceso = ordenesList.filter((o) => o.estado === EstadoOrden.EN_PROCESO).length;
+  const ordenesFinalizadas = ordenesList.filter((o) => o.estado === EstadoOrden.FINALIZADO).length;
+  const produccionTotal = ordenesList
     .filter((o) => o.estado === EstadoOrden.FINALIZADO)
     .reduce((acc, o) => acc + num(o.cantidad_real ?? o.cantidad_objetivo), 0);
-  const mermaTotal = ordenes.reduce((acc, o) => acc + num(o.merma_manual), 0);
-  const costoPromedio = ordenes.length > 0
-    ? ordenes.reduce((acc, o) => acc + num(o.costo_total_insumos), 0) / ordenes.length
+  const mermaTotal = ordenesList.reduce((acc, o) => acc + num(o.merma_manual), 0);
+  const costoPromedio = ordenesList.length > 0
+    ? ordenesList.reduce((acc, o) => acc + num(o.costo_total_insumos), 0) / ordenesList.length
     : 0;
   const valorInventarioPt = stockPT.reduce((acc, lote) => acc + num((lote as { valor_monetario?: unknown }).valor_monetario), 0);
 
@@ -94,7 +100,7 @@ const buildFallbackDashboard = async () => {
     })))
     .sort((a, b) => b.total_pct - a.total_pct);
 
-  const consumoMensual = ordenes.flatMap((o) =>
+  const consumoMensual = ordenesList.flatMap((o) =>
     (o.detalle_insumos ?? []).map((d) => ({
       mes: monthKey(o.fecha_creacion),
       insumo: d.nombre_insumo,
@@ -193,10 +199,11 @@ export const dashboardOperativoService = {
 
   async getKPIs(): Promise<DashboardOperativoKPIs> {
     try {
-      const [stockR, prodR, costR] = await Promise.all([
+      const [stockR, prodR, costR, insumosResult] = await Promise.all([
         supabaseClient.from('vw_dashboard_stock_resumen').select('*').single<DashboardStockResumenRow>(),
         supabaseClient.from('vw_dashboard_produccion_resumen').select('*').single<DashboardProduccionResumenRow>(),
         supabaseClient.from('vw_dashboard_costos_resumen').select('proteina_promedio_formula').single<DashboardCostosProteinaRow>(),
+        ApiService.insumos.getAllInsumos(),
       ]);
 
       const stockLotsQuery = await supabaseClient
@@ -210,16 +217,24 @@ export const dashboardOperativoService = {
       if (stockLotsQuery.error) throw stockLotsQuery.error;
 
       const stockLots = (stockLotsQuery.data ?? []) as DashboardStockLotesRow[];
-      const stockComprometidoMp = stockLots.reduce((acc, lote) => acc + num(lote.cantidad_comprometida), 0);
-      const stockTotalMp = stockLots.reduce((acc, lote) => acc + num(lote.cantidad_actual), 0);
-      const stockDisponibleMp = Math.max(0, stockTotalMp - stockComprometidoMp);
+      const insumoById = new Map(insumosResult.map((insumo) => [insumo.uid, insumo]));
+      const stockComprometidoMp = stockLots.length > 0
+        ? stockLots.reduce((acc, lote) => acc + num(lote.cantidad_comprometida), 0)
+        : num(stockR.data.stock_comprometido_mp);
+      const stockTotalMp = stockLots.length > 0
+        ? stockLots.reduce((acc, lote) => acc + num(lote.cantidad_actual), 0)
+        : num(stockR.data.stock_total_mp);
+      const stockDisponibleMp = stockLots.length > 0
+        ? Math.max(0, stockTotalMp - stockComprometidoMp)
+        : num(stockR.data.stock_disponible_mp);
+      const valorInventarioMp = stockLots.reduce((acc, lote) => acc + num(lote.cantidad_actual) * num(insumoById.get((lote as { id_insumo?: unknown }).id_insumo as string)?.costo_por_kg ?? insumoById.get((lote as { id_insumo?: unknown }).id_insumo as string)?.ref_costo_unitario), 0);
 
       return {
         stock_total_mp: stockTotalMp,
         stock_comprometido_mp: stockComprometidoMp,
         stock_disponible_mp: stockDisponibleMp,
         stock_critico: num(stockR.data.stock_critico),
-        valor_inventario_mp: num(stockR.data.valor_inventario_mp),
+        valor_inventario_mp: valorInventarioMp || num(stockR.data.valor_inventario_mp),
         stock_total_pt: num(stockR.data.stock_total_pt),
         valor_inventario_pt: num(stockR.data.valor_inventario_pt),
         ordenes_pendientes: num(prodR.data.ordenes_pendientes),

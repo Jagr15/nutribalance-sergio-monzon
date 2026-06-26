@@ -5,6 +5,7 @@ import { TipoCategoria, type Insumo } from '../types/insumo';
 import { TipoUnidad } from '../../../shared/types/global.interface'; // Usamos tu enum global
 import { useInsumos } from '../hooks/useInsumos';
 import Swal from 'sweetalert2';
+import { normalizarCostoInsumo, type UnidadCostoInsumo } from '../utils/costoInsumo';
 
 interface InsumoModalProps {
   insumo?: Insumo;
@@ -24,6 +25,8 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
     (insumo?.categoria as TipoCategoria) || '' as TipoCategoria
   );
   const [umbral, setUmbral] = useState(insumo?.umbral_alerta?.toString() || '0');
+  const [costo, setCosto] = useState(insumo?.costo_por_kg ?? insumo?.ref_costo_unitario ?? insumo?.costo ?? 0);
+  const [unidadCosto, setUnidadCosto] = useState<UnidadCostoInsumo>(insumo?.unidad_costo ?? 'KG');
   
   // Nuevo estado para la Unidad de Medida
   const [unidad, setUnidad] = useState<TipoUnidad>(
@@ -58,11 +61,17 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
       return;
     }
 
+    const costoNormalizado = normalizarCostoInsumo({ costo, unidad_costo: unidadCosto });
     const payload = {
       nombre: normalizedNombre,
       categoria,
       umbral_alerta: parseInt(umbral, 10),
-      unidad_medida: unidad // Ahora es dinámico
+      unidad_medida: unidad,
+      costo: costoNormalizado?.costo,
+      unidad_costo: costoNormalizado?.unidad_costo,
+      costo_por_kg: costoNormalizado?.costo_por_kg,
+      costo_por_tonelada: costoNormalizado?.costo_por_tonelada,
+      ref_costo_unitario: costoNormalizado?.costo_por_kg,
     };
 
     setIsSubmitting(true);
@@ -183,6 +192,36 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
                   * El umbral debe ser mayor a 0
                 </p>
               )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Costo de referencia</label>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.000001"
+                    value={costo}
+                    onChange={(e) => setCosto(Number(e.target.value))}
+                    placeholder="Costo"
+                    className="ui-input w-full rounded-lg py-2.5 px-3 text-sm text-slate-700 font-mono"
+                  />
+                </div>
+                <div className="relative">
+                  <select
+                    value={unidadCosto}
+                    onChange={(e) => setUnidadCosto(e.target.value as UnidadCostoInsumo)}
+                    className="w-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold py-2.5 px-2 rounded-lg appearance-none outline-none cursor-pointer text-center"
+                  >
+                    <option value="KG">KG</option>
+                    <option value="TON">TON</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-[9px] text-slate-500 ml-1">
+                Se normaliza automáticamente a costo por kg para inventario y finanzas.
+              </p>
             </div>
           </div>
 

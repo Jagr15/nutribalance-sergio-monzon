@@ -11,7 +11,11 @@ export interface Insumo {
     nombre: string; // Ej: "Maíz"
     unidad_medida: TipoUnidad;
     umbral_alerta: number; // El usuario define que a los 500kg se ponga rojo
-    ref_costo_unitario?:number;
+    ref_costo_unitario?: number;
+    costo?: number;
+    unidad_costo?: 'KG' | 'TON';
+    costo_por_kg?: number;
+    costo_por_tonelada?: number;
     proteina_bruta_pct?: number;
     humedad_pct?: number;
     fibra_pct?: number;
@@ -71,6 +75,7 @@ export interface StockMateriaPrimaResumen {
   stock_disponible: number;
   umbral_alerta: number;
   estado: StockMPEstadoResumen;
+  valor_inventario?: number;
 }
 
 export interface HistorialCompraMP {

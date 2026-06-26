@@ -4,7 +4,7 @@ import type { Insumo, StockMateriaPrima } from '../types/insumo';
 
 const insumos: Insumo[] = [
   { uid: 'i-1', nombre: 'Maíz', unidad_medida: 'KG', umbral_alerta: 100, categoria: 'Grano' },
-  { uid: 'i-2', nombre: 'Soja', unidad_medida: 'KG', umbral_alerta: 50, categoria: 'Grano' },
+  { uid: 'i-2', nombre: 'Soja', unidad_medida: 'KG', umbral_alerta: 50, categoria: 'Grano', costo_por_kg: 2 },
 ];
 
 const lotes: StockMateriaPrima[] = [
@@ -75,6 +75,7 @@ describe('buildStockMPResumen', () => {
         stock_disponible: 150,
         umbral_alerta: 100,
         estado: 'BAJO',
+        valor_inventario: 0,
       },
       {
         insumo_id: 'i-2',
@@ -85,6 +86,7 @@ describe('buildStockMPResumen', () => {
         stock_disponible: 70,
         umbral_alerta: 50,
         estado: 'BAJO',
+        valor_inventario: 140,
       },
     ]);
   });

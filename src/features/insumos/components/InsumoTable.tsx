@@ -17,7 +17,8 @@ const InsumoTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) 
           <TableCell header>Producto</TableCell>
           <TableCell header>Categoría</TableCell>
           <TableCell header>Unidad</TableCell>
-          <TableCell header>Costo Ref.</TableCell>
+          <TableCell header>Costo</TableCell>
+          <TableCell header>Eq. kg</TableCell>
           <TableCell header className="text-center">Umbral de Alerta</TableCell>
           <TableCell header className="text-right">Acciones</TableCell>
         </tr>
@@ -30,7 +31,20 @@ const InsumoTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) 
             <TableCell><span className="text-slate-700 uppercase">{insumo.unidad_medida}</span></TableCell>
             <TableCell>
               <span className="text-slate-700">
-                {typeof insumo.ref_costo_unitario === 'number' ? insumo.ref_costo_unitario.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/D'}
+                {typeof insumo.costo === 'number'
+                  ? `${insumo.costo.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${insumo.unidad_costo ?? 'KG'}`
+                  : typeof insumo.ref_costo_unitario === 'number'
+                    ? `${insumo.ref_costo_unitario.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / KG`
+                    : 'N/D'}
+              </span>
+            </TableCell>
+            <TableCell>
+              <span className="text-slate-700">
+                {typeof insumo.costo_por_kg === 'number'
+                  ? insumo.costo_por_kg.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  : typeof insumo.ref_costo_unitario === 'number'
+                    ? insumo.ref_costo_unitario.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    : 'Sin costo'}
               </span>
             </TableCell>
             <TableCell className="text-center">
@@ -46,7 +60,7 @@ const InsumoTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) 
           </TableRow>
         ))}
         {data.length === 0 ? (
-          <EmptyState colSpan={6} message={emptyMessage || "No hay registros en el maestro de insumos."} />
+          <EmptyState colSpan={7} message={emptyMessage || "No hay registros en el maestro de insumos."} />
         ) : null}
       </TableBody>
     </DataTable>

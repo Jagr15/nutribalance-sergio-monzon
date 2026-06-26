@@ -6,7 +6,11 @@ interface InsumoRow {
   nombre: string;
   unidad_medida: string;
   umbral_alerta: number;
+  costo: number | null;
+  unidad_costo: string | null;
   ref_costo_unitario: number | null;
+  costo_por_kg: number | null;
+  costo_por_tonelada: number | null;
   proteina_bruta_pct: number | null;
   humedad_pct: number | null;
   fibra_pct: number | null;
@@ -22,7 +26,11 @@ const mapInsumo = (row: InsumoRow): Insumo => ({
   nombre: row.nombre,
   unidad_medida: row.unidad_medida as Insumo['unidad_medida'],
   umbral_alerta: Number(row.umbral_alerta),
+  costo: row.costo ?? row.costo_por_kg ?? row.ref_costo_unitario ?? undefined,
+  unidad_costo: (row.unidad_costo as Insumo['unidad_costo']) ?? 'KG',
   ref_costo_unitario: row.ref_costo_unitario ?? undefined,
+  costo_por_kg: row.costo_por_kg ?? row.ref_costo_unitario ?? undefined,
+  costo_por_tonelada: row.costo_por_tonelada ?? (((row.costo_por_kg ?? row.ref_costo_unitario ?? 0) * 1000) || undefined),
   proteina_bruta_pct: row.proteina_bruta_pct ?? undefined,
   humedad_pct: row.humedad_pct ?? undefined,
   fibra_pct: row.fibra_pct ?? undefined,
@@ -37,7 +45,7 @@ export const supabaseInsumoService = {
   async getAllInsumos(): Promise<Insumo[]> {
     const { data, error } = await supabaseClient
       .from('insumos')
-      .select('legacy_uid,nombre,unidad_medida,umbral_alerta,ref_costo_unitario,proteina_bruta_pct,humedad_pct,fibra_pct,grasa_pct,cenizas_pct,unidad_base,observaciones,categoria')
+      .select('legacy_uid,nombre,unidad_medida,umbral_alerta,costo,unidad_costo,ref_costo_unitario,costo_por_kg,costo_por_tonelada,proteina_bruta_pct,humedad_pct,fibra_pct,grasa_pct,cenizas_pct,unidad_base,observaciones,categoria')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
@@ -54,7 +62,11 @@ export const supabaseInsumoService = {
         nombre: payload.nombre,
         unidad_medida: payload.unidad_medida,
         umbral_alerta: payload.umbral_alerta,
-        ref_costo_unitario: payload.ref_costo_unitario ?? null,
+        costo: payload.costo ?? payload.costo_por_kg ?? payload.ref_costo_unitario ?? null,
+        unidad_costo: payload.unidad_costo ?? 'KG',
+        ref_costo_unitario: payload.costo_por_kg ?? payload.ref_costo_unitario ?? null,
+        costo_por_kg: payload.costo_por_kg ?? payload.ref_costo_unitario ?? null,
+        costo_por_tonelada: payload.costo_por_tonelada ?? (((payload.costo_por_kg ?? payload.ref_costo_unitario ?? 0) * 1000) || null),
         proteina_bruta_pct: payload.proteina_bruta_pct ?? null,
         humedad_pct: payload.humedad_pct ?? null,
         fibra_pct: payload.fibra_pct ?? null,
@@ -64,7 +76,7 @@ export const supabaseInsumoService = {
         observaciones: payload.observaciones ?? null,
         categoria: payload.categoria,
       })
-      .select('legacy_uid,nombre,unidad_medida,umbral_alerta,ref_costo_unitario,proteina_bruta_pct,humedad_pct,fibra_pct,grasa_pct,cenizas_pct,unidad_base,observaciones,categoria')
+      .select('legacy_uid,nombre,unidad_medida,umbral_alerta,costo,unidad_costo,ref_costo_unitario,costo_por_kg,costo_por_tonelada,proteina_bruta_pct,humedad_pct,fibra_pct,grasa_pct,cenizas_pct,unidad_base,observaciones,categoria')
       .single<InsumoRow>();
 
     if (error) throw error;
@@ -78,7 +90,11 @@ export const supabaseInsumoService = {
         nombre: payload.nombre,
         unidad_medida: payload.unidad_medida,
         umbral_alerta: payload.umbral_alerta,
-        ref_costo_unitario: payload.ref_costo_unitario,
+        costo: payload.costo ?? payload.costo_por_kg ?? payload.ref_costo_unitario,
+        unidad_costo: payload.unidad_costo,
+        ref_costo_unitario: payload.costo_por_kg ?? payload.ref_costo_unitario,
+        costo_por_kg: payload.costo_por_kg ?? payload.ref_costo_unitario,
+        costo_por_tonelada: payload.costo_por_tonelada ?? (((payload.costo_por_kg ?? payload.ref_costo_unitario ?? 0) * 1000) || null),
         proteina_bruta_pct: payload.proteina_bruta_pct,
         humedad_pct: payload.humedad_pct,
         fibra_pct: payload.fibra_pct,
@@ -89,7 +105,7 @@ export const supabaseInsumoService = {
         categoria: payload.categoria,
       })
       .eq('legacy_uid', uid)
-      .select('legacy_uid,nombre,unidad_medida,umbral_alerta,ref_costo_unitario,proteina_bruta_pct,humedad_pct,fibra_pct,grasa_pct,cenizas_pct,unidad_base,observaciones,categoria')
+      .select('legacy_uid,nombre,unidad_medida,umbral_alerta,costo,unidad_costo,ref_costo_unitario,costo_por_kg,costo_por_tonelada,proteina_bruta_pct,humedad_pct,fibra_pct,grasa_pct,cenizas_pct,unidad_base,observaciones,categoria')
       .single<InsumoRow>();
 
     if (error) throw error;

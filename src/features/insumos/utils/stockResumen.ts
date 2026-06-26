@@ -5,6 +5,7 @@ type SourceInsumo = {
   nombre?: string;
   unidad_medida?: string;
   umbral_alerta?: number | null;
+  costo_por_kg?: number | null;
 };
 
 const num = (value: unknown) => Number(value ?? 0);
@@ -35,6 +36,7 @@ export const buildStockMPResumen = (
     const stockComprometido = lotesInsumo.reduce((acc, lote) => acc + num(lote.cantidad_comprometida), 0);
     const stockDisponible = lotesInsumo.reduce((acc, lote) => acc + (num(lote.cantidad_actual) - num(lote.cantidad_comprometida)), 0);
     const umbralAlerta = num(insumo?.umbral_alerta);
+    const valorInventario = stockActual * num(insumo?.costo_por_kg);
 
     return {
       insumo_id: insumoId,
@@ -45,6 +47,7 @@ export const buildStockMPResumen = (
       stock_disponible: stockDisponible,
       umbral_alerta: umbralAlerta,
       estado: getEstadoResumen(stockDisponible, umbralAlerta),
+      valor_inventario: valorInventario,
     };
   }).sort((a, b) => a.nombre_insumo.localeCompare(b.nombre_insumo));
 };

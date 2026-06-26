@@ -48,8 +48,6 @@ describe('stockMateriaPrimaService compras', () => {
       remito_nro: ' rem-1 ',
       cantidad: 10,
       unidad_entrada: TipoUnidad.KG,
-      precio_unitario: 100,
-      unidad_precio: 'KG',
       fecha_ingreso: '2026-06-18',
       cantidad_actual: 10,
       cantidad_inicial: 10,

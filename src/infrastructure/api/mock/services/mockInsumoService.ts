@@ -19,6 +19,11 @@ export const mockInsumoService = {
   createInsumo: async (data: Omit<Insumo, 'uid'>): Promise<Insumo> => {
     const nuevo: Insumo = {
       ...data,
+      ref_costo_unitario: data.costo_por_kg ?? data.ref_costo_unitario,
+      costo: data.costo ?? data.costo_por_kg ?? data.ref_costo_unitario,
+      costo_por_kg: data.costo_por_kg ?? data.ref_costo_unitario,
+      costo_por_tonelada: data.costo_por_tonelada ?? ((data.costo_por_kg ?? data.ref_costo_unitario ?? 0) * 1000),
+      unidad_costo: data.unidad_costo ?? 'KG',
       uid: `i-${Math.floor(Math.random() * 1000)}`
     };
     mockInsumos = [...mockInsumos, nuevo];

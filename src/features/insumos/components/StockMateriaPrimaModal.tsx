@@ -1,13 +1,12 @@
 // src/features/insumos/components/StockMateriaPrimaModal.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { FiX, FiSave, FiBox, FiTruck, FiMapPin, FiCalendar, FiHash, FiFileText, FiDollarSign } from "react-icons/fi";
+import { FiX, FiSave, FiBox, FiTruck, FiMapPin, FiCalendar, FiHash, FiFileText } from "react-icons/fi";
 import { useStockMateriaPrima } from '../hooks';
 import { ApiService } from '../../../infrastructure/api';
 import type { Insumo } from '../types';
 import type { Proveedor } from '../../proveedores/types';
 import type { Silo } from '../../silos/types';
 import { findSiloByName, getMateriaPrimaSilos } from '../../silos/utils/siloFilters';
-import { calcularCostoIngresoMP } from '../utils/costoIngreso';
 
 interface Props {
   onClose: () => void;
@@ -38,9 +37,6 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     remito_nro: '',
     cantidad: 0,
     unidad_entrada: 'KG' as 'KG' | 'TON',
-    precio_unitario: 0,
-    unidad_precio: 'KG' as 'KG' | 'TON',
-    costo_total: 0,
     fecha_ingreso: new Date().toISOString().split('T')[0]
   });
 
@@ -63,20 +59,6 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     loadData();
   }, []);
 
-  const costoCalculado = useMemo(() => {
-    try {
-      return calcularCostoIngresoMP({
-        cantidad: formData.cantidad,
-        unidad_entrada: formData.unidad_entrada,
-        precio_unitario: formData.precio_unitario,
-        unidad_precio: formData.unidad_precio,
-        costo_total: formData.costo_total,
-      });
-    } catch {
-      return null;
-    }
-  }, [formData.cantidad, formData.unidad_entrada, formData.precio_unitario, formData.unidad_precio, formData.costo_total]);
-
   const silosMateriaPrima = useMemo(() => getMateriaPrimaSilos(silos), [silos]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,11 +78,6 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       setSubmitError('La cantidad debe ser mayor a 0.');
       return;
     }
-    if (!Number.isFinite(formData.precio_unitario) || formData.precio_unitario <= 0) {
-      setSubmitError('El precio unitario debe ser mayor a 0.');
-      return;
-    }
-
     const siloSeleccionado = findSiloByName(silos, formData.ubicacion);
     if (!siloSeleccionado) {
       setSubmitError('El silo seleccionado no existe.');
@@ -111,21 +88,12 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       return;
     }
 
-    if (!costoCalculado) {
-      setSubmitError('No se pudo calcular el costo de ingreso.');
-      return;
-    }
-
     const dataToSave = {
       ...formData,
       lote: formData.lote.trim().toUpperCase(),
       remito_nro: formData.remito_nro.trim(),
-      cantidad_actual: costoCalculado.cantidad_kg,
-      cantidad_inicial: costoCalculado.cantidad_kg,
-      precio_unitario: formData.precio_unitario,
-      unidad_precio: formData.unidad_precio,
-      costo_unitario: costoCalculado.precio_unitario_kg,
-      costo_total: costoCalculado.costo_total
+      cantidad_actual: formData.cantidad,
+      cantidad_inicial: formData.cantidad,
     };
 
     try {
@@ -264,38 +232,6 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             <div className="space-y-1">
               <label className={labelStyles}><FiCalendar /> Fecha Ingreso</label>
               <input type="date" className={`${inputStyles} [color-scheme:light]`} value={formData.fecha_ingreso} onChange={e => setFormData({ ...formData, fecha_ingreso: e.target.value })} />
-            </div>
-          </div>
-
-          {/* SECCIÓN 3: COSTOS DINÁMICOS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-5 bg-emerald-500/[0.03] rounded-2xl border border-emerald-500/10">
-            <div className="space-y-1">
-              <label className={labelStyles}><FiDollarSign className="text-emerald-500"/> Precio Unitario</label>
-              <div className="flex bg-slate-50 border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500/50 transition-all duration-200 ease-out">
-                <input 
-                  required type="number" step="any" 
-                  className={`w-full bg-transparent px-4 py-2.5 text-xs text-slate-900 outline-none ${noSpinnerClasses} font-bold text-sm`}
-                  placeholder="0.00" 
-                  onChange={e => setFormData({ ...formData, precio_unitario: Number(e.target.value) })} 
-                />
-                <select
-                  className="bg-slate-50 text-[10px] font-bold text-blue-600 px-3 border-l border-slate-200 outline-none cursor-pointer"
-                  value={formData.unidad_precio}
-                  onChange={e => setFormData({ ...formData, unidad_precio: e.target.value as 'KG' | 'TON' })}
-                >
-                  <option value="KG">ARS / KG</option>
-                  <option value="TON">ARS / TON</option>
-                </select>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className={labelStyles}>Costo Total Calculado</label>
-              <div className="h-[42px] flex items-center px-4 bg-white/[0.02] border border-slate-200 rounded-xl">
-                <span className="text-sm font-black text-slate-900">
-                  ARS {costoCalculado ? costoCalculado.costo_total.toFixed(2) : '0.00'}
-                  <span className="text-[10px] ml-2 text-emerald-500/50 font-bold uppercase tracking-widest">calculado automáticamente</span>
-                </span>
-              </div>
             </div>
           </div>
 

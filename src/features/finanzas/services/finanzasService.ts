@@ -38,6 +38,8 @@ type FlujoCajaMovimientoRow = {
   fecha: string;
   tipo: MovimientoFinanciero['tipo'];
   origen_operativo?: string | null;
+  origen_modulo?: string | null;
+  origen_id?: string | null;
   descripcion: string;
   monto?: number | string | null;
   categorias_financieras?: CategoriaNested;
@@ -232,9 +234,10 @@ export const finanzasService = {
         .order('fecha_vencimiento', { ascending: true }),
       supabaseClient
         .from('tesoreria_cheques')
-        .select('id,numero,tipo,tercero,importe,fecha_emision,fecha_vencimiento,estado,cliente_id,cliente_nombre')
+        .select('id,numero,tipo,tercero,importe,created_at,fecha_emision,fecha_vencimiento,estado,cliente_id,cliente_nombre')
         .is('deleted_at', null)
-        .order('fecha_vencimiento', { ascending: true }),
+        .order('created_at', { ascending: false, nullsFirst: false })
+        .order('fecha_emision', { ascending: false }),
       supabaseClient
         .from('stock_pt_movimientos')
         .select('cliente_id,created_at,tipo')
@@ -246,38 +249,38 @@ export const finanzasService = {
     ]);
     const clientesResult = await ApiService.clientes.getAll().then(
       (data) => ({ status: 'fulfilled' as const, value: data }),
-      () => ({ status: 'rejected' as const }),
+      (reason) => ({ status: 'rejected' as const, reason }),
     );
 
-    const partialWarnings: string[] = [];
-    const unwrap = <T>(result: PromiseSettledResult<unknown>, fallback: T): T => {
+    const partialWarnings: Array<{ source: string; error?: unknown }> = [];
+    const unwrap = <T>(result: PromiseSettledResult<unknown>, fallback: T, source: string): T => {
       if (result.status === 'rejected') {
-        partialWarnings.push('Consulta secundaria');
+        partialWarnings.push({ source, error: result.reason });
         return fallback;
       }
       const value = result.value as { data?: unknown; error?: unknown };
       if (value && value.error) {
-        partialWarnings.push('Consulta secundaria');
+        partialWarnings.push({ source, error: value.error });
         return fallback;
       }
       return (value?.data ?? fallback) as T;
     };
     const unwrapClientes = () => {
       if (clientesResult.status === 'rejected') {
-        partialWarnings.push('Consulta secundaria');
+        partialWarnings.push({ source: 'clientes', error: clientesResult.reason });
         return [];
       }
       return Array.isArray(clientesResult.value) ? clientesResult.value : [];
     };
 
-    const presupuestos = (unwrap<PresupuestoDbRow[]>(presupuestosResult, []) as PresupuestoDbRow[]).map((row) => ({
+    const presupuestos = (unwrap<PresupuestoDbRow[]>(presupuestosResult, [], 'presupuestos_mensuales') as PresupuestoDbRow[]).map((row) => ({
       anio: row.anio,
       mes: row.mes,
       monto_presupuestado: row.monto_presupuestado,
       categoria: row.categorias_financieras?.nombre ?? null,
       centro_costo: row.centros_costo?.nombre ?? null,
     }));
-    const flujo = (unwrap<FlujoCajaRubroDbRow[]>(flujoResult, []) as FlujoCajaRubroDbRow[]).map((row) => ({
+    const flujo = (unwrap<FlujoCajaRubroDbRow[]>(flujoResult, [], 'flujo_caja_movimientos') as FlujoCajaRubroDbRow[]).map((row) => ({
       fecha: row.fecha,
       tipo: row.tipo,
       origen_operativo: row.origen_operativo,
@@ -286,17 +289,17 @@ export const finanzasService = {
       categoria: row.categoria ?? null,
       centro_costo: row.centro_costo ?? null,
     }));
-    const comprobantes = unwrap<ComprobanteCarteraDbRow[]>(comprobantesResult, []) as ComprobanteCarteraDbRow[];
-    const cheques = (unwrap<ChequeTesoreriaDbRow[]>(chequesResult, []) as ChequeTesoreriaDbRow[]).map((row) => ({
+    const comprobantes = unwrap<ComprobanteCarteraDbRow[]>(comprobantesResult, [], 'comprobantes') as ComprobanteCarteraDbRow[];
+    const cheques = (unwrap<ChequeTesoreriaDbRow[]>(chequesResult, [], 'tesoreria_cheques') as ChequeTesoreriaDbRow[]).map((row) => ({
       ...row,
       importe: Number(row.importe ?? 0),
     }));
-    const ventasPt = unwrap<StockPTMovimientoVentaRow[]>(ventasPtResult, []) as StockPTMovimientoVentaRow[];
-    const saldoActual = (unwrap<CuentasBancariasSaldoRow[]>(saldoResult, []) as CuentasBancariasSaldoRow[]).reduce((acc, row) => acc + Number(row.saldo_actual ?? 0), 0);
+    const ventasPt = unwrap<StockPTMovimientoVentaRow[]>(ventasPtResult, [], 'stock_pt_movimientos') as StockPTMovimientoVentaRow[];
+    const saldoActual = (unwrap<CuentasBancariasSaldoRow[]>(saldoResult, [], 'cuentas_bancarias') as CuentasBancariasSaldoRow[]).reduce((acc, row) => acc + Number(row.saldo_actual ?? 0), 0);
     const clientes = unwrapClientes();
 
     const rubros = await finanzasService.getRubrosFinancieros().catch(() => {
-      partialWarnings.push('Consulta secundaria');
+      partialWarnings.push({ source: 'rubros_financieros', error: new Error('Consulta secundaria rechazada') });
       return [];
     });
 
@@ -312,9 +315,7 @@ export const finanzasService = {
     );
 
     if (partialWarnings.length > 0) {
-      console.warn('[tesoreria] partial data loaded', {
-        warnings: partialWarnings.length,
-      });
+      console.warn('[tesoreria] partial data loaded', partialWarnings);
     }
     return insights;
   },
@@ -416,7 +417,7 @@ export const finanzasService = {
   async getMovimientos(): Promise<MovimientoFinanciero[]> {
     const { data, error } = await supabaseClient
       .from('flujo_caja_movimientos')
-      .select('legacy_uid,fecha,tipo,origen_operativo,descripcion,monto,estado,categorias_financieras(nombre),centros_costo(nombre)')
+      .select('legacy_uid,fecha,tipo,origen_operativo,origen_modulo,origen_id,descripcion,monto,estado,categorias_financieras(nombre),centros_costo(nombre)')
       .is('deleted_at', null)
       .order('fecha', { ascending: false });
 
@@ -426,6 +427,8 @@ export const finanzasService = {
       fecha: row.fecha,
       tipo: row.tipo,
       origen_operativo: row.origen_operativo ?? undefined,
+      origen_modulo: row.origen_modulo ?? undefined,
+      origen_id: row.origen_id ?? undefined,
       descripcion: row.descripcion,
       monto: Number(row.monto ?? 0),
       categoria: row.categorias_financieras?.nombre,
@@ -462,7 +465,9 @@ export const finanzasService = {
       ApiService.stockPT.getResumen(),
     ]);
 
-    const valorStockMp = sum(lotesMp.map((lote) => Number(lote.cantidad_actual ?? 0) * Number(lote.costo_unitario ?? 0)));
+    const insumos = await ApiService.insumos.getAllInsumos();
+    const costoByInsumo = new Map(insumos.map((insumo) => [insumo.uid, Number(insumo.costo_por_kg ?? insumo.ref_costo_unitario ?? 0)]));
+    const valorStockMp = sum(lotesMp.map((lote) => Number(lote.cantidad_actual ?? 0) * Number(costoByInsumo.get(lote.id_insumo) ?? 0)));
     const valorStockPt = sum(resumenPt.map((item) => Number(item.valor_monetario ?? 0)));
     return {
       valor_stock_mp: valorStockMp,

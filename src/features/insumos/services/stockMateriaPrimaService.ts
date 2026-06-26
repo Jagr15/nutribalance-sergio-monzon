@@ -3,7 +3,6 @@ import type { StockMateriaPrima } from "../types";
 import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
 import { contabilidadOperativaService } from '../../finanzas/services/contabilidadOperativaService';
-import { calcularCostoIngresoMP, type UnidadPrecioMP } from '../utils/costoIngreso';
 import type { Silo } from '../../silos/types';
 
 export interface NewStockEntryData {
@@ -16,9 +15,6 @@ export interface NewStockEntryData {
   remito_nro: string;
   cantidad: number;
   unidad_entrada: 'KG' | 'TON';
-  precio_unitario?: number;
-  unidad_precio?: UnidadPrecioMP;
-  costo_total?: number;
   costo_unitario?: number;
   fecha_ingreso: string;
   cantidad_actual: number;
@@ -36,14 +32,6 @@ export const stockMateriaPrimaService = {
     if (!data.id_proveedor) throw new Error('El proveedor es obligatorio.');
     if (!data.id_insumo) throw new Error('El insumo es obligatorio.');
     if (data.cantidad <= 0) throw new Error('La cantidad debe ser mayor a 0.');
-
-    const costo = calcularCostoIngresoMP({
-      cantidad: data.cantidad,
-      unidad_entrada: data.unidad_entrada,
-      precio_unitario: data.precio_unitario,
-      unidad_precio: data.unidad_precio,
-      costo_total: data.costo_total,
-    });
 
     const lote = data.lote.trim().toUpperCase();
     const remito = data.remito_nro?.trim() ?? '';
@@ -66,10 +54,8 @@ export const stockMateriaPrimaService = {
       remito_nro: remito,
       cantidad: data.cantidad,
       unidad_entrada: data.unidad_entrada,
-      precio_unitario: data.precio_unitario,
-      unidad_precio: data.unidad_precio,
-      costo_total: costo.costo_total,
-      costo_unitario: costo.precio_unitario_kg,
+      costo_total: 0,
+      costo_unitario: 0,
       // TODO: deuda técnica: reemplazar id fijo por sesión autenticada
       id_usuario: 'usr-101',
       fecha_ingreso: new Date(data.fecha_ingreso),
@@ -82,7 +68,7 @@ export const stockMateriaPrimaService = {
       lote,
       insumo: data.nombre_insumo.trim(),
       proveedor: data.nombre_prov.trim(),
-      monto: costo.costo_total,
+      monto: 0,
       remito: remito || undefined,
     });
 
@@ -94,9 +80,6 @@ export const stockMateriaPrimaService = {
       payload: {
         lote,
         cantidad: data.cantidad,
-        precio_unitario: data.precio_unitario,
-        unidad_precio: data.unidad_precio,
-        costo_total: costo.costo_total,
       },
     });
     return created;
