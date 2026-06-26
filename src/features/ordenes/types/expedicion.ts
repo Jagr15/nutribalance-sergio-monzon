@@ -29,8 +29,15 @@ export interface OrdenExpedicion {
   presentacion: PresentacionExpedicion;
   cantidad: number;
   cantidad_original: number;
+  unidad_original?: 'kg' | 'tonelada' | string | null;
   unidad_cantidad: 'kg' | 'tonelada';
   cantidad_kg: number;
+  modo_calculo?: 'kg_requeridos' | 'empaques' | string | null;
+  empaque_id?: string | null;
+  tipo_empaque?: string | null;
+  capacidad_empaque_kg?: number | null;
+  cantidad_empaques?: number | null;
+  sobrante_kg?: number | null;
   estado: EstadoExpedicion;
   motivo: string | null;
   referencia: string | null;

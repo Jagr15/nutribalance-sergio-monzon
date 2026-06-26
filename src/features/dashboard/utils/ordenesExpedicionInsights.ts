@@ -44,8 +44,8 @@ export const buildOrdenesExpedicionInsights = (
   expediciones: OrdenExpedicion[],
   clientes: Cliente[]
 ): DashboardExpedicionInsights => {
-  const expedicionesVigentes = expediciones.filter((exp) => exp.estado !== 'ANULADA');
-  const expedicionesPendientes = expediciones.filter((exp) => exp.estado === 'PENDIENTE').length;
+  const expedicionesVigentes = expediciones.filter((exp) => exp.estado !== 'cancelada');
+  const expedicionesPendientes = expediciones.filter((exp) => exp.estado === 'pendiente').length;
   const kgExpedidos = expedicionesVigentes.reduce((acc, exp) => acc + num(exp.cantidad), 0);
 
   const clientesAtendidos = new Set(

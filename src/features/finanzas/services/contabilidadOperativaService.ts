@@ -6,6 +6,8 @@ type MovimientoContablePayload = {
   fecha: string;
   tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA';
   origen_operativo: string;
+  origen_modulo?: string;
+  origen_id?: string;
   descripcion: string;
   monto: number;
   categoria_id?: string | null;
@@ -60,6 +62,8 @@ const normalizeBase = (payload: MovimientoContablePayload): MovimientoContablePa
   descripcion: cleanText(payload.descripcion),
   origen_operativo: cleanText(payload.origen_operativo),
   metadata: payload.metadata ?? {},
+  origen_modulo: payload.origen_modulo?.trim() || undefined,
+  origen_id: payload.origen_id?.trim() || undefined,
   estado: payload.estado ?? 'CONFIRMADO',
   categoria_id: payload.categoria_id ?? null,
   centro_costo_id: payload.centro_costo_id ?? null,
@@ -92,6 +96,8 @@ export const contabilidadOperativaService = {
       fecha: normalized.fecha,
       tipo: normalized.tipo,
       origen_operativo: normalized.origen_operativo,
+      origen_modulo: normalized.origen_modulo ?? undefined,
+      origen_id: normalized.origen_id ?? undefined,
       descripcion: normalized.descripcion,
       monto: normalized.monto,
       categoria_id: normalized.categoria_id ?? undefined,
@@ -192,6 +198,56 @@ export const contabilidadOperativaService = {
         tercero: payload.tercero,
         cliente: payload.cliente ?? null,
       },
+    });
+  },
+
+  async sincronizarMovimientoCostos(payload: {
+    origen_id: string;
+    fecha: string;
+    tipo: 'INGRESO' | 'EGRESO';
+    descripcion: string;
+    monto: number;
+    origen_operativo: string;
+    categoria_id?: string | null;
+    centro_costo_id?: string | null;
+    estado?: 'PENDIENTE' | 'CONFIRMADO' | 'ANULADO';
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    if (!payload.origen_id.trim()) throw new Error('El origen de costos es obligatorio.');
+    ensurePositive(payload.monto, 'El monto contable');
+    await contabilidadOperativaService.ensureMovimiento({
+      legacy_uid: `fcm-costos-${payload.origen_id}`,
+      fecha: payload.fecha,
+      tipo: payload.tipo,
+      origen_operativo: payload.origen_operativo,
+      origen_modulo: 'costos',
+      origen_id: payload.origen_id,
+      descripcion: payload.descripcion,
+      monto: payload.monto,
+      categoria_id: payload.categoria_id ?? null,
+      centro_costo_id: payload.centro_costo_id ?? null,
+      estado: payload.estado ?? 'CONFIRMADO',
+      metadata: {
+        ...payload.metadata,
+        origen_modulo: 'costos',
+        origen_id: payload.origen_id,
+      },
+    });
+  },
+
+  async anularMovimientoCostos(origenId: string): Promise<void> {
+    if (!origenId.trim()) throw new Error('El origen de costos es obligatorio.');
+    await contabilidadOperativaService.ensureMovimiento({
+      legacy_uid: `fcm-costos-${origenId}`,
+      fecha: new Date().toISOString(),
+      tipo: 'EGRESO',
+      origen_operativo: 'COSTOS_ANULACION',
+      origen_modulo: 'costos',
+      origen_id: origenId,
+      descripcion: `Anulación de movimiento de costos ${origenId}`,
+      monto: 1,
+      estado: 'ANULADO',
+      metadata: { origen_modulo: 'costos', origen_id: origenId, accion: 'anulacion' },
     });
   },
 

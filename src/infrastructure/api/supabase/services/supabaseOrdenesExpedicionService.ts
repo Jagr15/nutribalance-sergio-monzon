@@ -19,8 +19,15 @@ interface OrdenExpedicionRow {
   presentacion: string;
   cantidad: number;
   cantidad_original: number | null;
-  unidad_cantidad: string | null;
+  unidad_original: string | null;
   cantidad_kg: number | null;
+  modo_calculo: string | null;
+  empaque_id: string | null;
+  tipo_empaque: string | null;
+  capacidad_empaque_kg: number | null;
+  cantidad_empaques: number | null;
+  sobrante_kg: number | null;
+  unidad_cantidad: string | null;
   estado: string;
   motivo: string | null;
   referencia: string | null;
@@ -41,8 +48,15 @@ const mapRow = (row: OrdenExpedicionRow): OrdenExpedicion => ({
   presentacion: row.presentacion as OrdenExpedicion['presentacion'],
   cantidad: Number(row.cantidad),
   cantidad_original: Number(row.cantidad_original ?? row.cantidad),
+  unidad_original: (row.unidad_original ?? row.unidad_cantidad ?? 'kg') as string,
   unidad_cantidad: (row.unidad_cantidad as OrdenExpedicion['unidad_cantidad']) ?? 'kg',
   cantidad_kg: Number(row.cantidad_kg ?? row.cantidad),
+  modo_calculo: row.modo_calculo ?? 'kg_requeridos',
+  empaque_id: row.empaque_id,
+  tipo_empaque: row.tipo_empaque,
+  capacidad_empaque_kg: row.capacidad_empaque_kg,
+  cantidad_empaques: row.cantidad_empaques,
+  sobrante_kg: row.sobrante_kg,
   estado: row.estado as OrdenExpedicion['estado'],
   motivo: row.motivo,
   referencia: row.referencia,
@@ -106,7 +120,7 @@ export const supabaseOrdenesExpedicionService = {
   async getAll(): Promise<OrdenExpedicion[]> {
     const { data, error } = await supabaseClient
       .from('ordenes_expedicion')
-      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion,cantidad,cantidad_original,unidad_cantidad,cantidad_kg,estado,motivo,referencia,created_at,updated_at')
+      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion,cantidad,cantidad_original,unidad_original,cantidad_kg,modo_calculo,empaque_id,tipo_empaque,capacidad_empaque_kg,cantidad_empaques,sobrante_kg,unidad_cantidad,estado,motivo,referencia,created_at,updated_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -199,7 +213,7 @@ export const supabaseOrdenesExpedicionService = {
   },
 
   async cancelar(id: string): Promise<OrdenExpedicion> {
-    await ensureState(id, ['pendiente', 'preparando', 'lista', 'despachada'], 'cancelada');
+    await ensureState(id, ['pendiente', 'preparando', 'lista'], 'cancelada');
     const { data, error } = await supabaseClient.rpc('cancelar_orden_expedicion', { p_orden_id: id });
     if (error) throw error;
     const updated = Array.isArray(data) ? data[0] : data;

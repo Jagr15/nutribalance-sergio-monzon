@@ -72,4 +72,26 @@ describe('contabilidadOperativaService', () => {
       expect.any(Object),
     );
   });
+
+  it('sincroniza movimiento de costos de forma idempotente con origen', async () => {
+    await contabilidadOperativaService.sincronizarMovimientoCostos({
+      origen_id: 'costo-001',
+      fecha: '2026-06-18T00:00:00Z',
+      tipo: 'INGRESO',
+      origen_operativo: 'COBRANZA',
+      descripcion: 'Cobranza cliente',
+      monto: 2500,
+      metadata: { comprobante: 'c-1' },
+    });
+
+    expect(upsertMock).toHaveBeenCalledWith(expect.objectContaining({
+      legacy_uid: 'fcm-costos-costo-001',
+      origen_modulo: 'costos',
+      origen_id: 'costo-001',
+      tipo: 'INGRESO',
+      origen_operativo: 'COBRANZA',
+      monto: 2500,
+      metadata: expect.objectContaining({ origen_modulo: 'costos', origen_id: 'costo-001' }),
+    }), expect.any(Object));
+  });
 });

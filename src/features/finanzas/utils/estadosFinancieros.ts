@@ -80,8 +80,9 @@ export const buildEstadosFinancieros = (params: {
 }): EstadosFinancierosData => {
   const rango = getPeriodoRango(params.periodo, params.rangoCustom);
   const movimientos = filtrarMovimientosPorPeriodo(params.movimientos, rango);
-  const ingresos = movimientos.filter((movimiento) => movimiento.tipo === 'INGRESO');
-  const egresos = movimientos.filter((movimiento) => movimiento.tipo === 'EGRESO');
+  const movimientosConfirmados = movimientos.filter((movimiento) => movimiento.estado === 'CONFIRMADO');
+  const ingresos = movimientosConfirmados.filter((movimiento) => movimiento.tipo === 'INGRESO');
+  const egresos = movimientosConfirmados.filter((movimiento) => movimiento.tipo === 'EGRESO');
 
   const ingresosPorCuenta = new Map<string, number>();
   const egresosPorCuenta = new Map<string, number>();

@@ -35,6 +35,12 @@ create or replace function public.registrar_orden_expedicion(
   p_cantidad numeric,
   p_cantidad_original numeric default null,
   p_unidad_cantidad text default null,
+  p_modo_calculo text default null,
+  p_empaque_id uuid default null,
+  p_tipo_empaque text default null,
+  p_capacidad_empaque_kg numeric default null,
+  p_cantidad_empaques numeric default null,
+  p_sobrante_kg numeric default null,
   p_motivo text default null,
   p_referencia text default null
 )
@@ -92,13 +98,16 @@ begin
 
   insert into public.ordenes_expedicion (
     legacy_uid, numero_expedicion, stock_pt_id, producto_id, nombre_producto, lote_pt,
-    cliente_id, presentacion, cantidad, cantidad_original, unidad_cantidad, cantidad_kg,
+    cliente_id, presentacion, cantidad, cantidad_original, unidad_original, unidad_cantidad, cantidad_kg,
+    modo_calculo, empaque_id, tipo_empaque, capacidad_empaque_kg, cantidad_empaques, sobrante_kg,
     estado, motivo, referencia
   ) values (
     v_legacy_uid, v_numero_expedicion, v_stock_pt.id,
     coalesce(v_stock_pt.id_formula_legacy, v_stock_pt.nombre_producto),
     v_stock_pt.nombre_producto, v_stock_pt.lote, p_cliente_id, v_presentacion, p_cantidad,
-    p_cantidad_original, v_unidad, v_cantidad_kg, 'pendiente',
+    p_cantidad_original, v_unidad, v_unidad, v_cantidad_kg,
+    coalesce(p_modo_calculo, 'kg_requeridos'), p_empaque_id, p_tipo_empaque,
+    coalesce(p_capacidad_empaque_kg, 1), coalesce(p_cantidad_empaques, p_cantidad_original), coalesce(p_sobrante_kg, 0), 'pendiente',
     coalesce(p_motivo, 'Despacho de producto terminado'),
     coalesce(p_referencia, v_numero_expedicion)
   );
@@ -178,8 +187,15 @@ begin
     presentacion = coalesce(p_presentacion, presentacion),
     cantidad = coalesce(p_cantidad, cantidad),
     cantidad_original = coalesce(p_cantidad_original, cantidad_original),
+    unidad_original = coalesce(p_unidad_cantidad, unidad_original),
     unidad_cantidad = v_unidad,
     cantidad_kg = v_nueva_cantidad_kg,
+    modo_calculo = coalesce(p_modo_calculo, modo_calculo),
+    empaque_id = coalesce(p_empaque_id, empaque_id),
+    tipo_empaque = coalesce(p_tipo_empaque, tipo_empaque),
+    capacidad_empaque_kg = coalesce(p_capacidad_empaque_kg, capacidad_empaque_kg),
+    cantidad_empaques = coalesce(p_cantidad_empaques, cantidad_empaques),
+    sobrante_kg = coalesce(p_sobrante_kg, sobrante_kg),
     motivo = coalesce(p_motivo, motivo),
     referencia = coalesce(p_referencia, referencia),
     updated_at = now()

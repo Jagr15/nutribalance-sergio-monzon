@@ -5,7 +5,7 @@ import { Outlet } from "react-router-dom";
 
 export const MainLayout = () => {
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-[#f4f7fb] text-slate-900">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[#f4f7fb] text-slate-900 text-[15px] leading-6">
       {/* Sidebar Fijo */}
       <Sidebar />
       
@@ -20,8 +20,8 @@ export const MainLayout = () => {
           2. overflow-y-auto para permitir el scroll solo en esta zona.
           3. custom-scrollbar (opcional) para que se vea profesional como en IAWAREPERU.
         */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar">
-          <div className="max-w-[1400px] mx-auto w-full">
+        <main className="flex-1 overflow-y-auto p-5 md:p-7 lg:p-9 custom-scrollbar">
+          <div className="max-w-[1560px] mx-auto w-full">
             <Outlet />
           </div>
         </main>

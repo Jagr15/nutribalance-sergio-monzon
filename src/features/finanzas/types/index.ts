@@ -5,6 +5,8 @@ export interface MovimientoFinanciero {
   fecha: string;
   tipo: TipoMovimientoFinanciero;
   origen_operativo?: string;
+  origen_modulo?: string;
+  origen_id?: string;
   descripcion: string;
   monto: number;
   categoria?: string;
@@ -103,6 +105,7 @@ export interface ChequeTesoreriaRow {
   fecha_emision: string;
   fecha_vencimiento: string;
   fecha_acreditacion?: string | null;
+  created_at?: string | null;
   estado: EstadoChequeTesoreria;
   cliente_id: string | null;
   cliente_nombre: string | null;
