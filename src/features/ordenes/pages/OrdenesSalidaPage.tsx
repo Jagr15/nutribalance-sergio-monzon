@@ -5,7 +5,7 @@ import { Card } from '../../../shared/components/card';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import type { OrdenExpedicion } from '../types';
 import OrdenExpedicionModal from '../components/OrdenExpedicionModal';
-import { actualizarOrdenExpedicionEnLista } from '../utils/ordenesExpedicion';
+import { cancelarOrdenExpedicionEnLista } from '../utils/ordenesExpedicion';
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
 
@@ -73,10 +73,11 @@ const OrdenesSalidaPage: React.FC = () => {
   }, [load]);
 
   const handleCancelar = useCallback(async (ordenId: string) => {
+    const currentOrden = ordenesSalida.find((orden) => orden.id === ordenId) ?? null;
     const cancelada = await ApiService.ordenesExpedicion.cancelar(ordenId);
-    setOrdenesSalida((current) => actualizarOrdenExpedicionEnLista(current, cancelada));
+    setOrdenesSalida((current) => cancelarOrdenExpedicionEnLista(current, ordenId, cancelada ?? currentOrden));
     await load();
-  }, [load]);
+  }, [load, ordenesSalida]);
 
   const handlePreparar = useCallback(async (ordenId: string) => {
     await ApiService.ordenesExpedicion.iniciarPreparacion(ordenId);

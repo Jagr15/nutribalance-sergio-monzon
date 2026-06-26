@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OrdenExpedicion } from '../types';
-import { actualizarOrdenExpedicionEnLista } from '../utils/ordenesExpedicion';
+import { cancelarOrdenExpedicionEnLista, actualizarOrdenExpedicionEnLista } from '../utils/ordenesExpedicion';
 
 const baseOrden = (id: string, estado: OrdenExpedicion['estado']): OrdenExpedicion => ({
   id,
@@ -35,5 +35,12 @@ describe('actualizarOrdenExpedicionEnLista', () => {
     expect(next.find((orden) => orden.id === 'id-1')?.estado).toBe('cancelada');
     expect(next.find((orden) => orden.id === 'id-1')?.updated_at).toBe('2026-06-18T10:05:00Z');
     expect(next.find((orden) => orden.id === 'id-2')?.estado).toBe('pendiente');
+  });
+
+  it('aplica cancelación local aunque la RPC no devuelva la fila', () => {
+    const ordenes = [baseOrden('id-1', 'pendiente')];
+    const next = cancelarOrdenExpedicionEnLista(ordenes, 'id-1', null);
+
+    expect(next[0].estado).toBe('cancelada');
   });
 });
