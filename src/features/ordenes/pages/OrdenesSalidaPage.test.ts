@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OrdenExpedicion } from '../types';
-import { cancelarOrdenExpedicionEnLista, actualizarOrdenExpedicionEnLista } from '../utils/ordenesExpedicion';
+import { cancelarOrdenExpedicionEnLista, actualizarOrdenExpedicionEnLista, puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
 
 const baseOrden = (id: string, estado: OrdenExpedicion['estado']): OrdenExpedicion => ({
   id,
@@ -42,5 +42,11 @@ describe('actualizarOrdenExpedicionEnLista', () => {
     const next = cancelarOrdenExpedicionEnLista(ordenes, 'id-1', null);
 
     expect(next[0].estado).toBe('cancelada');
+  });
+
+  it('oculta acciones en estados cerrados', () => {
+    expect(puedeMostrarAccionesOrdenSalida('despachada')).toBe(false);
+    expect(puedeMostrarAccionesOrdenSalida('cancelada')).toBe(false);
+    expect(puedeMostrarAccionesOrdenSalida('lista')).toBe(true);
   });
 });

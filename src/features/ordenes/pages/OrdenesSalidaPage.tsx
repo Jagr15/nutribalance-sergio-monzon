@@ -5,7 +5,7 @@ import { Card } from '../../../shared/components/card';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import type { OrdenExpedicion } from '../types';
 import OrdenExpedicionModal from '../components/OrdenExpedicionModal';
-import { cancelarOrdenExpedicionEnLista } from '../utils/ordenesExpedicion';
+import { cancelarOrdenExpedicionEnLista, puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
 
@@ -190,7 +190,7 @@ const OrdenesSalidaPage: React.FC = () => {
                     <td className="px-6 py-4 text-slate-600">{formatDateDDMMYYYY(orden.created_at)}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex flex-wrap justify-end gap-2">
-                        {orden.estado === 'pendiente' || orden.estado === 'preparando' || orden.estado === 'lista' ? (
+                        {puedeMostrarAccionesOrdenSalida(orden.estado) ? (
                           <>
                             {orden.estado === 'pendiente' ? (
                               <button type="button" onClick={() => void handlePreparar(orden.id)} className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-500">

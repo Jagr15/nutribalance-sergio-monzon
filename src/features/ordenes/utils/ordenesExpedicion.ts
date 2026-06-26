@@ -17,3 +17,6 @@ export const cancelarOrdenExpedicionEnLista = (
     estado: 'cancelada' as OrdenExpedicion['estado'],
   } as OrdenExpedicion;
 });
+
+export const puedeMostrarAccionesOrdenSalida = (estado: OrdenExpedicion['estado']) =>
+  estado === 'pendiente' || estado === 'preparando' || estado === 'lista';
