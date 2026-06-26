@@ -10,7 +10,7 @@ export interface ChequeTesoreriaFormValues {
   importe: number;
   fecha_emision: string;
   fecha_vencimiento: string;
-  fecha_acreditacion?: string;
+  fecha_acreditacion?: string | null;
   estado: EstadoChequeTesoreria | '';
   cliente_id?: string | null;
   cliente_nombre?: string | null;
@@ -217,6 +217,9 @@ export const tesoreriaService = {
   async updateChequeEstado(id: string, estado: EstadoChequeTesoreria): Promise<ChequeTesoreriaRow> {
     if (!ESTADOS_VALIDOS.has(estado)) throw new Error('El estado del cheque es obligatorio.');
     if (runtimeConfig.mode === 'mock') {
+      const current = readMockCheques().find((row) => row.id === id);
+      if (!current) throw new Error(`Cheque ${id} no encontrado`);
+      if (current.estado === estado) return normalizeCheque(current);
       const nextRows = readMockCheques().map((row) => (row.id === id ? { ...row, estado } : row));
       writeMockCheques(nextRows);
       const updated = nextRows.find((row) => row.id === id);
@@ -248,6 +251,7 @@ export const tesoreriaService = {
       .eq('id', id)
       .maybeSingle<ChequeTesoreriaDbRow>();
     if (currentError) throw currentError;
+    if (current && current.estado === estado) return normalizeCheque(current);
     const { data, error } = await supabaseClient.from('tesoreria_cheques').update({ estado }).eq('id', id).select('id,numero,tipo,tercero,importe,created_at,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre').single<ChequeTesoreriaDbRow>();
     if (error) throw new Error(formatDbError('actualizar el estado del cheque', error));
     if (current && estado === 'COBRADO' && current.tipo === 'RECIBIDO') {

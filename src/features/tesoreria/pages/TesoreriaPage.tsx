@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FiBell, FiSettings } from 'react-icons/fi';
 import Swal from 'sweetalert2';
 import { Card } from '../../../shared/components/card';
 import { useFinanzas } from '../../finanzas/hooks/useFinanzas';
@@ -7,7 +6,7 @@ import { useTesoreria } from '../hooks/useTesoreria';
 import { ChequeForm } from '../components/ChequeForm';
 import { EMPTY_CHEQUE_FORM } from '../components/chequeFormDefaults';
 import type { ChequeTesoreriaFormValues } from '../services/tesoreriaService';
-import type { ChequeTesoreriaRow, EstadoChequeTesoreria, MovimientoFinanciero } from '../../finanzas/types';
+import type { ChequeTesoreriaRow, EstadoChequeTesoreria } from '../../finanzas/types';
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value)) : 'Sin dato';
@@ -21,13 +20,6 @@ const isDeprecatedText = (value?: string | null) => {
 };
 const isDueToday = (value: string) => value.slice(0, 10) === todayIso();
 
-const formatMovementLabel = (movement: MovimientoFinanciero) => {
-  const base = movement.descripcion || 'Movimiento financiero';
-  if (movement.tipo === 'INGRESO') return `Ingreso por ${base}`;
-  if (movement.tipo === 'EGRESO') return `Egreso por ${base}`;
-  return `Transferencia: ${base}`;
-};
-
 const normalizeSearchText = (value: string) => value
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -37,8 +29,7 @@ const normalizeSearchText = (value: string) => value
 
 const TesoreriaPage = () => {
   const { kpis, reportes, movimientos, tesoreria: tesoreriaFinanzas } = useFinanzas();
-  const { tesoreria, error, getCheques, createCheque, updateCheque } = useTesoreria();
-  const [todayKey] = useState(() => new Date().toISOString().slice(0, 10));
+  const { tesoreria, error, getCheques, createCheque, updateCheque, updateChequeEstado } = useTesoreria();
   const [form, setForm] = useState<ChequeTesoreriaFormValues>(EMPTY_CHEQUE_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -51,6 +42,7 @@ const TesoreriaPage = () => {
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<'EMITIDO' | 'RECIBIDO' | ''>('');
   const [searchInput, setSearchInput] = useState('');
+  const [activeTab, setActiveTab] = useState<'RECIBIDOS' | 'EMITIDOS'>('RECIBIDOS');
   const listSectionRef = useRef<HTMLElement | null>(null);
   const allChequesRef = useRef<HTMLElement | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
@@ -167,6 +159,33 @@ const TesoreriaPage = () => {
     setIsFormOpen(true);
   };
 
+  const nextDirectState = (cheque: ChequeTesoreriaRow): EstadoChequeTesoreria | null => {
+    if (cheque.tipo === 'RECIBIDO') {
+      if (cheque.estado === 'DEPOSITADO' || cheque.estado === 'COBRADO') return null;
+      return 'DEPOSITADO';
+    }
+    if (cheque.estado === 'COBRADO') return null;
+    return 'DEPOSITADO';
+  };
+
+  const handleDirectStateChange = async (cheque: ChequeTesoreriaRow) => {
+    const next = nextDirectState(cheque);
+    if (!next) {
+      await showToast('error', 'El cheque ya está procesado.');
+      return;
+    }
+    try {
+      await updateChequeEstado(cheque.id, next);
+      const refreshed = await loadAllCheques();
+      setCheques(refreshed);
+      setHighlightedChequeId(cheque.id);
+      await showToast('success', cheque.tipo === 'RECIBIDO' ? 'Cheque marcado como depositado.' : 'Cheque marcado como cubierto.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'No se pudo actualizar el estado.';
+      await showToast('error', message);
+    }
+  };
+
   const allCheques = useMemo(
     () => [...cheques]
       .filter((cheque) => !isDeprecatedText(cheque.numero) && !isDeprecatedText(cheque.tercero))
@@ -201,11 +220,6 @@ const TesoreriaPage = () => {
 
   const filteredChequesEmitidos = useMemo(() => filteredCheques.filter((cheque) => cheque.tipo === 'EMITIDO'), [filteredCheques]);
   const filteredChequesRecibidos = useMemo(() => filteredCheques.filter((cheque) => cheque.tipo === 'RECIBIDO'), [filteredCheques]);
-  const filteredChequesPendientes = useMemo(() => filteredCheques.filter((cheque) => cheque.estado === 'PENDIENTE'), [filteredCheques]);
-  const filteredChequesDepositados = useMemo(() => filteredCheques.filter((cheque) => cheque.estado === 'DEPOSITADO'), [filteredCheques]);
-  const filteredChequesCobrados = useMemo(() => filteredCheques.filter((cheque) => cheque.estado === 'COBRADO'), [filteredCheques]);
-  const filteredChequesRechazados = useMemo(() => filteredCheques.filter((cheque) => cheque.estado === 'RECHAZADO'), [filteredCheques]);
-  const filteredChequesVencidos = useMemo(() => filteredCheques.filter((cheque) => cheque.estado === 'VENCIDO'), [filteredCheques]);
   const getChequeStateLabel = (estado: EstadoChequeTesoreria) => ({
     PENDIENTE: 'Pendiente',
     A_DEPOSITAR: 'A depositar',
@@ -224,22 +238,6 @@ const TesoreriaPage = () => {
     ENDOSADO: 'bg-violet-100 text-violet-800 border-violet-200',
     VENCIDO: 'bg-slate-100 text-slate-800 border-slate-200',
   }[estado]);
-  const chequeCards = useMemo(() => {
-    const buckets = [
-      { key: 'emitidos', title: 'Cheques emitidos', items: filteredChequesEmitidos },
-      { key: 'recibidos', title: 'Cheques recibidos', items: filteredChequesRecibidos },
-      { key: 'pendientes', title: 'Cheques pendientes', items: filteredChequesPendientes },
-      { key: 'depositados', title: 'Cheques depositados', items: filteredChequesDepositados },
-      { key: 'cobrados', title: 'Cheques cobrados', items: filteredChequesCobrados },
-      { key: 'rechazados', title: 'Cheques rechazados', items: filteredChequesRechazados },
-      { key: 'vencidos', title: 'Cheques vencidos', items: filteredChequesVencidos },
-    ];
-    return buckets.map((bucket) => ({
-      ...bucket,
-      total: bucket.items.reduce((acc, cheque) => acc + cheque.importe, 0),
-      sample: bucket.items.slice(0, 3),
-    }));
-  }, [filteredChequesCobrados, filteredChequesDepositados, filteredChequesEmitidos, filteredChequesPendientes, filteredChequesRecibidos, filteredChequesRechazados, filteredChequesVencidos]);
   const horizonBuckets = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -284,80 +282,21 @@ const TesoreriaPage = () => {
     };
   }, [filteredCheques, kpis.cuentas_por_cobrar, kpis.saldo_actual, movimientos, reportes.ingresos_pt_por_producto, tesoreria.carteraClientes]);
 
-  const movimientosCajaRecientes = useMemo(() => {
-    const chequesCobradoRecibidos = filteredCheques
-      .filter((cheque) => cheque.estado === 'COBRADO')
-      .map((cheque) => ({
-        id: `cobrado-${cheque.id}`,
-        fecha: cheque.fecha_acreditacion ?? cheque.fecha_vencimiento,
-        titulo: `Cheque cobrado ${cheque.numero}`,
-        detalle: `${cheque.tercero} · ${formatCurrency(cheque.importe)}`,
-        tipo: 'Cheque cobrado',
-      }));
-    const chequesDepositados = filteredCheques
-      .filter((cheque) => cheque.estado === 'DEPOSITADO' || cheque.estado === 'A_DEPOSITAR')
-      .map((cheque) => ({
-        id: `depositado-${cheque.id}`,
-        fecha: cheque.fecha_acreditacion ?? cheque.fecha_vencimiento,
-        titulo: `Cheque depositado ${cheque.numero}`,
-        detalle: `${cheque.tercero} · ${formatCurrency(cheque.importe)}`,
-        tipo: 'Cheque depositado',
-      }));
-    const chequeEmitidoCubierto = filteredCheques
-      .filter((cheque) => cheque.estado === 'DEPOSITADO')
-      .map((cheque) => ({
-        id: `pagado-${cheque.id}`,
-        fecha: cheque.fecha_acreditacion ?? cheque.fecha_vencimiento,
-        titulo: `Cheque emitido cubierto ${cheque.numero}`,
-        detalle: `${cheque.tercero} · ${formatCurrency(cheque.importe)}`,
-        tipo: 'Cheque emitido',
-      }));
-    const movimientosIngresos = movimientos
-      .filter((movimiento) => movimiento.tipo === 'INGRESO')
-      .slice(0, 8)
-      .map((movement) => ({
-        id: `mov-${movement.uid}`,
-        fecha: movement.fecha,
-        titulo: formatMovementLabel(movement),
-        detalle: `${movement.categoria || 'Sin categoría'} · ${formatCurrency(movement.monto)}`,
-        tipo: 'Movimiento',
-      }));
-    return [...movimientosIngresos, ...chequesDepositados, ...chequesCobradoRecibidos, ...chequeEmitidoCubierto]
-      .filter((item) => !isDeprecatedText(item.titulo) && !isDeprecatedText(item.detalle))
-      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
-      .slice(0, 8);
-  }, [filteredCheques, movimientos]);
   const alertaPrioritaria = useMemo(() => {
     const emitidoVenceHoy = filteredChequesEmitidos.find((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(cheque.estado) && isDueToday(cheque.fecha_vencimiento));
     if (emitidoVenceHoy) {
-      return `Hoy hay un cheque que cubrir: ${emitidoVenceHoy.numero}`;
+      return `Cheque emitido ${emitidoVenceHoy.numero} por cubrir hoy por ${formatCurrency(emitidoVenceHoy.importe)}.`;
     }
     const recibidoListoDepositar = filteredChequesRecibidos.find((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(cheque.estado) && isDueToday(cheque.fecha_vencimiento));
     if (recibidoListoDepositar) {
-      return `Cheque recibido ${recibidoListoDepositar.numero} listo para depositar`;
+      return `Cheque recibido ${recibidoListoDepositar.numero} listo para depositar por ${formatCurrency(recibidoListoDepositar.importe)}.`;
     }
     const recibidoADepositar = filteredChequesRecibidos.find((cheque) => cheque.estado === 'A_DEPOSITAR');
     if (recibidoADepositar) {
-      return `Cheque recibido ${recibidoADepositar.numero} listo para depositar`;
+      return `Cheque recibido ${recibidoADepositar.numero} listo para depositar por ${formatCurrency(recibidoADepositar.importe)}.`;
     }
     return null;
   }, [filteredChequesEmitidos, filteredChequesRecibidos]);
-  const campanaFinanciera = useMemo(() => {
-    const vencidos = filteredCheques.filter((cheque) => cheque.tipo === 'EMITIDO' && (cheque.estado === 'VENCIDO' || (cheque.estado === 'PENDIENTE' && cheque.fecha_vencimiento.slice(0, 10) < todayKey)));
-    const depositados = filteredCheques.filter((cheque) => cheque.tipo === 'RECIBIDO' && (cheque.estado === 'DEPOSITADO' || cheque.estado === 'COBRADO'));
-    return {
-      count: vencidos.length + depositados.length,
-      label: vencidos.length > 0 ? `Hay ${vencidos.length} cheques vencidos.` : 'Sin vencimientos financieros críticos.',
-    };
-  }, [filteredCheques, todayKey]);
-  const campanaOperativa = useMemo(() => {
-    const porAcreditar = filteredCheques.filter((cheque) => cheque.tipo === 'RECIBIDO' && (cheque.estado === 'PENDIENTE' || cheque.estado === 'RECHAZADO'));
-    const porCubrir = filteredCheques.filter((cheque) => cheque.tipo === 'EMITIDO' && cheque.estado === 'PENDIENTE');
-    return {
-      count: porAcreditar.length + porCubrir.length,
-      label: porCubrir.length > 0 ? `Hay ${porCubrir.length} cheques por cubrir.` : 'Sin pendientes operativos urgentes.',
-    };
-  }, [filteredCheques]);
   const openCreateForm = () => {
     resetForm();
     setIsFormOpen(true);
@@ -453,126 +392,106 @@ const TesoreriaPage = () => {
         </div>
       </Card>
 
-      <section className="space-y-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Caja y cobranza</p>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-            <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Caja disponible</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.cajaDisponible)}</p></Card>
-            <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Ventas del período</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.ventasPeriodo)}</p></Card>
-            <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Cobros del período</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.cobrosPeriodo)}</p></Card>
-            <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Cuentas por cobrar</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.ctasCobrar)}</p></Card>
-            <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Cheques recibidos hoy</p><p className="mt-2 text-2xl font-semibold">{cajasYcobranza.chequesRecibidosHoy.length}</p></Card>
-            <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Cheques emitidos hoy</p><p className="mt-2 text-2xl font-semibold">{cajasYcobranza.chequesEmitidosHoy.length}</p></Card>
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card><p className="text-xs uppercase tracking-[0.24em] text-slate-500">Cheques emitidos</p><p className="mt-2 text-3xl font-semibold">{resumen.emitidos}</p></Card>
-          <Card><p className="text-xs uppercase tracking-[0.24em] text-slate-500">Cheques recibidos</p><p className="mt-2 text-3xl font-semibold">{resumen.recibidos}</p></Card>
-          <Card><p className="text-xs uppercase tracking-[0.24em] text-slate-500">Alertas activas</p><p className="mt-2 text-3xl font-semibold">{resumen.alertas}</p></Card>
-          <Card><p className="text-xs uppercase tracking-[0.24em] text-slate-500">Saldo proyectado</p><p className="mt-2 text-3xl font-semibold">{formatCurrency(resumen.proyeccion)}</p></Card>
-        </div>
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Caja disponible</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.cajaDisponible)}</p></Card>
+        <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Ventas del período</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.ventasPeriodo)}</p></Card>
+        <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Cobros del período</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.cobrosPeriodo)}</p></Card>
+        <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Cuentas por cobrar</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.ctasCobrar)}</p></Card>
+        <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Recibidos hoy</p><p className="mt-2 text-2xl font-semibold">{cajasYcobranza.chequesRecibidosHoy.length}</p></Card>
+        <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Emitidos hoy</p><p className="mt-2 text-2xl font-semibold">{cajasYcobranza.chequesEmitidosHoy.length}</p></Card>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card className="border-sky-200 bg-sky-50">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-sky-700">Campana financiera</p>
-              <h2 className="mt-1 truncate text-base font-semibold text-slate-900 sm:text-lg">Alertas de flujo y vencimientos</h2>
-            </div>
-            <div className="shrink-0 rounded-2xl bg-white p-3 text-sky-700 shadow-sm">
-              <FiBell size={18} />
-            </div>
-          </div>
-          <p className="mt-3 break-words text-sm text-slate-700">{campanaFinanciera.label}</p>
-          <p className="mt-2 text-lg font-semibold text-slate-900 sm:text-2xl">{campanaFinanciera.count}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-sky-700">Alerta prioritaria</p>
+          <p className="mt-2 text-sm text-slate-700">{alertaPrioritaria ?? 'Sin alertas prioritarias en el momento.'}</p>
         </Card>
-
-        <Card className="border-emerald-200 bg-emerald-50">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-700">Campana operativa</p>
-              <h2 className="mt-1 truncate text-base font-semibold text-slate-900 sm:text-lg">Seguimiento de cheques y acción</h2>
-            </div>
-            <div className="shrink-0 rounded-2xl bg-white p-3 text-emerald-700 shadow-sm">
-              <FiSettings size={18} />
-            </div>
+        <Card className="border-slate-200 bg-slate-50">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Resumen</p>
+          <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+            <div><p className="text-slate-500">Cheques recibidos</p><p className="font-semibold">{resumen.recibidos}</p></div>
+            <div><p className="text-slate-500">Cheques emitidos</p><p className="font-semibold">{resumen.emitidos}</p></div>
+            <div><p className="text-slate-500">Alertas activas</p><p className="font-semibold">{resumen.alertas}</p></div>
+            <div><p className="text-slate-500">Saldo proyectado</p><p className="font-semibold">{formatCurrency(resumen.proyeccion)}</p></div>
           </div>
-          <p className="mt-3 break-words text-sm text-slate-700">{campanaOperativa.label}</p>
-          <p className="mt-2 text-lg font-semibold text-slate-900 sm:text-2xl">{campanaOperativa.count}</p>
         </Card>
       </section>
-
-      <Card className="min-w-0">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="min-w-0 truncate text-lg font-semibold">Movimientos de caja recientes</h2>
-        </div>
-        {movimientosCajaRecientes.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-            No hay movimientos recientes para mostrar.
-          </div>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            {movimientosCajaRecientes.map((item) => (
-              <div key={item.id} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-500">{item.tipo}</p>
-                <p className="mt-1 truncate text-sm font-semibold text-slate-900">{item.titulo}</p>
-                <p className="mt-1 truncate text-xs text-slate-600">{item.detalle}</p>
-                <p className="mt-2 text-[11px] text-slate-500">{formatDate(item.fecha)}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
 
       <section ref={listSectionRef} className="space-y-4 scroll-mt-32">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Cheques</p>
-            <h2 className="mt-1 truncate text-lg font-semibold text-slate-900">Organización por zona y estado</h2>
+            <h2 className="mt-1 truncate text-lg font-semibold text-slate-900">Tabla compacta de tesorería</h2>
           </div>
           <button type="button" onClick={openCreateForm} className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">+ Registrar cheque</button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setActiveTab('RECIBIDOS')} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === 'RECIBIDOS' ? 'bg-emerald-600 text-white' : 'border border-slate-200 bg-white text-slate-700'}`}>Cheques recibidos</button>
+          <button type="button" onClick={() => setActiveTab('EMITIDOS')} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === 'EMITIDOS' ? 'bg-rose-600 text-white' : 'border border-slate-200 bg-white text-slate-700'}`}>Cheques emitidos</button>
         </div>
         {filteredCheques.length === 0 ? (
           <Card className="border-dashed border-slate-200">
             <p className="text-sm text-slate-500">No hay cheques que coincidan con los filtros.</p>
           </Card>
         ) : null}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {chequeCards.map((bucket) => (
-            <Card key={bucket.key} className="border-slate-200 min-w-0">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{bucket.title}</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900 sm:text-3xl">{bucket.items.length}</p>
-                </div>
-                <span className="shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">{formatCurrency(bucket.total)}</span>
-              </div>
-              <div className="mt-4 space-y-2">
-                {bucket.sample.length > 0 ? bucket.sample.map((cheque) => (
-                  <div key={cheque.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">{cheque.numero}</p>
-                        <p className="truncate text-xs text-slate-500">{cheque.tercero} · {formatDate(cheque.fecha_vencimiento)}</p>
-                      </div>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getChequeStateTone(cheque.estado)}`}>{getChequeStateLabel(cheque.estado)}</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <p className="min-w-0 truncate whitespace-nowrap text-sm font-semibold text-slate-700">{formatCurrency(cheque.importe)}</p>
-                      <button type="button" onClick={() => startEdit(cheque)} className="shrink-0 rounded-xl border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">Editar</button>
-                    </div>
-                  </div>
-                )) : (
-                  <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">
-                    Sin registros en esta categoría.
-                  </div>
-                )}
-              </div>
-            </Card>
-          ))}
-        </div>
+        <Card className="min-w-0 overflow-hidden border-slate-200">
+          <div className="overflow-x-auto">
+            <table className="min-w-[1100px] w-full border-collapse text-sm">
+              <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                <tr>
+                  <th className="px-3 py-3 text-left">Número</th>
+                  <th className="px-3 py-3 text-left">Tipo</th>
+                  <th className="px-3 py-3 text-left">Tercero</th>
+                  <th className="px-3 py-3 text-left">{activeTab === 'RECIBIDOS' ? 'Fecha de depósito/cobro' : 'Fecha de pago'}</th>
+                  <th className="px-3 py-3 text-left">Acreditación</th>
+                  <th className="px-3 py-3 text-left">Estado</th>
+                  <th className="px-3 py-3 text-right">Importe</th>
+                  <th className="px-3 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {(activeTab === 'RECIBIDOS' ? filteredChequesRecibidos : filteredChequesEmitidos).map((cheque) => {
+                  const isHighlighted = highlightedChequeId === cheque.id;
+                  const band = cheque.tipo === 'RECIBIDO'
+                    ? cheque.estado === 'COBRADO' || cheque.estado === 'DEPOSITADO'
+                      ? 'bg-emerald-50'
+                      : cheque.estado === 'PENDIENTE'
+                        ? 'bg-amber-50'
+                        : 'bg-slate-50'
+                    : cheque.estado === 'DEPOSITADO' || cheque.estado === 'COBRADO'
+                      ? 'bg-slate-100'
+                      : cheque.estado === 'PENDIENTE'
+                        ? 'bg-rose-50'
+                        : 'bg-amber-50';
+                  const directState = nextDirectState(cheque);
+                  return (
+                    <tr key={cheque.id} className={`${band} ${isHighlighted ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
+                      <td className="px-3 py-2 font-semibold text-slate-900">{cheque.numero}</td>
+                      <td className="px-3 py-2 text-slate-700">{cheque.tipo === 'RECIBIDO' ? 'Recibido' : 'Emitido'}</td>
+                      <td className="px-3 py-2 text-slate-700">{cheque.tercero || cheque.cliente_nombre || 'Sin tercero'}</td>
+                      <td className="px-3 py-2 text-slate-700">{formatDate(cheque.fecha_vencimiento)}</td>
+                      <td className="px-3 py-2 text-slate-700">{formatDate(cheque.fecha_acreditacion)}</td>
+                      <td className="px-3 py-2"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${getChequeStateTone(cheque.estado)}`}>{getChequeStateLabel(cheque.estado)}</span></td>
+                      <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrency(cheque.importe)}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex justify-end gap-2">
+                          {directState ? (
+                            <button type="button" onClick={() => void handleDirectStateChange(cheque)} className="rounded-xl border border-emerald-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50">
+                              {cheque.tipo === 'RECIBIDO' ? 'Depositado' : 'Cubierto'}
+                            </button>
+                          ) : (
+                            <span className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-slate-500">Procesado</span>
+                          )}
+                          <button type="button" onClick={() => startEdit(cheque)} className="rounded-xl border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">Editar</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {horizonBuckets.map((bucket) => (
             <Card key={bucket.label} className={bucket.label === 'Hoy' ? 'border-blue-200 bg-blue-50' : 'border-slate-200'}>
@@ -610,104 +529,26 @@ const TesoreriaPage = () => {
         </div>
       </section>
 
-      <section ref={allChequesRef} className="scroll-mt-32 space-y-4">
-        <Card className="border-slate-200 min-w-0">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Tesorería</p>
-              <h2 className="mt-1 truncate text-lg font-semibold text-slate-900">Todos los cheques</h2>
-              <p className="mt-1 text-sm text-slate-500">Listado operativo principal con filtros aplicados.</p>
-            </div>
-            <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">{filteredCheques.length}</span>
-          </div>
-          {filteredCheques.length === 0 ? (
-            <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-              No hay cheques que coincidan con los filtros.
-            </div>
-          ) : (
-            <>
-              <div className="mt-4 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white xl:block">
-                <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  <span>Número</span>
-                  <span>Tipo</span>
-                  <span>Cliente / Proveedor</span>
-                  <span>Estado</span>
-                  <span>Importe</span>
-                  <span>Emisión</span>
-                  <span>Vencimiento</span>
-                  <span>Acciones</span>
-                </div>
-                <div className="divide-y divide-slate-200">
-                  {filteredCheques.map((cheque) => {
-                    const isHighlighted = highlightedChequeId === cheque.id;
-                    return (
-                      <div key={`all-${cheque.id}`} className={`grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition-colors ${isHighlighted ? 'bg-blue-50/80' : 'bg-white'}`}>
-                        <span className="truncate font-semibold text-slate-900">{cheque.numero}</span>
-                        <span className="truncate text-sm text-slate-700">{cheque.tipo === 'EMITIDO' ? 'Emitido' : 'Recibido'}</span>
-                        <span className="truncate text-sm text-slate-700">{cheque.tercero || cheque.cliente_nombre || 'Sin tercero'}</span>
-                        <span className={`inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getChequeStateTone(cheque.estado)}`}>{getChequeStateLabel(cheque.estado)}</span>
-                        <span className="truncate whitespace-nowrap text-sm font-semibold text-slate-900">{formatCurrency(cheque.importe)}</span>
-                        <span className="truncate whitespace-nowrap text-sm text-slate-600">{formatDate(cheque.fecha_emision)}</span>
-                        <span className="truncate whitespace-nowrap text-sm text-slate-600">{formatDate(cheque.fecha_vencimiento)}</span>
-                        <div className="flex justify-end">
-                          <button type="button" onClick={() => startEdit(cheque)} className="shrink-0 rounded-xl border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">
-                            Editar
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="grid gap-4 xl:hidden">
-                {filteredCheques.map((cheque) => {
-                  const isHighlighted = highlightedChequeId === cheque.id;
-                  return (
-                    <Card
-                      key={`all-mobile-${cheque.id}`}
-                      className={`min-w-0 overflow-hidden border-slate-200 p-0 transition-all duration-500 ${isHighlighted ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-white shadow-lg shadow-blue-200/70 scale-[1.01]' : ''}`}
-                    >
-                      <div className={`h-1.5 w-full ${cheque.estado === 'COBRADO' ? 'bg-emerald-500' : cheque.estado === 'DEPOSITADO' ? 'bg-sky-500' : cheque.estado === 'RECHAZADO' ? 'bg-rose-500' : cheque.estado === 'VENCIDO' ? 'bg-slate-500' : cheque.estado === 'ENDOSADO' ? 'bg-violet-500' : 'bg-amber-500'}`} />
-                      <div className="space-y-3 px-4 py-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Cheque</p>
-                            <p className="truncate text-base font-semibold text-slate-900 sm:text-lg">{cheque.numero}</p>
-                          </div>
-                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getChequeStateTone(cheque.estado)}`}>{getChequeStateLabel(cheque.estado)}</span>
-                        </div>
-                        <p className="min-w-0 truncate text-sm text-slate-700">{cheque.tercero || cheque.cliente_nombre || 'Sin tercero'}</p>
-                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
-                          <span className="truncate">{cheque.tipo === 'EMITIDO' ? 'Emitido' : 'Recibido'}</span>
-                          <span className="truncate whitespace-nowrap text-right">{formatDate(cheque.fecha_emision)}</span>
-                          <span className="truncate whitespace-nowrap">{formatDate(cheque.fecha_vencimiento)}</span>
-                          <span className="truncate whitespace-nowrap text-right font-semibold text-slate-900">{formatCurrency(cheque.importe)}</span>
-                        </div>
-                        <div className="flex justify-end">
-                          <button type="button" onClick={() => startEdit(cheque)} className="shrink-0 rounded-xl border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">
-                            Editar
-                          </button>
-                        </div>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </Card>
-      </section>
-
+      <section className="space-y-4">
         <Card>
-          <h2 className="text-lg font-semibold">Alertas de tesorería</h2>
-          <div className="mt-4 space-y-3">
-            {tesoreriaFinanzas.alertasTesoreria.filter((alerta) => !isDeprecatedText(alerta.titulo) && !isDeprecatedText(alerta.tipo)).map((alerta) => (
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Alertas de tesorería</h2>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">{tesoreriaFinanzas.alertasTesoreria.length}</span>
+          </div>
+          <div className="mt-4 grid gap-3">
+            {tesoreriaFinanzas.alertasTesoreria.filter((alerta) => !isDeprecatedText(alerta.titulo) && !isDeprecatedText(alerta.tipo)).slice(0, 6).map((alerta) => (
               <div key={alerta.alerta_id} className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-amber-900">{alerta.titulo}</p>
                     <p className="text-xs text-amber-700">{alerta.tipo}</p>
+                    <p className="mt-1 text-xs text-amber-700">
+                      {String(alerta.dato_asociado?.cheque ?? 'Cheque')}
+                      {' · '}
+                      {formatCurrency(Number(alerta.dato_asociado?.importe ?? 0))}
+                      {' · '}
+                      {formatDate(String(alerta.dato_asociado?.vence ?? alerta.fecha_evento))}
+                    </p>
                   </div>
                   <span className="rounded-full bg-amber-600 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">{alerta.prioridad}</span>
                 </div>
@@ -715,6 +556,7 @@ const TesoreriaPage = () => {
             ))}
           </div>
         </Card>
+      </section>
       {isFormOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm"
@@ -745,7 +587,6 @@ const TesoreriaPage = () => {
                 error={formError}
                 title={editingId ? 'Editar cheque' : 'Registrar cheque'}
                 submitLabel={editingId ? 'Guardar cambios' : 'Registrar cheque'}
-                showAcreditacion={Boolean(editingId)}
               />
             </div>
           </div>

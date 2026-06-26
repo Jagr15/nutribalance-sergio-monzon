@@ -23,7 +23,6 @@ export const ChequeForm = ({
   error,
   title,
   submitLabel,
-  showAcreditacion = false,
 }: {
   value: ChequeTesoreriaFormValues;
   onChange: (next: ChequeTesoreriaFormValues) => void;
@@ -33,7 +32,6 @@ export const ChequeForm = ({
   error?: string | null;
   title: string;
   submitLabel: string;
-  showAcreditacion?: boolean;
 }) => (
   <form
     className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
@@ -81,24 +79,22 @@ export const ChequeForm = ({
       </label>
       <label className="block">
         <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Fecha de emisión</span>
-        <input type="date" className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" value={value.fecha_emision} onChange={(event) => onChange({ ...value, fecha_emision: event.target.value })} />
+        <input required type="date" className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" value={value.fecha_emision} onChange={(event) => onChange({ ...value, fecha_emision: event.target.value })} />
       </label>
       <label className="block">
-        <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Fecha de vencimiento</span>
+        <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{value.tipo === 'RECIBIDO' ? 'Fecha de depósito/cobro' : 'Fecha de pago'}</span>
         <input required type="date" className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" value={value.fecha_vencimiento} onChange={(event) => onChange({ ...value, fecha_vencimiento: event.target.value })} />
       </label>
-      {showAcreditacion ? (
-        <label className="block">
-          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Fecha de acreditación</span>
-          <input
-            type="date"
-            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
-            value={value.fecha_acreditacion ?? ''}
-            onChange={(event) => onChange({ ...value, fecha_acreditacion: event.target.value })}
-          />
-          <p className="mt-1 text-xs text-slate-500">Opcional. Puedes guardarlo sin informar acreditación.</p>
-        </label>
-      ) : null}
+      <label className="block">
+        <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Fecha de acreditación</span>
+        <input
+          type="date"
+          className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+          value={value.fecha_acreditacion ?? ''}
+          onChange={(event) => onChange({ ...value, fecha_acreditacion: event.target.value || null })}
+        />
+        <p className="mt-1 text-xs text-slate-500">Opcional. Puedes guardarlo vacío.</p>
+      </label>
     </div>
 
     <div className="mt-6 flex flex-wrap justify-end gap-3">
