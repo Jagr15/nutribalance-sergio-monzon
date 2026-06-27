@@ -18,7 +18,7 @@ const getEstadoResumen = (stockDisponible: number, umbralAlerta: number): StockM
 
 export const buildStockMPResumen = (
   lotes: StockMateriaPrima[],
-  insumos: SourceInsumo[],
+  insumos: SourceInsumo[] = [],
 ): StockMateriaPrimaResumen[] => {
   const insumoById = new Map(insumos.map((item) => [item.uid, item]));
   const grouped = new Map<string, StockMateriaPrima[]>();
@@ -32,6 +32,7 @@ export const buildStockMPResumen = (
 
   return [...grouped.entries()].map(([insumoId, lotesInsumo]) => {
     const insumo = insumoById.get(insumoId);
+    const nombreDesdeLote = lotesInsumo.find((lote) => lote.nombre_insumo?.trim())?.nombre_insumo?.trim();
     const stockActual = lotesInsumo.reduce((acc, lote) => acc + num(lote.cantidad_actual), 0);
     const stockComprometido = lotesInsumo.reduce((acc, lote) => acc + num(lote.cantidad_comprometida), 0);
     const stockDisponible = lotesInsumo.reduce((acc, lote) => acc + (num(lote.cantidad_actual) - num(lote.cantidad_comprometida)), 0);
@@ -40,7 +41,7 @@ export const buildStockMPResumen = (
 
     return {
       insumo_id: insumoId,
-      nombre_insumo: insumo?.nombre ?? 'Sin dato',
+      nombre_insumo: insumo?.nombre ?? nombreDesdeLote ?? 'Sin dato',
       unidad: insumo?.unidad_medida ?? 'KG',
       stock_actual: stockActual,
       stock_comprometido: stockComprometido,

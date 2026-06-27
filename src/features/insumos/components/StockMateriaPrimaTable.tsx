@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FiChevronDown, FiChevronLeft, FiChevronRight, FiFileText, FiMapPin, FiSearch } from 'react-icons/fi';
-import type { Insumo, StockMateriaPrima, StockMateriaPrimaResumen } from '../types';
+import type { StockMateriaPrima, StockMateriaPrimaResumen } from '../types';
 import type { Proveedor } from '../../proveedores/types';
 import {
   DataTable,
@@ -17,14 +17,13 @@ import {
 interface Props {
   resumen: StockMateriaPrimaResumen[];
   lotes: StockMateriaPrima[];
-  insumos: Insumo[];
   proveedores: Proveedor[];
   onDelete: (uid: string) => void;
 }
 
 const unitLabel = (value: string) => (value || 'KG').toUpperCase();
 
-const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], insumos, proveedores, onDelete }) => {
+const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], proveedores, onDelete }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -62,17 +61,16 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], ins
       if (directMatch) return true;
 
       return (lotesByInsumo.get(item.insumo_id) ?? []).some((lote) => {
-        const insumoNombre = insumos.find((i) => i.uid === lote.id_insumo)?.nombre ?? '';
         const prov = proveedorById[lote.id_proveedor] ?? '';
         return (
           lote.lote.toLowerCase().includes(search) ||
-          insumoNombre.toLowerCase().includes(search) ||
+          item.nombre_insumo.toLowerCase().includes(search) ||
           prov.toLowerCase().includes(search) ||
           lote.ubicacion.toLowerCase().includes(search)
         );
       });
     });
-  }, [insumos, lotesByInsumo, proveedorById, resumen, searchTerm]);
+  }, [lotesByInsumo, proveedorById, resumen, searchTerm]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
   const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -103,13 +101,13 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], ins
           </tr>
         </TableHeader>
         <TableBody>
-          {paginatedData.map((item) => {
+          {paginatedData.map((item, index) => {
             const isExpanded = expandedId === item.insumo_id;
             const detalleLotes = lotesByInsumo.get(item.insumo_id) ?? [];
             const totalLotes = detalleLotes.length;
 
             return (
-              <React.Fragment key={item.insumo_id}>
+              <React.Fragment key={`${item.insumo_id ?? 'insumo'}-${index}`}>
                 <TableRow className={isExpanded ? 'bg-slate-50' : 'cursor-pointer'}>
                   <TableCell>
                     <button type="button" onClick={() => setExpandedId(isExpanded ? null : item.insumo_id)} className="flex items-center gap-3 text-left w-full">

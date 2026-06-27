@@ -2,7 +2,6 @@ import { ApiService } from '../../../infrastructure/api/';
 import type { StockMateriaPrima } from "../types";
 import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
-import { contabilidadOperativaService } from '../../finanzas/services/contabilidadOperativaService';
 import type { Silo } from '../../silos/types';
 
 export interface NewStockEntryData {
@@ -60,16 +59,6 @@ export const stockMateriaPrimaService = {
       id_usuario: 'usr-101',
       fecha_ingreso: new Date(data.fecha_ingreso),
       ubicacion: data.ubicacion,
-    });
-
-    await contabilidadOperativaService.registrarCompraMateriaPrima({
-      stock_lote_legacy_uid: created.uid,
-      fecha: data.fecha_ingreso,
-      lote,
-      insumo: data.nombre_insumo.trim(),
-      proveedor: data.nombre_prov.trim(),
-      monto: 0,
-      remito: remito || undefined,
     });
 
     await auditAction({

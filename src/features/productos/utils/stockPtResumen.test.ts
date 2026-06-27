@@ -3,7 +3,7 @@ import { ControlEstado, type MovimientoStockPT, type StockProductoTerminado } fr
 import { buildStockPTResumen } from './stockPtResumen';
 
 describe('buildStockPTResumen', () => {
-  it('consolida por producto y calcula estado y valor', () => {
+  it('mantiene cada lote como fila independiente y calcula estado y valor', () => {
     const stock: StockProductoTerminado[] = [
       {
         uid: 'pt-a',
@@ -68,16 +68,23 @@ describe('buildStockPTResumen', () => {
     ];
 
     const resumen = buildStockPTResumen(stock, movimientos);
-    expect(resumen).toHaveLength(1);
+    expect(resumen).toHaveLength(2);
     expect(resumen[0]).toMatchObject({
+      producto_id: 'pt-b',
       nombre_producto: 'Producto A',
-      stock_actual: 90,
-      valor_monetario: 900,
+      stock_actual: 10,
+      valor_monetario: 100,
       estado: ControlEstado.CRITICO,
-      cantidad_lotes: 2,
+      cantidad_lotes: 1,
       numero_orden: 'OP-000002',
       id_formula: 'form-a',
       version_formula: 1,
+    });
+    expect(resumen[1]).toMatchObject({
+      producto_id: 'pt-a',
+      stock_actual: 80,
+      valor_monetario: 800,
+      cantidad_lotes: 1,
     });
   });
 });

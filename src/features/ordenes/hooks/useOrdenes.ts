@@ -71,6 +71,7 @@ export const useOrdenes = () => {
     try {
       const updated = await useOrdenService.finishProduction(id, payload);
       setOrdenes(prev => prev.map(o => o.id === id ? updated : o));
+      window.dispatchEvent(new Event('stock-pt-updated'));
       return updated;
     } catch (err) {
       const message = getErrorMessage(err, "No se pudo finalizar la orden.");

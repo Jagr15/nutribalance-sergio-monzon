@@ -2,17 +2,6 @@ import { ControlEstado, type MovimientoStockPT, type StockProductoTerminado, typ
 
 const num = (value: unknown) => Number(value ?? 0);
 
-const stateRank: Record<StockProductoTerminado['estado'], number> = {
-  OK: 0,
-  BAJO: 1,
-  CRITICO: 2,
-};
-
-const pickWorstState = (states: Array<StockProductoTerminado['estado'] | undefined>): StockProductoTerminado['estado'] => {
-  const ranked = states.filter(Boolean).sort((a, b) => stateRank[b as StockProductoTerminado['estado']] - stateRank[a as StockProductoTerminado['estado']]);
-  return ranked[0] ?? ControlEstado.OK;
-};
-
 const getStateFromBalance = (saldo: number, inicial?: number | null, fallback: StockProductoTerminado['estado'] = ControlEstado.OK) => {
   if (!Number.isFinite(saldo)) return fallback;
   const base = num(inicial);
@@ -29,57 +18,38 @@ export const buildStockPTResumen = (
 ): StockProductoTerminadoResumen[] => {
   const movimientosByProducto = new Map<string, MovimientoStockPT[]>();
   movimientos.forEach((mov) => {
-    const key = mov.producto_id ?? mov.nombre_producto;
+    const key = mov.stock_pt_id ?? mov.producto_id ?? `${mov.nombre_producto}-${mov.lote}`;
     const current = movimientosByProducto.get(key) ?? [];
     current.push(mov);
     movimientosByProducto.set(key, current);
   });
 
-  const grouped = new Map<string, StockProductoTerminado[]>();
-  stock.forEach((item) => {
-    const key = item.nombre_producto.trim().toLowerCase();
-    const current = grouped.get(key) ?? [];
-    current.push(item);
-    grouped.set(key, current);
-  });
-
-  return [...grouped.entries()].map(([key, items]) => {
-    const sortedByDate = [...items].sort((a, b) => {
-      const aDate = new Date(a.updateAt || a.fecha_ingreso).getTime();
-      const bDate = new Date(b.updateAt || b.fecha_ingreso).getTime();
-      return aDate - bDate;
-    });
-    const latestItem = sortedByDate[sortedByDate.length - 1] ?? items[0];
-    const saldoActual = items.reduce((acc, item) => acc + num(item.cantidad_total), 0);
-    const valorMonetario = items.reduce(
-      (acc, item) => acc + num(item.cantidad_total) * num(item.costo_unitario_estimado),
-      0
-    );
-    const cantidadLotes = items.length;
-    const ultimaActualizacion = latestItem?.updateAt || latestItem?.fecha_ingreso || '';
-    const numeroOrden = latestItem?.numero_orden || latestItem?.id_orden || null;
-    const idFormula = latestItem?.id_formula ?? null;
-    const versionFormula = typeof latestItem?.version_formula === 'number' ? latestItem.version_formula : null;
-    const movimientosDelProducto = movimientosByProducto.get(items[0].nombre_producto) ?? movimientosByProducto.get(key) ?? [];
-    const tieneMovimientos = movimientosDelProducto.length > 0;
-    const estado = tieneMovimientos ? pickWorstState(
-      items.map((item) => getStateFromBalance(num(item.cantidad_total), item.cantidad_inicial, item.estado))
-    ) : pickWorstState(
-      items.map((item) => getStateFromBalance(num(item.cantidad_total), item.cantidad_inicial, item.estado))
-    );
+  return stock.map((item) => {
+    const key = item.uid ?? `${item.id_orden}-${item.lote}`;
+    const movimientosDelProducto = movimientosByProducto.get(key) ?? [];
+    const saldoActual = num(item.cantidad_total);
+    const valorMonetario = saldoActual * num(item.costo_unitario_estimado);
+    const estado = movimientosDelProducto.length > 0
+      ? getStateFromBalance(saldoActual, item.cantidad_inicial, item.estado)
+      : getStateFromBalance(saldoActual, item.cantidad_inicial, item.estado);
 
     return {
-      producto_id: idFormula,
-      nombre_producto: items[0].nombre_producto,
-      unidad: items[0].unidad_medida,
+      producto_id: item.uid,
+      nombre_producto: item.nombre_producto,
+      unidad: item.unidad_medida,
       stock_actual: saldoActual,
       valor_monetario: valorMonetario,
       estado,
-      cantidad_lotes: cantidadLotes,
-      ultima_actualizacion: ultimaActualizacion,
-      numero_orden: numeroOrden,
-      id_formula: idFormula,
-      version_formula: versionFormula,
+      cantidad_lotes: 1,
+      ultima_actualizacion: item.updateAt || item.fecha_ingreso || '',
+      numero_orden: item.numero_orden || item.id_orden || null,
+      id_formula: item.id_formula ?? null,
+      version_formula: typeof item.version_formula === 'number' ? item.version_formula : null,
     };
-  }).sort((a, b) => a.nombre_producto.localeCompare(b.nombre_producto));
+  }).sort((a, b) => {
+    const dateA = new Date(a.ultima_actualizacion).getTime();
+    const dateB = new Date(b.ultima_actualizacion).getTime();
+    if (dateA !== dateB) return dateB - dateA;
+    return a.nombre_producto.localeCompare(b.nombre_producto);
+  });
 };

@@ -117,13 +117,14 @@ export const useOrdenService = {
     const silosService = (ApiService as typeof ApiService & { silos?: { getAll: () => Promise<Silo[]> } }).silos;
     const validateDestinationSilo = silosService?.getAll
       ? silosService.getAll().then((silos) => {
-          const siloSeleccionado = silos.find((silo) => silo.nombre === normalizedPayload.destino_silo);
+          const siloSeleccionado = silos.find((silo) => silo.uid === normalizedPayload.destino_silo || silo.nombre === normalizedPayload.destino_silo);
           if (!siloSeleccionado) {
             throw new Error('El silo de destino seleccionado no existe.');
           }
           if (siloSeleccionado.tipo_uso !== 'PRODUCTO_TERMINADO') {
             throw new Error('Solo se puede finalizar la orden en silos de Producto Terminado.');
           }
+          normalizedPayload.destino_silo = siloSeleccionado.nombre;
         })
       : Promise.resolve();
 

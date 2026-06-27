@@ -6,11 +6,14 @@ import { Card } from '../../../shared/components/card';
 import { ROUTES } from '../../../app/config/routes';
 import { ApiService } from '../../../infrastructure/api';
 import { getSessionUser } from '../../auth/session';
+import { useOrdenes } from '../../ordenes/hooks/useOrdenes';
 import { useOrdenService } from '../../ordenes/services';
 import { EstadoOrden, type DetalleInsumoLote } from '../../ordenes/types';
 import { ControlEstado, type MovimientoStockPT, type StockProductoTerminado, type StockProductoTerminadoResumen } from '../types';
 import type { Formula } from '../../formulas/types';
 import type { Cliente } from '../../clientes/types/cliente';
+import { buildStockPTResumen } from '../utils/stockPtResumen';
+import type { Silo } from '../../silos/types';
 
 type EstadoProductoUi = 'OK' | 'Bajo' | 'Crítico';
 
@@ -406,36 +409,157 @@ const openProgramacionModal = (
   });
 };
 
+const openIngresoPTModal = async (
+  ordenesEnProceso: Array<{ id: string; lote: string; nombre_producto: string; cantidad_objetivo: number; destino_silo: string | null; estado: string }>,
+  silosDisponibles: Silo[],
+  onConfirm: (payload: { ordenId: string; loteSalida: string; cantidadReal: number; merma: number; destinoSilo: string }) => Promise<void>
+) => {
+  if (ordenesEnProceso.length === 0) {
+    void Swal.fire({
+      icon: 'info',
+      title: 'Sin órdenes en proceso',
+      text: 'No hay órdenes en proceso para registrar un ingreso de PT.',
+      background: '#ffffff',
+      color: '#0f172a',
+      confirmButtonColor: '#2563eb',
+    });
+    return;
+  }
+
+  const options = ordenesEnProceso
+    .map((orden) => `<option value="${orden.id}">${orden.lote} · ${orden.nombre_producto}</option>`)
+    .join('');
+  const silosOptions = silosDisponibles
+    .map((silo) => `<option value="${silo.uid}">${silo.nombre}</option>`)
+    .join('');
+
+  const result = await Swal.fire({
+    title: 'Registrar ingreso PT',
+    html: `
+      <div style="text-align:left; color:#0f172a; font-size:14px;">
+        <label style="display:block; margin:0 0 6px;">Orden en proceso</label>
+        <select id="ingreso-pt-orden" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;">
+          ${options}
+        </select>
+        <label style="display:block; margin:0 0 6px;">Lote PT</label>
+        <input id="ingreso-pt-lote" type="text" placeholder="PT-2026-001" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+        <label style="display:block; margin:0 0 6px;">Cantidad real</label>
+        <input id="ingreso-pt-cantidad" type="number" min="1" step="0.001" placeholder="0.00" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+        <label style="display:block; margin:0 0 6px;">Merma</label>
+        <input id="ingreso-pt-merma" type="number" min="0" step="0.001" placeholder="0.00" value="0" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+        <label style="display:block; margin:0 0 6px;">Destino / silo</label>
+        <select id="ingreso-pt-destino" style="width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" ${silosDisponibles.length === 0 ? 'disabled' : ''}>
+          <option value="">Seleccionar silo</option>
+          ${silosOptions}
+        </select>
+        ${silosDisponibles.length === 0 ? '<p style="margin:8px 0 0; color:#b45309; font-size:12px;">No existen silos disponibles. Cree un silo antes de registrar un ingreso PT.</p>' : ''}
+      </div>
+    `,
+    background: '#ffffff',
+    color: '#0f172a',
+    showCancelButton: true,
+    confirmButtonColor: '#2563eb',
+    cancelButtonColor: '#334155',
+    confirmButtonText: 'Registrar ingreso',
+    cancelButtonText: 'Cancelar',
+    width: 680,
+    showLoaderOnConfirm: true,
+    didOpen: () => {
+      if (silosDisponibles.length === 0) {
+        const confirmButton = Swal.getConfirmButton();
+        if (confirmButton) confirmButton.disabled = true;
+      }
+    },
+    preConfirm: async () => {
+      if (silosDisponibles.length === 0) {
+        Swal.showValidationMessage('No existen silos disponibles. Cree un silo antes de registrar un ingreso PT.');
+        return false;
+      }
+      const ordenId = (document.getElementById('ingreso-pt-orden') as HTMLSelectElement | null)?.value;
+      const loteSalida = (document.getElementById('ingreso-pt-lote') as HTMLInputElement | null)?.value.trim();
+      const cantidadReal = Number((document.getElementById('ingreso-pt-cantidad') as HTMLInputElement | null)?.value);
+      const merma = Number((document.getElementById('ingreso-pt-merma') as HTMLInputElement | null)?.value ?? 0);
+      const destinoSilo = (document.getElementById('ingreso-pt-destino') as HTMLSelectElement | null)?.value.trim();
+      const orden = ordenesEnProceso.find((item) => item.id === ordenId);
+
+      if (!orden) {
+        Swal.showValidationMessage('Seleccioná una orden válida.');
+        return false;
+      }
+      if (!loteSalida) {
+        Swal.showValidationMessage('El lote PT es obligatorio.');
+        return false;
+      }
+      if (!Number.isFinite(cantidadReal) || cantidadReal <= 0) {
+        Swal.showValidationMessage('La cantidad real debe ser mayor a 0.');
+        return false;
+      }
+      if (!Number.isFinite(merma) || merma < 0) {
+        Swal.showValidationMessage('La merma debe ser mayor o igual a 0.');
+        return false;
+      }
+      if (!destinoSilo) {
+        Swal.showValidationMessage('El silo destino es obligatorio.');
+        return false;
+      }
+
+      await onConfirm({
+        ordenId: orden.id,
+        loteSalida,
+        cantidadReal,
+        merma,
+        destinoSilo,
+      });
+
+      return true;
+    },
+  });
+
+  if (result.isConfirmed) {
+    void Swal.fire({
+      icon: 'success',
+      title: 'Ingreso PT registrado',
+      text: 'El lote de producto terminado quedó disponible en stock.',
+      background: '#ffffff',
+      color: '#0f172a',
+      confirmButtonColor: '#2563eb',
+    });
+  }
+};
+
 const ProductosPage = () => {
   const [items, setItems] = useState<ProductoUi[]>([]);
   const [resumenPT, setResumenPT] = useState<StockProductoTerminadoResumen[]>([]);
   const [movimientosPT, setMovimientosPT] = useState<MovimientoStockPT[]>([]);
   const [formulas, setFormulas] = useState<Formula[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [silos, setSilos] = useState<Silo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isResumenLoading, setIsResumenLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState<'TODOS' | EstadoProductoUi>('TODOS');
   const navigate = useNavigate();
+  const { ordenes, handleFinishProduction } = useOrdenes();
 
   const refreshData = useCallback(async () => {
     setIsLoading(true);
     setIsResumenLoading(true);
     setLoadError(null);
     try {
-      const [stock, resumen, movimientos, formulasData, clientesData] = await Promise.all([
+      const [stock, movimientos, formulasData, clientesData, silosData] = await Promise.all([
         ApiService.stockPT.getAll(),
-        ApiService.stockPT.getResumen().catch(() => [] as StockProductoTerminadoResumen[]),
         ApiService.stockPT.getMovimientos().catch(() => [] as MovimientoStockPT[]),
         ApiService.formulas.findAll().catch(() => [] as Formula[]),
         ApiService.clientes.getAll().catch(() => [] as Cliente[]),
+        ApiService.silos.getAll().catch(() => [] as Silo[]),
       ]);
       setItems(stock.map(toUi));
-      setResumenPT(resumen);
+      setResumenPT(buildStockPTResumen(stock, movimientos));
       setMovimientosPT(movimientos);
       setFormulas(formulasData);
       setClientes(clientesData);
+      setSilos((silosData ?? []).filter((silo) => silo.tipo_uso === 'PRODUCTO_TERMINADO'));
     } catch (error: unknown) {
       setItems([]);
       setLoadError(error instanceof Error ? error.message : 'No se pudo cargar el stock de productos terminados.');
@@ -451,6 +575,15 @@ const ProductosPage = () => {
     }, 0);
 
     return () => window.clearTimeout(timer);
+  }, [refreshData]);
+
+  useEffect(() => {
+    const handleStockPtUpdated = () => {
+      void refreshData();
+    };
+
+    window.addEventListener('stock-pt-updated', handleStockPtUpdated);
+    return () => window.removeEventListener('stock-pt-updated', handleStockPtUpdated);
   }, [refreshData]);
 
   const formulaByNombre = useMemo(() => {
@@ -509,6 +642,9 @@ const ProductosPage = () => {
   const proteinaPromedio = proteinasDisponibles.length > 0
     ? proteinasDisponibles.reduce((acc, value) => acc + value, 0) / proteinasDisponibles.length
     : null;
+
+  const ordenesEnProceso = ordenes.filter((orden) => orden.estado === EstadoOrden.EN_PROCESO);
+  const silosProductoTerminado = silos.filter((silo) => silo.tipo_uso === 'PRODUCTO_TERMINADO');
 
   return (
     <div className="space-y-6">
@@ -574,14 +710,14 @@ const ProductosPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {resumenRows.map((row) => {
+                {resumenRows.map((row, index) => {
                   const lotesDelProducto = itemsWithProteina.filter((item) => item.nombre.trim().toLowerCase() === row.nombre_producto.trim().toLowerCase());
                   const formulaLabel = row.id_formula || row.version_formula
                     ? `${row.id_formula ?? 'Sin fórmula'} ${row.version_formula ? `v${row.version_formula}` : ''}`
                     : 'Derivada desde OP';
 
                   return (
-                    <tr key={row.nombre_producto} className="border-t border-slate-100 hover:bg-slate-50">
+                    <tr key={`${row.producto_id ?? row.numero_orden ?? row.nombre_producto}-${index}`} className="border-t border-slate-100 hover:bg-slate-50">
                       <td className="px-4 py-3 font-medium">{row.nombre_producto}</td>
                       <td className="px-4 py-3 text-slate-700">{formulaLabel}</td>
                       <td className="px-4 py-3">{formatKg(row.stock_actual)}</td>
@@ -653,13 +789,36 @@ const ProductosPage = () => {
             </select>
             <button
               type="button"
-            onClick={() => openProgramacionModal(filtered.length > 0 ? filtered : itemsWithProteina, formulaByNombre)}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-sm font-medium text-white"
+              disabled={silosProductoTerminado.length === 0}
+              onClick={() => {
+                void openIngresoPTModal(ordenesEnProceso.map((orden) => ({
+                  id: orden.id,
+                  lote: orden.lote,
+                  nombre_producto: orden.nombre_producto,
+                  cantidad_objetivo: orden.cantidad_objetivo,
+                  destino_silo: orden.destino_silo,
+                  estado: orden.estado,
+                })), silosProductoTerminado, async ({ ordenId, loteSalida, cantidadReal, merma, destinoSilo }) => {
+                  await handleFinishProduction(ordenId, {
+                    lote_salida: loteSalida,
+                    cantidad_real: cantidadReal,
+                    merma,
+                    destino_silo: destinoSilo,
+                  });
+                  await refreshData();
+                });
+              }}
+              className="px-4 py-2 rounded-xl bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
-              Registrar producción
+              Registrar ingreso PT
             </button>
           </div>
         </div>
+        {silosProductoTerminado.length === 0 ? (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            No existen silos disponibles. Cree un silo antes de registrar un ingreso PT.
+          </div>
+        ) : null}
 
         {loadError ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-4">

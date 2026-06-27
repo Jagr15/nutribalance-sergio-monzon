@@ -5,7 +5,6 @@ import type {
   StockMPEstadoResumen,
   UltimoPrecioPagadoInsumo,
 } from '../../../../features/insumos/types';
-import { calcularCostoIngresoMP } from '../../../../features/insumos/utils/costoIngreso';
 import type { StockMPCreateData } from '../../types';
 import { supabaseClient } from '../client';
 
@@ -171,14 +170,6 @@ export const supabaseStockMPService = {
   },
 
   async create(payload: StockMPCreateData): Promise<StockMateriaPrima> {
-    const costo = calcularCostoIngresoMP({
-      cantidad: payload.cantidad,
-      unidad_entrada: payload.unidad_entrada,
-      precio_unitario: payload.precio_unitario,
-      unidad_precio: payload.unidad_precio,
-      costo_total: payload.costo_total,
-    });
-
     const { data: insumo, error: insumoError } = await supabaseClient
       .from('insumos')
       .select('id')
@@ -209,11 +200,11 @@ export const supabaseStockMPService = {
         lote: payload.lote.toUpperCase(),
         remito_nro: payload.remito_nro,
         ubicacion: payload.ubicacion,
-        cantidad_inicial: costo.cantidad_kg,
-        cantidad_actual: costo.cantidad_kg,
+        cantidad_inicial: payload.cantidad,
+        cantidad_actual: payload.cantidad,
         cantidad_comprometida: 0,
-        costo_unitario: costo.precio_unitario_kg,
-        costo_total: costo.costo_total,
+        costo_unitario: 0,
+        costo_total: 0,
         fecha_ingreso: payload.fecha_ingreso.toISOString(),
         id_usuario: usuario?.id ?? null,
       })
