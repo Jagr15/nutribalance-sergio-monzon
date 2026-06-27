@@ -170,7 +170,6 @@ export const tesoreriaService = {
       cliente_id: normalized.cliente_id,
       cliente_nombre: normalized.cliente_nombre,
     };
-    console.log('[tesoreria] creating cheque', insertPayload);
     const { data, error } = await supabaseClient
       .from('tesoreria_cheques')
       .insert(insertPayload)
@@ -184,9 +183,7 @@ export const tesoreriaService = {
       console.error('[tesoreria] create cheque failed', { error: new Error('Supabase returned no row after insert'), payload: insertPayload });
       throw new Error('No se pudo guardar el cheque: Supabase no devolvió el registro creado.');
     }
-    const created = normalizeCheque(data);
-    console.log('[tesoreria] cheque created', created);
-    return created;
+    return normalizeCheque(data);
   },
 
   async updateCheque(id: string, payload: ChequeTesoreriaFormValues): Promise<ChequeTesoreriaRow> {

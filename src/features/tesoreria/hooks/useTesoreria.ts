@@ -59,7 +59,6 @@ export const useTesoreria = () => {
   const createCheque = useCallback(async (payload: ChequeTesoreriaFormValues) => {
     const created = await tesoreriaService.createCheque(payload);
     await refresh();
-    console.log('[tesoreria] cheque created and refreshed', created.id);
     return created;
   }, [refresh]);
 

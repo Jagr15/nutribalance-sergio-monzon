@@ -53,9 +53,6 @@ const TesoreriaPage = () => {
     try {
       const realCheques = await getCheques({ limit: 50 });
       setCheques(realCheques);
-      console.log('[tesoreria] source cheques count', realCheques.length);
-      console.log('[tesoreria] newest cheque', realCheques[0] ?? null);
-      console.log('[tesoreria] all cheque ids rendered', realCheques.map((cheque) => cheque.id));
       return realCheques;
     } catch (err: unknown) {
       console.error('[tesoreria] failed loading real cheques', err);
@@ -119,9 +116,6 @@ const TesoreriaPage = () => {
       ));
       const refreshedCheques = await loadAllCheques();
       const foundAfterRefresh = refreshedCheques.some((cheque) => cheque.id === savedCheque.id);
-      console.log('[tesoreria] created id', savedCheque.id);
-      console.log('[tesoreria] fetched cheque ids', refreshedCheques.map((cheque) => cheque.id));
-      console.log('[tesoreria] created found after refresh', foundAfterRefresh);
       if (!foundAfterRefresh) {
         const optimistic = [savedCheque, ...refreshedCheques.filter((cheque) => cheque.id !== savedCheque.id)];
         setCheques(optimistic);
@@ -129,7 +123,6 @@ const TesoreriaPage = () => {
       } else {
         setCheques(refreshedCheques);
       }
-      console.log('[tesoreria] submit success', savedCheque.id);
       setHighlightedChequeId(savedCheque.id);
       if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
       highlightTimerRef.current = window.setTimeout(() => {
@@ -252,27 +245,35 @@ const TesoreriaPage = () => {
   const horizonBuckets = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    const buildBucket = (days: number, label: string) => {
-      const limit = new Date(now.getTime() + days * dayMs);
+    const buildBucket = (fromDays: number, toDays: number | null, label: string) => {
+      const from = new Date(now.getTime() + fromDays * dayMs);
+      const to = toDays !== null ? new Date(now.getTime() + toDays * dayMs) : null;
       const inRange = (value: string) => {
         const fecha = new Date(value);
         fecha.setHours(0, 0, 0, 0);
-        return fecha.getTime() >= now.getTime() && fecha.getTime() <= limit.getTime();
+        if (fecha.getTime() < from.getTime()) return false;
+        if (to && fecha.getTime() > to.getTime()) return false;
+        return true;
       };
       const recibidosPendientes = filteredCheques.filter((cheque) => cheque.tipo === 'RECIBIDO' && ['PENDIENTE', 'A_DEPOSITAR'].includes(cheque.estado) && inRange(cheque.fecha_vencimiento));
       const emitidosPendientes = filteredCheques.filter((cheque) => cheque.tipo === 'EMITIDO' && ['PENDIENTE', 'A_DEPOSITAR'].includes(cheque.estado) && inRange(cheque.fecha_vencimiento));
-      const row = tesoreria.proyeccionFlujo.find((item) => item.horizonte === label);
+      const importeTotal = [...recibidosPendientes, ...emitidosPendientes].reduce((acc, cheque) => acc + Number(cheque.importe ?? 0), 0);
       return {
         label,
         recibidosPendientes,
         emitidosPendientes,
-        entradas: row?.ingresos_estimados ?? 0,
-        salidas: row?.egresos_estimados ?? 0,
-        saldo: row?.saldo_estimado ?? 0,
+        importeTotal,
       };
     };
-    return [buildBucket(0, 'Hoy'), buildBucket(7, '7 días'), buildBucket(15, '15 días'), buildBucket(30, '30 días')];
-  }, [filteredCheques, tesoreria.proyeccionFlujo]);
+    return [
+      buildBucket(0, 0, 'Hoy'),
+      buildBucket(1, 7, '1 a 7 días'),
+      buildBucket(8, 15, '8 a 15 días'),
+      buildBucket(16, 30, '16 a 30 días'),
+      buildBucket(31, 60, '31 a 60 días'),
+      buildBucket(61, null, 'Más de 60 días'),
+    ];
+  }, [filteredCheques]);
   const cajasYcobranza = useMemo(() => {
     const ventasPeriodo = reportes.ingresos_pt_por_producto.reduce((acc, row) => acc + Number(row.importe_total ?? 0), 0);
     const cobrosPeriodo = movimientos
@@ -509,9 +510,9 @@ const TesoreriaPage = () => {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{bucket.label}</p>
-                  <h3 className="mt-1 truncate text-base font-semibold text-slate-900 sm:text-lg">Proyección de flujo</h3>
+                  <h3 className="mt-1 truncate text-base font-semibold text-slate-900 sm:text-lg">Vencimientos</h3>
                 </div>
-                <span className="shrink-0 whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">{formatCurrency(bucket.saldo)}</span>
+                <span className="shrink-0 whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">{formatCurrency(bucket.importeTotal)}</span>
               </div>
               <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2">
@@ -523,17 +524,17 @@ const TesoreriaPage = () => {
                   <p className="mt-1 truncate text-lg font-semibold text-rose-700">{bucket.emitidosPendientes.length}</p>
                 </div>
                 <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Entradas estimadas</p>
-                  <p className="mt-1 truncate whitespace-nowrap text-base font-semibold text-emerald-700 sm:text-lg">{formatCurrency(bucket.entradas)}</p>
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Importe acumulado</p>
+                  <p className="mt-1 truncate whitespace-nowrap text-base font-semibold text-emerald-700 sm:text-lg">{formatCurrency(bucket.importeTotal)}</p>
                 </div>
                 <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Salidas estimadas</p>
-                  <p className="mt-1 truncate whitespace-nowrap text-base font-semibold text-rose-700 sm:text-lg">{formatCurrency(bucket.salidas)}</p>
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Emitidos pendientes</p>
+                  <p className="mt-1 truncate whitespace-nowrap text-base font-semibold text-rose-700 sm:text-lg">{bucket.emitidosPendientes.length}</p>
                 </div>
               </div>
               <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Saldo neto proyectado</p>
-                <p className="mt-1 truncate whitespace-nowrap text-lg font-semibold text-slate-900 sm:text-xl">{formatCurrency(bucket.saldo)}</p>
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Total del tramo</p>
+                <p className="mt-1 truncate whitespace-nowrap text-lg font-semibold text-slate-900 sm:text-xl">{formatCurrency(bucket.importeTotal)}</p>
               </div>
             </Card>
           ))}
