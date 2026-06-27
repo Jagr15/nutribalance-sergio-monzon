@@ -19,15 +19,6 @@ export const Header = () => {
   const financialCount = financialAlerts.length;
   const operationalCount = operationalAlerts.length;
 
-  if (import.meta.env.DEV) {
-    console.debug('[header-alertas]', {
-      total: activeAlerts.length,
-      financialCandidates: financialAlerts.map((alerta) => ({ titulo: alerta.titulo, area: alerta.area, prioridad: alerta.prioridad })),
-      financialFiltered: financialAlerts.map((alerta) => ({ titulo: alerta.titulo, area: alerta.area, prioridad: alerta.prioridad })),
-      operationalFiltered: operationalAlerts.map((alerta) => ({ titulo: alerta.titulo, area: alerta.area, prioridad: alerta.prioridad })),
-    });
-  }
-
   const showInfo = (feature: string) => {
     void Swal.fire({
       icon: "info",

@@ -12,7 +12,7 @@ export const useTrazabilidadHistoria = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lotes, setLotes] = useState<StockMateriaPrima[]>([]);
-  const [insumos, setInsumos] = useState<Insumo[]>([]);
+const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [trazabilidadOP, setTrazabilidadOP] = useState<TrazabilidadPorOP[]>([]);
   const [movimientosPT, setMovimientosPT] = useState<MovimientoStockPT[]>([]);
@@ -72,6 +72,7 @@ export const useTrazabilidadHistoria = () => {
     () => [...lotes]
       .sort((a, b) => new Date(b.fecha_ingreso).getTime() - new Date(a.fecha_ingreso).getTime())
       .map((lote) => ({
+        id: lote.uid,
         value: lote.lote,
         label: `${lote.lote} · ${insumos.find((insumo) => insumo.uid === lote.id_insumo)?.nombre ?? lote.id_insumo}`,
       })),
@@ -83,12 +84,13 @@ export const useTrazabilidadHistoria = () => {
       ...ordenes.map((orden) => orden.nombre_producto),
       ...movimientosPT.map((mov) => mov.nombre_producto),
       ...expediciones.map((exp) => exp.nombre_producto),
-    ])].filter(Boolean).sort().map((value) => ({ value, label: value })),
+    ])].filter(Boolean).sort().map((value, index) => ({ id: `producto-${index}`, value, label: value })),
     [expediciones, movimientosPT, ordenes],
   );
 
   const ventaOptions = useMemo(
-    () => expediciones.map((exp) => ({
+    () => expediciones.map((exp, index) => ({
+      id: `${exp.numero_expedicion ?? 'venta'}-${index}`,
       value: exp.numero_expedicion,
       label: `${exp.numero_expedicion} · ${exp.nombre_producto} · ${exp.cliente_nombre ?? 'Sin cliente'}`,
     })),
@@ -96,7 +98,7 @@ export const useTrazabilidadHistoria = () => {
   );
 
   const clienteOptions = useMemo(
-    () => clientes.map((item) => ({ value: item.nombre, label: item.nombre })),
+    () => clientes.map((item, index) => ({ id: item.uid ?? `cliente-${index}`, value: item.nombre, label: item.nombre })),
     [clientes],
   );
 

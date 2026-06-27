@@ -65,6 +65,7 @@ export const useTrazabilidad = () => {
       [...lotes]
         .sort((a, b) => new Date(b.fecha_ingreso).getTime() - new Date(a.fecha_ingreso).getTime())
         .map((lote) => ({
+          id: lote.uid,
           uid: lote.uid,
           label: `${lote.lote} · ${insumos.find((insumo) => insumo.uid === lote.id_insumo)?.nombre ?? lote.id_insumo}`,
           secondary: `${formatDateDDMMYYYY(lote.fecha_ingreso)} · ${lote.cantidad_actual.toLocaleString('es-AR')} kg`,

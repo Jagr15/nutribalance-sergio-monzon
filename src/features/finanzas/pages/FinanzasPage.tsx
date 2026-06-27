@@ -1437,7 +1437,7 @@ const FinanzasPage = () => {
                 />
                 <div className="space-y-2">
                   {topGastosPorRubro.map((row, index) => (
-                    <div key={row.rubro} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div key={`${row.rubro ?? 'rubro'}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
                       <div>
                         <p className="font-semibold text-slate-900">{row.rubro}</p>
                         <p className="text-xs text-slate-500">{formatCurrency(row.monto)} · {formatPct(row.porcentaje)}</p>
@@ -1482,8 +1482,8 @@ const FinanzasPage = () => {
                 </select>
               </div>
               <div className="space-y-3">
-                {ingresosPtVisibles.map((row) => (
-                  <div key={row.producto} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                {ingresosPtVisibles.map((row, index) => (
+                  <div key={`${row.producto ?? 'producto'}-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">{row.producto}</p>
@@ -1533,8 +1533,8 @@ const FinanzasPage = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {carteraClientesVisibles.map((row) => (
-                      <tr key={row.cliente_id ?? row.cliente_nombre}>
+                    {carteraClientesVisibles.map((row, index) => (
+                      <tr key={`${row.cliente_id ?? row.cliente_nombre ?? 'cliente'}-${index}`}>
                         <td className="py-2 font-medium text-slate-900">{row.cliente_nombre}</td>
                         <td className="py-2 text-right">{formatCurrency(row.saldo_pendiente)}</td>
                         <td className="py-2 text-slate-700">{formatDate(row.ultima_compra)}</td>
@@ -1585,8 +1585,8 @@ const FinanzasPage = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {variacionesOrdenadas.map((row) => (
-                      <tr key={`var-${row.rubro}`}>
+                    {variacionesOrdenadas.map((row, index) => (
+                      <tr key={`${row.rubro ?? 'var'}-${index}`}>
                         <td className="py-2 font-medium text-slate-900">{row.rubro}</td>
                         <td className="py-2 text-right">{formatCurrency(row.presupuesto)}</td>
                         <td className="py-2 text-right">{formatCurrency(row.real)}</td>

@@ -314,9 +314,6 @@ export const finanzasService = {
       { rubros },
     );
 
-    if (partialWarnings.length > 0) {
-      console.warn('[tesoreria] partial data loaded', partialWarnings);
-    }
     return insights;
   },
 

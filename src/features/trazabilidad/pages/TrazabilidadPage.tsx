@@ -8,6 +8,9 @@ const fmtDate = (value: string | Date | null | undefined) => {
   return Number.isNaN(date.getTime()) ? 'Sin fecha' : date.toLocaleString('es-AR');
 };
 
+const optionKey = (item: { id?: string; legacy_uid?: string; value?: string; label?: string }, index: number) =>
+  `${item.id ?? item.legacy_uid ?? item.value ?? item.label ?? 'option'}-${index}`;
+
 const TrazabilidadPage = () => {
   const {
     loading,
@@ -66,8 +69,8 @@ const TrazabilidadPage = () => {
                 className="w-full rounded-xl border border-slate-200 bg-white px-9 py-3 text-sm text-slate-900"
               >
                 <option value="">Seleccioná un lote</option>
-                {lotesOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
+                {lotesOptions.map((option, index) => (
+                  <option key={optionKey(option, index)} value={option.value}>
                     {option.label}
                   </option>
                 ))}
@@ -83,8 +86,8 @@ const TrazabilidadPage = () => {
               className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
             >
               <option value="">Todos</option>
-              {productosOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+              {productosOptions.map((option, index) => (
+                <option key={optionKey(option, index)} value={option.value}>{option.label}</option>
               ))}
             </select>
           </div>
@@ -97,8 +100,8 @@ const TrazabilidadPage = () => {
               className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
             >
               <option value="">Todos</option>
-              {ventaOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+              {ventaOptions.map((option, index) => (
+                <option key={optionKey(option, index)} value={option.value}>{option.label}</option>
               ))}
             </select>
           </div>
@@ -111,8 +114,8 @@ const TrazabilidadPage = () => {
               className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
             >
               <option value="">Todos</option>
-              {clienteOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+              {clienteOptions.map((option, index) => (
+                <option key={optionKey(option, index)} value={option.value}>{option.label}</option>
               ))}
             </select>
           </div>
@@ -184,8 +187,8 @@ const TrazabilidadPage = () => {
                   <div>
                     <p className="font-semibold">Trazabilidad incompleta</p>
                     <ul className="mt-2 space-y-1 text-sm">
-                      {resultado.advertencias.map((warning) => (
-                        <li key={warning}>• {warning}</li>
+                      {resultado.advertencias.map((warning, index) => (
+                        <li key={`${warning}-${index}`}>• {warning}</li>
                       ))}
                     </ul>
                   </div>

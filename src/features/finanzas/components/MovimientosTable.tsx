@@ -29,44 +29,39 @@ export const MovimientosTable = ({
         </span>
       </div>
       <DataTable className="rounded-none border-0 shadow-none" minWidthClassName="min-w-full">
-        <table className="w-full border-collapse text-left">
-          <TableHeader>
-            <tr className="bg-slate-50/80">
-              <TableCell header className="text-slate-600">Fecha</TableCell>
-              <TableCell header className="text-slate-600">Tipo</TableCell>
-              <TableCell header className="text-slate-600">Descripción</TableCell>
-              <TableCell header className="text-slate-600">Categoría</TableCell>
-              <TableCell header className="text-right text-slate-600">Monto</TableCell>
-              <TableCell header className="text-slate-600">Estado</TableCell>
-              {showOrigenAndCentroCosto ? <TableCell header className="text-slate-600">Origen</TableCell> : null}
-              {showOrigenAndCentroCosto ? <TableCell header className="text-slate-600">Centro costo</TableCell> : null}
-            </tr>
-          </TableHeader>
-          <TableBody>
-            {visibleMovimientos.map((m) => {
-              const key = `${m.uid}-${m.fecha}-${m.descripcion}`;
-              return (
-                <TableRow key={key}>
-                  <TableCell className="whitespace-nowrap text-slate-600">{formatDateDDMMYYYY(m.fecha)}</TableCell>
-                  <TableCell><StatusBadge value={m.tipo} /></TableCell>
-                  <TableCell className="max-w-[320px] whitespace-normal break-words text-slate-900">{m.descripcion}</TableCell>
-                  <TableCell className="max-w-[220px] whitespace-normal break-words text-slate-500">{m.categoria || '-'}</TableCell>
-                  <TableCell className="whitespace-nowrap text-right font-semibold text-slate-900">{formatCurrency(m.monto)}</TableCell>
-                  <TableCell><StatusBadge value={m.estado} /></TableCell>
-                  {showOrigenAndCentroCosto ? <TableCell className="max-w-[200px] whitespace-normal break-words text-slate-500">{m.origen_operativo || '-'}</TableCell> : null}
-                  {showOrigenAndCentroCosto ? <TableCell className="max-w-[200px] whitespace-normal break-words text-slate-500">{m.centro_costo || '-'}</TableCell> : null}
-                </TableRow>
-              );
-            })}
-            {movimientos.length === 0 ? (
-              <EmptyState
-                colSpan={colSpan}
-                title="Aún no hay movimientos registrados."
-                message="Cuando registres ingresos, egresos o transferencias aparecerán aquí."
-              />
-            ) : null}
-          </TableBody>
-        </table>
+        <TableHeader>
+          <tr className="bg-slate-50/80">
+            <TableCell header className="text-slate-600">Fecha</TableCell>
+            <TableCell header className="text-slate-600">Tipo</TableCell>
+            <TableCell header className="text-slate-600">Descripción</TableCell>
+            <TableCell header className="text-slate-600">Categoría</TableCell>
+            <TableCell header className="text-right text-slate-600">Monto</TableCell>
+            <TableCell header className="text-slate-600">Estado</TableCell>
+            {showOrigenAndCentroCosto ? <TableCell header className="text-slate-600">Origen</TableCell> : null}
+            {showOrigenAndCentroCosto ? <TableCell header className="text-slate-600">Centro costo</TableCell> : null}
+          </tr>
+        </TableHeader>
+        <TableBody>
+          {visibleMovimientos.map((m, index) => (
+            <TableRow key={m.uid || `${m.fecha}-${m.descripcion}-${index}`}>
+              <TableCell className="whitespace-nowrap text-slate-600">{formatDateDDMMYYYY(m.fecha)}</TableCell>
+              <TableCell><StatusBadge value={m.tipo} /></TableCell>
+              <TableCell className="max-w-[320px] whitespace-normal break-words text-slate-900">{m.descripcion}</TableCell>
+              <TableCell className="max-w-[220px] whitespace-normal break-words text-slate-500">{m.categoria || '-'}</TableCell>
+              <TableCell className="whitespace-nowrap text-right font-semibold text-slate-900">{formatCurrency(m.monto)}</TableCell>
+              <TableCell><StatusBadge value={m.estado} /></TableCell>
+              {showOrigenAndCentroCosto ? <TableCell className="max-w-[200px] whitespace-normal break-words text-slate-500">{m.origen_operativo || '-'}</TableCell> : null}
+              {showOrigenAndCentroCosto ? <TableCell className="max-w-[200px] whitespace-normal break-words text-slate-500">{m.centro_costo || '-'}</TableCell> : null}
+            </TableRow>
+          ))}
+          {movimientos.length === 0 ? (
+            <EmptyState
+              colSpan={colSpan}
+              title="Aún no hay movimientos registrados."
+              message="Cuando registres ingresos, egresos o transferencias aparecerán aquí."
+            />
+          ) : null}
+        </TableBody>
       </DataTable>
     </div>
   );
