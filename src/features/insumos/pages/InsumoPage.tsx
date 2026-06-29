@@ -1,6 +1,6 @@
 // src/pages/InsumoPage.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { FiPlus } from "react-icons/fi";
+import { FiChevronLeft, FiChevronRight, FiPlus } from "react-icons/fi";
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 
@@ -21,8 +21,10 @@ const InsumoPage: React.FC = () => {
 
   // Estados locales de la UI
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedInsumo, setSelectedInsumo] = useState<Insumo | undefined>();
+  const itemsPerPage = 10;
 
   // Carga inicial de datos
   useEffect(() => {
@@ -94,6 +96,21 @@ const InsumoPage: React.FC = () => {
     );
   }, [searchTerm, insumos]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredInsumos.length / itemsPerPage));
+  const paginatedInsumos = useMemo(() => {
+    const safePage = Math.min(currentPage, totalPages);
+    const start = (safePage - 1) * itemsPerPage;
+    return filteredInsumos.slice(start, start + itemsPerPage);
+  }, [currentPage, filteredInsumos, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
   return (
     <main className="main animate-fade-in p-6">
       {/* Header de la Página */}
@@ -157,12 +174,39 @@ const InsumoPage: React.FC = () => {
           </div>
         ) : (
           <InsumoTable 
-            data={filteredInsumos} 
+            data={paginatedInsumos} 
             onEdit={handleOpenModal} 
             onDelete={handleDelete} 
             emptyMessage={insumos.length === 0 ? 'No hay insumos activos registrados.' : 'No se encontraron insumos para la búsqueda.'}
           />
         )}
+        {!(isLoading && insumos.length === 0) ? (
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-4">
+            <span className="text-xs text-slate-600 font-semibold">
+              {filteredInsumos.length} insumos • Página {Math.min(currentPage, totalPages)} de {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 disabled:opacity-30"
+                aria-label="Anterior"
+              >
+                <FiChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 disabled:opacity-30"
+                aria-label="Siguiente"
+              >
+                <FiChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {/* Modal de Creación / Edición */}

@@ -30,19 +30,18 @@ export const buildStockMPResumen = (
     grouped.set(insumoId, current);
   });
 
-  return [...grouped.entries()].map(([insumoId, lotesInsumo]) => {
-    const insumo = insumoById.get(insumoId);
-    const nombreDesdeLote = lotesInsumo.find((lote) => lote.nombre_insumo?.trim())?.nombre_insumo?.trim();
+  const resumenDesdeInsumos = insumos.map((insumo) => {
+    const lotesInsumo = grouped.get(insumo.uid) ?? [];
     const stockActual = lotesInsumo.reduce((acc, lote) => acc + num(lote.cantidad_actual), 0);
     const stockComprometido = lotesInsumo.reduce((acc, lote) => acc + num(lote.cantidad_comprometida), 0);
     const stockDisponible = lotesInsumo.reduce((acc, lote) => acc + (num(lote.cantidad_actual) - num(lote.cantidad_comprometida)), 0);
-    const umbralAlerta = num(insumo?.umbral_alerta);
-    const valorInventario = stockActual * num(insumo?.costo_por_kg);
+    const umbralAlerta = num(insumo.umbral_alerta);
+    const valorInventario = stockActual * num(insumo.costo_por_kg);
 
     return {
-      insumo_id: insumoId,
-      nombre_insumo: insumo?.nombre ?? nombreDesdeLote ?? 'Sin dato',
-      unidad: insumo?.unidad_medida ?? 'KG',
+      insumo_id: insumo.uid,
+      nombre_insumo: insumo.nombre ?? 'Sin dato',
+      unidad: insumo.unidad_medida ?? 'KG',
       stock_actual: stockActual,
       stock_comprometido: stockComprometido,
       stock_disponible: stockDisponible,
@@ -50,5 +49,29 @@ export const buildStockMPResumen = (
       estado: getEstadoResumen(stockDisponible, umbralAlerta),
       valor_inventario: valorInventario,
     };
-  }).sort((a, b) => a.nombre_insumo.localeCompare(b.nombre_insumo));
+  });
+
+  const extrasDesdeLotes = [...grouped.entries()]
+    .filter(([insumoId]) => !insumoById.has(insumoId))
+    .map(([insumoId, lotesInsumo]) => {
+      const nombreDesdeLote = lotesInsumo.find((lote) => lote.nombre_insumo?.trim())?.nombre_insumo?.trim();
+      const stockActual = lotesInsumo.reduce((acc, lote) => acc + num(lote.cantidad_actual), 0);
+      const stockComprometido = lotesInsumo.reduce((acc, lote) => acc + num(lote.cantidad_comprometida), 0);
+      const stockDisponible = lotesInsumo.reduce((acc, lote) => acc + (num(lote.cantidad_actual) - num(lote.cantidad_comprometida)), 0);
+      const umbralAlerta = 0;
+
+      return {
+        insumo_id: insumoId,
+        nombre_insumo: nombreDesdeLote ?? 'Sin dato',
+        unidad: 'KG',
+        stock_actual: stockActual,
+        stock_comprometido: stockComprometido,
+        stock_disponible: stockDisponible,
+        umbral_alerta: umbralAlerta,
+        estado: getEstadoResumen(stockDisponible, umbralAlerta),
+        valor_inventario: 0,
+      };
+    });
+
+  return [...resumenDesdeInsumos, ...extrasDesdeLotes].sort((a, b) => a.nombre_insumo.localeCompare(b.nombre_insumo));
 };

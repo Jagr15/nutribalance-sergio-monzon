@@ -6,6 +6,7 @@ import StockMateriaPrimaTable from '../components/StockMateriaPrimaTable';
 import StockMateriaPrimaModal from '../components/StockMateriaPrimaModal';
 import { ApiService } from '../../../infrastructure/api';
 import type { HistorialCompraMP } from '../types';
+import type { Insumo } from '../types/insumo';
 import type { Proveedor } from '../../proveedores/types';
 import Swal from 'sweetalert2';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
@@ -33,6 +34,7 @@ const StockMateriaPrimaPage: React.FC = () => {
   const [comprasTotal, setComprasTotal] = useState(0);
 
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [historialCompras, setHistorialCompras] = useState<HistorialCompraMP[]>([]);
 
   const loadComprasInfo = useCallback(async () => {
@@ -56,17 +58,19 @@ const StockMateriaPrimaPage: React.FC = () => {
   }, [comprasPage, comprasPageSize, comprasPeriodo]);
 
   const refreshData = useCallback(async () => {
-    await Promise.all([getAll(), loadComprasInfo()]);
+    await Promise.all([getAll(), loadComprasInfo(), ApiService.insumos.getAllInsumos().then(setInsumos)]);
   }, [getAll, loadComprasInfo]);
 
   useEffect(() => {
     const initialize = async () => {
       try {
         const resP = await ApiService.proveedores.getAll();
+        const resI = await ApiService.insumos.getAllInsumos();
         await Promise.all([
           getAll(),
         ]);
         setProveedores(resP);
+        setInsumos(resI);
       } catch (error) {
         console.error('Error cargando catálogos:', error);
         setError('No se pudieron cargar los catálogos de insumos/proveedores.');
@@ -111,13 +115,15 @@ const StockMateriaPrimaPage: React.FC = () => {
     }
   };
 
-  const resumen = buildStockMPResumen(lotes);
+  const resumen = buildStockMPResumen(lotes, insumos);
   const noData = resumen.length === 0;
   const combinedError = error ?? loadError ?? comprasError;
   const isBusy = isLoading || comprasLoading;
   const comprasRegistradas = comprasTotal;
   const proveedoresActivos = proveedores.filter((proveedor) => proveedor.esta_activo).length;
+  const insumosActivos = insumos.length;
   const showLoadingCards = isBusy && comprasRegistradas === 0 && resumen.length === 0;
+  const stockRegistroCount = resumen.length;
   const totalPages = Math.max(1, Math.ceil(comprasTotal / comprasPageSize));
   const emptyBecauseFilter = !comprasLoading && historialCompras.length === 0 && comprasTotal === 0;
 
@@ -166,11 +172,24 @@ const StockMateriaPrimaPage: React.FC = () => {
             <p className="mt-3 text-3xl font-black text-slate-900">{showLoadingCards ? '—' : proveedoresActivos}</p>
             <p className="mt-2 text-xs text-slate-500">Catálogo de proveedores con estado vigente.</p>
           </div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Insumos activos</p>
+            <p className="mt-3 text-3xl font-black text-slate-900">{showLoadingCards ? '—' : insumosActivos}</p>
+            <p className="mt-2 text-xs text-slate-500">Fuente real desde la tabla `insumos`.</p>
+          </div>
         </div>
 
       </section>
 
       <section>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            {stockRegistroCount} registros de stock
+          </p>
+          <p className="text-xs text-slate-500">
+            Consolida insumos activos y stock por lote.
+          </p>
+        </div>
         {isBusy && resumen.length === 0 ? (
           <div className="py-20 text-center">
             <div className="w-8 h-8 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
