@@ -43,17 +43,8 @@ const formatDate = (value?: string | null) => {
 };
 
 const normalizeText = (value?: string | null) => value?.trim() || "—";
-const DEMO_PATTERN = /prueba|test|demo|www|tttt|eze/i;
-const isDemoCliente = (cliente: Cliente) => [
-  cliente.nombre,
-  cliente.segmento,
-  cliente.ubicacion,
-  cliente.contacto,
-  cliente.productoPrincipal,
-  cliente.razonSocial,
-  cliente.email,
-  cliente.telefono,
-].some((field) => DEMO_PATTERN.test(field ?? ""));
+
+const ESTADO_FILTERS = ['Todos', EstadoCliente.ACTIVO, EstadoCliente.EN_RIESGO, EstadoCliente.SUSPENDIDO] as const;
 
 const toInputValue = (value?: string | null) => value ?? "";
 
@@ -568,6 +559,7 @@ const ClientesPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [estadoFilter, setEstadoFilter] = useState<(typeof ESTADO_FILTERS)[number]>('Todos');
 
   const loadClientes = async () => {
     try {
@@ -665,8 +657,9 @@ const ClientesPage = () => {
 
   const filteredClientes = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const estadoNormalizado = estadoFilter.toLowerCase();
     return clientes.filter((cliente) => {
-      if (isDemoCliente(cliente)) return false;
+      if (estadoFilter !== 'Todos' && cliente.estado.toLowerCase() !== estadoNormalizado) return false;
       if (!query) return true;
       return [cliente.nombre, cliente.segmento, cliente.ubicacion, cliente.contacto, cliente.productoPrincipal, cliente.condicionComercial]
         .filter(Boolean)
@@ -674,7 +667,7 @@ const ClientesPage = () => {
         .toLowerCase()
         .includes(query);
     });
-  }, [search, clientes]);
+  }, [estadoFilter, search, clientes]);
 
   const totalPendiente = filteredClientes.reduce((acc, item) => acc + item.saldoPendienteArs, 0);
   const clientesActivos = filteredClientes.filter((cliente) => cliente.estaActivo).length;
@@ -718,6 +711,17 @@ const ClientesPage = () => {
         <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-5">
           <h2 className="text-xl font-semibold">Listado de clientes</h2>
           <div className="flex gap-2 w-full md:w-auto">
+            <select
+              value={estadoFilter}
+              onChange={(event) => setEstadoFilter(event.target.value as typeof estadoFilter)}
+              className="w-full md:w-[180px] bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
+            >
+              {ESTADO_FILTERS.map((estado) => (
+                <option key={estado} value={estado}>
+                  {estado}
+                </option>
+              ))}
+            </select>
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
