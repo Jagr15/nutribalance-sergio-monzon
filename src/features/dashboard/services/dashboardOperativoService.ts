@@ -5,6 +5,7 @@ import { buildStockMPResumen } from '../../insumos/utils/stockResumen';
 import { buildStockPTResumen } from '../../productos/utils/stockPtResumen';
 import { buildProductoTerminadoInsights } from '../utils/productoTerminadoInsights';
 import { buildOrdenesExpedicionInsights } from '../utils/ordenesExpedicionInsights';
+import type { DashboardPeriodo } from '../utils/dashboardExecutiveInsights';
 import type {
   AlertaOperativaRaw,
   ConsumoMensualInsumo,
@@ -181,7 +182,7 @@ const buildFallbackExpedicionInsights = async (): Promise<DashboardExpedicionIns
 };
 
 export const dashboardOperativoService = {
-  async getStockResumenes(): Promise<DashboardStockResumenes> {
+  async getStockResumenes(_periodo?: DashboardPeriodo): Promise<DashboardStockResumenes> {
     try {
       const [stockMateriaPrima, stockProductoTerminado] = await Promise.all([
         ApiService.stockMP.getResumen(),
@@ -197,7 +198,7 @@ export const dashboardOperativoService = {
     }
   },
 
-  async getKPIs(): Promise<DashboardOperativoKPIs> {
+  async getKPIs(_periodo?: DashboardPeriodo): Promise<DashboardOperativoKPIs> {
     try {
       const [stockR, prodR, costR, insumosResult] = await Promise.all([
         supabaseClient.from('vw_dashboard_stock_resumen').select('*').single<DashboardStockResumenRow>(),
@@ -251,7 +252,7 @@ export const dashboardOperativoService = {
     }
   },
 
-  async getComposicionYConsumo(): Promise<{ formulas: FormulaComposicion[]; consumoMensual: ConsumoMensualInsumo[] }> {
+  async getComposicionYConsumo(_periodo?: DashboardPeriodo): Promise<{ formulas: FormulaComposicion[]; consumoMensual: ConsumoMensualInsumo[] }> {
     try {
       const { data, error } = await supabaseClient
         .from('vw_dashboard_costos_resumen')
@@ -291,7 +292,7 @@ export const dashboardOperativoService = {
     }
   },
 
-  async getProductoTerminadoInsights(): Promise<DashboardProductoTerminadoInsights> {
+  async getProductoTerminadoInsights(_periodo?: DashboardPeriodo): Promise<DashboardProductoTerminadoInsights> {
     try {
       const [stockPT, movimientosPT, clientes] = await Promise.all([
         ApiService.stockPT.getResumen(),
@@ -305,7 +306,7 @@ export const dashboardOperativoService = {
     }
   },
 
-  async getExpedicionInsights(): Promise<DashboardExpedicionInsights> {
+  async getExpedicionInsights(_periodo?: DashboardPeriodo): Promise<DashboardExpedicionInsights> {
     try {
       const [expediciones, clientes] = await Promise.all([
         ApiService.ordenesExpedicion.getAll(),

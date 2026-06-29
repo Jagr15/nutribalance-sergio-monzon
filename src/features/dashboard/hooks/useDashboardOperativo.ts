@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { dashboardOperativoService } from '../services/dashboardOperativoService';
+import type { DashboardPeriodo } from '../utils/dashboardExecutiveInsights';
 import type {
   ConsumoMensualInsumo,
   DashboardExpedicionInsights,
@@ -50,7 +51,7 @@ const EMPTY_EXPEDICION_INSIGHTS: DashboardExpedicionInsights = {
   porCliente: [],
 };
 
-export const useDashboardOperativo = () => {
+export const useDashboardOperativo = (periodo: DashboardPeriodo = 'MES') => {
   const [kpis, setKpis] = useState<DashboardOperativoKPIs>(EMPTY_KPI);
   const [formulas, setFormulas] = useState<FormulaComposicion[]>([]);
   const [consumoMensual, setConsumoMensual] = useState<ConsumoMensualInsumo[]>([]);
@@ -69,11 +70,11 @@ export const useDashboardOperativo = () => {
       setLoading(true);
       setLoadError(null);
       const [kpiData, extra, resumenes, ptInsightsData, expedicionInsightsData] = await Promise.all([
-        dashboardOperativoService.getKPIs(),
-        dashboardOperativoService.getComposicionYConsumo(),
-        dashboardOperativoService.getStockResumenes(),
-        dashboardOperativoService.getProductoTerminadoInsights(),
-        dashboardOperativoService.getExpedicionInsights(),
+        dashboardOperativoService.getKPIs(periodo),
+        dashboardOperativoService.getComposicionYConsumo(periodo),
+        dashboardOperativoService.getStockResumenes(periodo),
+        dashboardOperativoService.getProductoTerminadoInsights(periodo),
+        dashboardOperativoService.getExpedicionInsights(periodo),
       ]);
       setKpis(kpiData);
       setFormulas(extra.formulas);
@@ -89,7 +90,7 @@ export const useDashboardOperativo = () => {
       setLoading(false);
       inFlightRef.current = false;
     }
-  }, []);
+  }, [periodo]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

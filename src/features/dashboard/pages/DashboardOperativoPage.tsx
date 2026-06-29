@@ -8,6 +8,7 @@ import { BrandLogo } from '../../../shared/components/BrandLogo';
 import { KPIBox, SectionTitle } from '../components/dashboardShared';
 import { fmtARS, fmtDateTime, fmtRelativeMinutes, getTrendTone } from '../components/dashboardFormat';
 import { buildDashboardExecutiveInsights, getDashboardPeriodoLabel, isWithinDashboardPeriodo, type DashboardPeriodo } from '../utils/dashboardExecutiveInsights';
+import { buildDashboardOperativoQuery } from '../utils/dashboardPeriod';
 import { buildDashboardTemporalInsights } from '../utils/dashboardTemporalInsights';
 import type { Cliente } from '../../clientes/types/cliente';
 import type { MovimientoStockPT } from '../../productos/types';
@@ -17,25 +18,28 @@ import { ApiService } from '../../../infrastructure/api';
 const PERIODOS: DashboardPeriodo[] = ['HOY', 'SEMANA', 'MES'];
 
 export const DashboardOperativoPage = () => {
-  const { kpis, stockResumenes, loading, lastUpdatedAt, loadError } = useDashboardOperativo();
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [movimientosPT, setMovimientosPT] = useState<MovimientoStockPT[]>([]);
   const [periodo, setPeriodo] = useState<DashboardPeriodo>('MES');
+  const { kpis, stockResumenes, loading, lastUpdatedAt, loadError } = useDashboardOperativo(periodo);
   const now = useMemo(() => new Date(), []);
   const updatedAtLabel = useMemo(() => fmtDateTime(lastUpdatedAt), [lastUpdatedAt]);
   const relativeUpdatedLabel = useMemo(() => fmtRelativeMinutes(lastUpdatedAt), [lastUpdatedAt]);
   const periodoLabel = useMemo(() => getDashboardPeriodoLabel(periodo), [periodo]);
 
+  const queryParams = useMemo(() => buildDashboardOperativoQuery(periodo, now), [now, periodo]);
+
   // Reusa la misma carga de datos operativos del dashboard ejecutivo.
   useEffect(() => {
+    void queryParams;
     void Promise.allSettled([ApiService.ordenes.getAll(), ApiService.clientes.getAll(), ApiService.stockPT.getMovimientos()])
       .then(([ordenesResult, clientesResult, movimientosResult]) => {
         if (ordenesResult.status === 'fulfilled') setOrdenes(ordenesResult.value);
         if (clientesResult.status === 'fulfilled') setClientes(clientesResult.value);
         if (movimientosResult.status === 'fulfilled') setMovimientosPT(movimientosResult.value);
       });
-  }, []);
+  }, [queryParams]);
 
   const executiveMovimientos = useMemo(() => movimientosPT.filter((mov) => isWithinDashboardPeriodo(mov.created_at, periodo, now)), [movimientosPT, now, periodo]);
   const executiveInsights = useMemo(() => buildDashboardExecutiveInsights(executiveMovimientos, clientes, periodo, now), [clientes, executiveMovimientos, now, periodo]);
