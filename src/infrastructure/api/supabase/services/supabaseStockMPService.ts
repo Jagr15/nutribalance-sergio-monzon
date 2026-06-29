@@ -2,12 +2,12 @@ import type {
   HistorialCompraMP,
   StockMateriaPrima,
   StockMateriaPrimaResumen,
-  StockMPEstadoResumen,
   UltimoPrecioPagadoInsumo,
 } from '../../../../features/insumos/types';
 import type { StockMPCreateData } from '../../types';
 import { supabaseClient } from '../client';
 import { endOfDay, endOfMonth, endOfWeek, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
+import { runtimeConfig } from '../../runtimeConfig';
 
 interface StockLoteRow {
   legacy_uid: string | null;
@@ -28,15 +28,12 @@ interface StockLoteRow {
   usuarios: { legacy_uid: string | null } | null;
 }
 
-interface StockResumenRow {
-  insumo_id: string;
-  nombre_insumo: string;
-  unidad: string;
-  stock_actual: number;
-  stock_comprometido: number;
-  stock_disponible: number;
+interface SourceInsumoResumen {
+  uid: string;
+  nombre: string;
+  unidad_medida: string;
   umbral_alerta: number;
-  estado: StockMPEstadoResumen;
+  costo_por_kg: number;
 }
 
 interface HistorialCompraRow {
@@ -52,6 +49,22 @@ interface HistorialCompraRow {
 }
 
 type HistorialPeriodo = 'HOY' | 'SEMANA' | 'MES' | 'TODO';
+
+const TEST_PREFIXES = ['demo-', 'qa-', 'test-', 'prueba-', 'sample-'];
+
+const isTestLegacyUid = (value: string | null | undefined) => {
+  const normalized = (value ?? '').trim().toLowerCase();
+  return TEST_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+};
+
+const isProductionDataRow = (legacyUid: string | null | undefined, lote: string | null | undefined) => {
+  if (runtimeConfig.mode !== 'supabase') return true;
+  if (isTestLegacyUid(legacyUid)) return false;
+  const normalizedLote = (lote ?? '').trim().toLowerCase();
+  if (normalizedLote.startsWith('qa stock')) return false;
+  if (/^(demo|test|prueba)\b/.test(normalizedLote)) return false;
+  return true;
+};
 
 const getPeriodoRange = (periodo: HistorialPeriodo, now = new Date()) => {
   if (periodo === 'HOY') return { start: startOfDay(now), end: endOfDay(now) };
@@ -71,6 +84,61 @@ const mapHistorial = (rows: HistorialCompraRow[]): HistorialCompraMP[] => rows.m
   costo_unitario: Number(row.costo_unitario),
   costo_total: Number(row.costo_total),
 }));
+
+const buildResumenFromSources = (lotes: StockMateriaPrima[], insumos: SourceInsumoResumen[]): StockMateriaPrimaResumen[] => {
+  const insumoById = new Map(insumos.map((item) => [item.uid, item]));
+  const grouped = new Map<string, StockMateriaPrima[]>();
+
+  lotes.forEach((lote) => {
+    const insumoId = lote.insumo_id ?? lote.id_insumo;
+    const current = grouped.get(insumoId) ?? [];
+    current.push(lote);
+    grouped.set(insumoId, current);
+  });
+
+  const resumenDesdeInsumos = insumos.map((insumo) => {
+    const lotesInsumo = grouped.get(insumo.uid) ?? [];
+    const stockActual = lotesInsumo.reduce((acc, lote) => acc + Number(lote.cantidad_actual ?? 0), 0);
+    const stockComprometido = lotesInsumo.reduce((acc, lote) => acc + Number(lote.cantidad_comprometida ?? 0), 0);
+    const stockDisponible = lotesInsumo.reduce((acc, lote) => acc + (Number(lote.cantidad_actual ?? 0) - Number(lote.cantidad_comprometida ?? 0)), 0);
+    const valorInventario = stockActual * insumo.costo_por_kg;
+
+    return {
+      insumo_id: insumo.uid,
+      nombre_insumo: insumo.nombre,
+      unidad: insumo.unidad_medida,
+      stock_actual: stockActual,
+      stock_comprometido: stockComprometido,
+      stock_disponible: stockDisponible,
+      umbral_alerta: insumo.umbral_alerta,
+      estado: stockDisponible <= insumo.umbral_alerta ? 'CRITICO' : stockDisponible <= insumo.umbral_alerta * 2 ? 'BAJO' : 'OK',
+      valor_inventario: valorInventario,
+    } satisfies StockMateriaPrimaResumen;
+  });
+
+  const extrasDesdeLotes = [...grouped.entries()]
+    .filter(([insumoId]) => !insumoById.has(insumoId))
+    .map(([insumoId, lotesInsumo]) => {
+      const nombreDesdeLote = lotesInsumo.find((lote) => lote.nombre_insumo?.trim())?.nombre_insumo?.trim() ?? 'Sin dato';
+      const stockActual = lotesInsumo.reduce((acc, lote) => acc + Number(lote.cantidad_actual ?? 0), 0);
+      const stockComprometido = lotesInsumo.reduce((acc, lote) => acc + Number(lote.cantidad_comprometida ?? 0), 0);
+      const stockDisponible = lotesInsumo.reduce((acc, lote) => acc + (Number(lote.cantidad_actual ?? 0) - Number(lote.cantidad_comprometida ?? 0)), 0);
+
+      return {
+        insumo_id: insumoId,
+        nombre_insumo: nombreDesdeLote,
+        unidad: 'KG',
+        stock_actual: stockActual,
+        stock_comprometido: stockComprometido,
+        stock_disponible: stockDisponible,
+        umbral_alerta: 0,
+        estado: stockDisponible <= 0 ? 'CRITICO' : 'OK',
+        valor_inventario: 0,
+      } satisfies StockMateriaPrimaResumen;
+    });
+
+  return [...resumenDesdeInsumos, ...extrasDesdeLotes].sort((a, b) => a.nombre_insumo.localeCompare(b.nombre_insumo));
+};
 
 interface UltimoPrecioRow {
   insumo: string;
@@ -115,30 +183,46 @@ export const supabaseStockMPService = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return (data ?? []).map((row) => mapStock(row as unknown as StockLoteRow));
+    return (data ?? [])
+      .filter((row) => isProductionDataRow((row as unknown as StockLoteRow).legacy_uid, (row as unknown as StockLoteRow).lote))
+      .map((row) => mapStock(row as unknown as StockLoteRow));
   },
 
   async getResumen(): Promise<StockMateriaPrimaResumen[]> {
-    const { data, error } = await supabaseClient
-      .from('stock_mp_resumen')
-      .select('insumo_id,nombre_insumo,unidad,stock_actual,stock_comprometido,stock_disponible,umbral_alerta,estado')
-      .order('nombre_insumo', { ascending: true });
+    const [lotesResult, insumos] = await Promise.all([
+      supabaseClient
+        .from('stock_lotes_mp')
+        .select(
+          'legacy_uid,insumo_id,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid,nombre),proveedores(legacy_uid),usuarios(legacy_uid)'
+        )
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false }),
+      supabaseClient
+        .from('insumos')
+        .select('legacy_uid,nombre,unidad_medida,umbral_alerta,costo_por_kg,deleted_at,esta_activo')
+        .is('deleted_at', null)
+        .eq('esta_activo', true)
+        .order('nombre', { ascending: true }),
+    ]);
 
-    if (error) throw error;
+    if (lotesResult.error) throw lotesResult.error;
+    if (insumos.error) throw insumos.error;
 
-    return (data ?? []).map((row) => {
-      const resumen = row as unknown as StockResumenRow;
-      return {
-        insumo_id: resumen.insumo_id,
-        nombre_insumo: resumen.nombre_insumo,
-        unidad: resumen.unidad,
-        stock_actual: Number(resumen.stock_actual),
-        stock_comprometido: Number(resumen.stock_comprometido),
-        stock_disponible: Number(resumen.stock_disponible),
-        umbral_alerta: Number(resumen.umbral_alerta),
-        estado: resumen.estado,
-      };
-    });
+    const lotes = (lotesResult.data ?? [])
+      .filter((row) => isProductionDataRow((row as unknown as StockLoteRow).legacy_uid, (row as unknown as StockLoteRow).lote))
+      .map((row) => mapStock(row as unknown as StockLoteRow));
+
+    const sourceInsumos = (insumos.data ?? [])
+      .filter((row) => isProductionDataRow((row as { legacy_uid?: string | null }).legacy_uid, (row as { nombre?: string | null }).nombre))
+      .map((row) => ({
+        uid: (row as { legacy_uid?: string | null }).legacy_uid ?? crypto.randomUUID(),
+        nombre: (row as { nombre?: string | null }).nombre ?? 'Sin dato',
+        unidad_medida: (row as { unidad_medida?: string | null }).unidad_medida ?? 'KG',
+        umbral_alerta: Number((row as { umbral_alerta?: number | null }).umbral_alerta ?? 0),
+        costo_por_kg: Number((row as { costo_por_kg?: number | null }).costo_por_kg ?? 0),
+      }));
+
+    return buildResumenFromSources(lotes, sourceInsumos);
   },
 
   async getHistorialCompras(params: { periodo?: HistorialPeriodo; page?: number; pageSize?: number } = {}): Promise<{ data: HistorialCompraMP[]; total: number }> {
@@ -164,7 +248,8 @@ export const supabaseStockMPService = {
     if (error) throw error;
 
     return {
-      data: mapHistorial((data ?? []) as HistorialCompraRow[]),
+      data: mapHistorial((data ?? []) as HistorialCompraRow[])
+        .filter((row) => isProductionDataRow(null, row.lote)),
       total: count ?? 0,
     };
   },
