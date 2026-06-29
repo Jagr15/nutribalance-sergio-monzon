@@ -17,12 +17,20 @@ const formatterNumero = new Intl.NumberFormat('es-AR', {
 
 const formatterFecha = (value: string | Date | null | undefined) => formatDateDDMMYYYY(value);
 
+type HistorialPeriodo = 'HOY' | 'SEMANA' | 'MES' | 'TODO';
+
+const DEFAULT_PAGE_SIZE = 10;
+
 const StockMateriaPrimaPage: React.FC = () => {
   const { lotes, isLoading, loadError, getAll, remove } = useStockMateriaPrima();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [comprasLoading, setComprasLoading] = useState(true);
   const [comprasError, setComprasError] = useState<string | null>(null);
+  const [comprasPeriodo, setComprasPeriodo] = useState<HistorialPeriodo>('HOY');
+  const [comprasPage, setComprasPage] = useState(1);
+  const [comprasPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [comprasTotal, setComprasTotal] = useState(0);
 
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [historialCompras, setHistorialCompras] = useState<HistorialCompraMP[]>([]);
@@ -30,8 +38,13 @@ const StockMateriaPrimaPage: React.FC = () => {
   const loadComprasInfo = useCallback(async () => {
     try {
       setComprasLoading(true);
-      const historial = await ApiService.stockMP.getHistorialCompras();
-      setHistorialCompras(historial);
+      const { data, total } = await ApiService.stockMP.getHistorialCompras({
+        periodo: comprasPeriodo,
+        page: comprasPage,
+        pageSize: comprasPageSize,
+      });
+      setHistorialCompras(data);
+      setComprasTotal(total);
       setComprasError(null);
     } catch (err) {
       console.error('Error cargando historial de compras MP:', err);
@@ -40,7 +53,7 @@ const StockMateriaPrimaPage: React.FC = () => {
     } finally {
       setComprasLoading(false);
     }
-  }, []);
+  }, [comprasPage, comprasPageSize, comprasPeriodo]);
 
   const refreshData = useCallback(async () => {
     await Promise.all([getAll(), loadComprasInfo()]);
@@ -52,7 +65,6 @@ const StockMateriaPrimaPage: React.FC = () => {
         const resP = await ApiService.proveedores.getAll();
         await Promise.all([
           getAll(),
-          loadComprasInfo(),
         ]);
         setProveedores(resP);
       } catch (error) {
@@ -63,6 +75,10 @@ const StockMateriaPrimaPage: React.FC = () => {
 
     void initialize();
   }, [getAll, loadComprasInfo]);
+
+  useEffect(() => {
+    void loadComprasInfo();
+  }, [loadComprasInfo]);
 
   const handleDelete = async (uid: string) => {
     const result = await Swal.fire({
@@ -99,10 +115,19 @@ const StockMateriaPrimaPage: React.FC = () => {
   const noData = resumen.length === 0;
   const combinedError = error ?? loadError ?? comprasError;
   const isBusy = isLoading || comprasLoading;
-  const comprasRegistradas = historialCompras.length;
+  const comprasRegistradas = comprasTotal;
   const proveedoresActivos = proveedores.filter((proveedor) => proveedor.esta_activo).length;
-  const recentPurchases = historialCompras.slice(0, 10);
   const showLoadingCards = isBusy && comprasRegistradas === 0 && resumen.length === 0;
+  const totalPages = Math.max(1, Math.ceil(comprasTotal / comprasPageSize));
+  const emptyBecauseFilter = !comprasLoading && historialCompras.length === 0 && comprasTotal === 0;
+
+  const handlePeriodoChange = (periodo: HistorialPeriodo) => {
+    setComprasPeriodo(periodo);
+    setComprasPage(1);
+  };
+
+  const handlePrevPage = () => setComprasPage((current) => Math.max(1, current - 1));
+  const handleNextPage = () => setComprasPage((current) => Math.min(totalPages, current + 1));
 
   const formatDate = (value: string | Date | null | undefined) => formatterFecha(value);
   const formatNumber = (value: number) => formatterNumero.format(value);
@@ -169,8 +194,26 @@ const StockMateriaPrimaPage: React.FC = () => {
       <section className="mt-8 space-y-6">
         <article className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col w-full">
             <div className="px-6 py-4 border-b border-slate-200 shrink-0">
-              <h2 className="text-lg font-black text-slate-900">Historial de ingresos MP</h2>
-              <p className="text-sm text-slate-500 mt-1">Recepciones recientes con proveedor, lote, remito y cantidad.</p>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Historial de ingresos MP</h2>
+                  <p className="text-sm text-slate-500 mt-1">Recepciones recientes con proveedor, lote, remito y cantidad.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(['HOY', 'SEMANA', 'MES', 'TODO'] as HistorialPeriodo[]).map((periodo) => (
+                    <button
+                      key={periodo}
+                      type="button"
+                      onClick={() => handlePeriodoChange(periodo)}
+                      className={`rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] ${
+                        comprasPeriodo === periodo ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {periodo === 'HOY' ? 'Hoy' : periodo === 'SEMANA' ? 'Semana' : periodo === 'MES' ? 'Mes' : 'Todo'}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="overflow-auto flex-1">
               <table className="w-full text-sm">
@@ -191,7 +234,7 @@ const StockMateriaPrimaPage: React.FC = () => {
                         Cargando historial de ingresos...
                       </td>
                     </tr>
-                  ) : recentPurchases.map((row, index) => (
+                  ) : historialCompras.map((row, index) => (
                     <tr key={`${row.id_insumo ?? 'ingreso'}-${row.fecha_compra ?? 'sin-fecha'}-${index}`} className="border-t border-slate-100">
                       <td className="px-4 py-2 text-slate-600">{formatDate(row.fecha_compra)}</td>
                       <td className="px-4 py-2 text-slate-700">{row.proveedor}</td>
@@ -201,15 +244,38 @@ const StockMateriaPrimaPage: React.FC = () => {
                       <td className="px-4 py-2 text-right text-slate-900">{formatNumber(row.cantidad)}</td>
                     </tr>
                   ))}
-                  {!showLoadingCards && !recentPurchases.length ? (
+                  {!showLoadingCards && emptyBecauseFilter ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-4 text-center text-sm text-slate-500">
-                        No hay ingresos registrados todavía.
+                        No hay ingresos para el período seleccionado.
                       </td>
                     </tr>
                   ) : null}
                 </tbody>
               </table>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-3">
+              <p className="text-xs text-slate-500">
+                {comprasTotal} registros · Página {comprasPage} de {totalPages}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={comprasPage === 1}
+                  onClick={handlePrevPage}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-40"
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  disabled={comprasPage >= totalPages}
+                  onClick={handleNextPage}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-40"
+                >
+                  Siguiente
+                </button>
+              </div>
             </div>
         </article>
       </section>

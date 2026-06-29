@@ -91,7 +91,7 @@ export interface StockMPCreateData {
 export interface StockMPService {
   getAllLotes: () => Promise<StockMateriaPrima[]>;
   getResumen: () => Promise<StockMateriaPrimaResumen[]>;
-  getHistorialCompras: () => Promise<HistorialCompraMP[]>;
+  getHistorialCompras: (params?: { periodo?: 'HOY' | 'SEMANA' | 'MES' | 'TODO'; page?: number; pageSize?: number }) => Promise<{ data: HistorialCompraMP[]; total: number }>;
   getUltimosPrecios: () => Promise<UltimoPrecioPagadoInsumo[]>;
   create: (data: StockMPCreateData) => Promise<StockMateriaPrima>;
   update: (uid: string, data: Partial<StockMateriaPrima>) => Promise<StockMateriaPrima>;

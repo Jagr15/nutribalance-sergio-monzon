@@ -18,7 +18,38 @@ export const mockAdapter: ApiServices = {
   proveedores: mockProveedorService,
   insumos: mockInsumoService,
   formulas: mockFormulaService,
-  stockMP: mockMateriaPrimaService,
+  stockMP: {
+    ...mockMateriaPrimaService,
+    getHistorialCompras: async (params) => {
+      const historial = await mockMateriaPrimaService.getHistorialCompras();
+      const page = Math.max(1, Number(params?.page ?? 1));
+      const pageSize = Math.max(1, Number(params?.pageSize ?? 10));
+      const periodo = params?.periodo ?? 'HOY';
+      const end = new Date();
+      const start = new Date(end);
+      if (periodo === 'HOY') {
+        start.setHours(0, 0, 0, 0);
+      } else if (periodo === 'SEMANA') {
+        const day = start.getDay() || 7;
+        start.setDate(start.getDate() - (day - 1));
+        start.setHours(0, 0, 0, 0);
+      } else if (periodo === 'MES') {
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+      } else {
+        start.setTime(0);
+      }
+      const filtered = periodo === 'TODO' ? historial : historial.filter((row) => {
+        const fecha = new Date(row.fecha_compra);
+        return fecha >= start && fecha <= end;
+      });
+      const from = (page - 1) * pageSize;
+      return {
+        data: filtered.slice(from, from + pageSize),
+        total: filtered.length,
+      };
+    },
+  },
   stockPT: mockStockPTService,
   empaquesProducto: mockEmpaquesProductoService,
   trazabilidad: mockTrazabilidadService,

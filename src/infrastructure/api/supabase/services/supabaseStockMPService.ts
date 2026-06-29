@@ -7,6 +7,7 @@ import type {
 } from '../../../../features/insumos/types';
 import type { StockMPCreateData } from '../../types';
 import { supabaseClient } from '../client';
+import { endOfDay, endOfMonth, endOfWeek, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 
 interface StockLoteRow {
   legacy_uid: string | null;
@@ -49,6 +50,27 @@ interface HistorialCompraRow {
   costo_unitario: number;
   costo_total: number;
 }
+
+type HistorialPeriodo = 'HOY' | 'SEMANA' | 'MES' | 'TODO';
+
+const getPeriodoRange = (periodo: HistorialPeriodo, now = new Date()) => {
+  if (periodo === 'HOY') return { start: startOfDay(now), end: endOfDay(now) };
+  if (periodo === 'SEMANA') return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
+  if (periodo === 'MES') return { start: startOfMonth(now), end: endOfMonth(now) };
+  return null;
+};
+
+const mapHistorial = (rows: HistorialCompraRow[]): HistorialCompraMP[] => rows.map((row) => ({
+  proveedor: row.proveedor,
+  id_proveedor: row.id_proveedor,
+  insumo: row.insumo,
+  id_insumo: row.id_insumo,
+  fecha_compra: row.fecha_compra,
+  lote: row.lote,
+  cantidad: Number(row.cantidad),
+  costo_unitario: Number(row.costo_unitario),
+  costo_total: Number(row.costo_total),
+}));
 
 interface UltimoPrecioRow {
   insumo: string;
@@ -119,29 +141,32 @@ export const supabaseStockMPService = {
     });
   },
 
-  async getHistorialCompras(): Promise<HistorialCompraMP[]> {
-    const { data, error } = await supabaseClient
+  async getHistorialCompras(params: { periodo?: HistorialPeriodo; page?: number; pageSize?: number } = {}): Promise<{ data: HistorialCompraMP[]; total: number }> {
+    const page = Math.max(1, Number(params.page ?? 1));
+    const pageSize = Math.max(1, Number(params.pageSize ?? 10));
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    const periodo = params.periodo ?? 'HOY';
+    const range = getPeriodoRange(periodo);
+
+    let query = supabaseClient
       .from('historial_compras_mp')
-      .select('proveedor,id_proveedor,insumo,id_insumo,fecha_compra,lote,cantidad,costo_unitario,costo_total')
+      .select('proveedor,id_proveedor,insumo,id_insumo,fecha_compra,lote,cantidad,costo_unitario,costo_total', { count: 'exact' })
       .order('fecha_compra', { ascending: false })
       .order('lote', { ascending: false });
 
+    if (range) {
+      query = query.gte('fecha_compra', range.start.toISOString()).lte('fecha_compra', range.end.toISOString());
+    }
+
+    const { data, error, count } = await query.range(from, to);
+
     if (error) throw error;
 
-    return (data ?? []).map((row) => {
-      const compra = row as unknown as HistorialCompraRow;
-      return {
-        proveedor: compra.proveedor,
-        id_proveedor: compra.id_proveedor,
-        insumo: compra.insumo,
-        id_insumo: compra.id_insumo,
-        fecha_compra: compra.fecha_compra,
-        lote: compra.lote,
-        cantidad: Number(compra.cantidad),
-        costo_unitario: Number(compra.costo_unitario),
-        costo_total: Number(compra.costo_total),
-      };
-    });
+    return {
+      data: mapHistorial((data ?? []) as HistorialCompraRow[]),
+      total: count ?? 0,
+    };
   },
 
   async getUltimosPrecios(): Promise<UltimoPrecioPagadoInsumo[]> {
