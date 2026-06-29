@@ -28,3 +28,23 @@ export interface AlertaOperativa {
   accionRecomendada: string;
   impactoOperativo: string;
 }
+
+export type AlertaModulo = 'stock' | 'produccion' | 'tesoreria' | 'clientes' | 'costos';
+export type AlertaEntidadTipo = 'insumo' | 'producto_terminado' | 'silo' | 'cheque_emitido' | 'cheque_recibido' | 'orden' | 'cliente';
+export type AlertaSeveridad = 'verde' | 'amarillo' | 'rojo';
+
+export interface AlertaConfiguracion {
+  id: string;
+  modulo: AlertaModulo;
+  entidad_tipo: AlertaEntidadTipo;
+  entidad_id: string | null;
+  nombre: string;
+  umbral_minimo: number | null;
+  umbral_critico: number | null;
+  unidad: string | null;
+  dias_anticipacion: number | null;
+  severidad: AlertaSeveridad;
+  esta_activa: boolean;
+  created_at: string;
+  updated_at: string;
+}
