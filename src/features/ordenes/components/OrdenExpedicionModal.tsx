@@ -4,6 +4,7 @@ import { FiX, FiTruck, FiPackage, FiUser, FiFileText } from 'react-icons/fi';
 import { ApiService } from '../../../infrastructure/api';
 import type { Cliente } from '../../clientes/types/cliente';
 import type { EmpaqueProducto, StockProductoTerminado } from '../../productos/types';
+import { getProductoEmpaquesKeys } from '../../productos/utils/empaquesProducto';
 import type { OrdenExpedicion } from '../types';
 import { PresentacionExpedicion } from '../types';
 import { calcularEmpaques } from '../utils/empaques';
@@ -97,9 +98,14 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
         return;
       }
       try {
-        const productoId = selectedStock.id_formula ?? selectedStock.nombre_producto;
-        const rows = await ApiService.empaquesProducto.listByProducto(productoId);
-        const activos = rows.filter((item) => item.activo);
+        const productoKeys = getProductoEmpaquesKeys({
+          nombre: selectedStock.nombre_producto,
+          idFormula: selectedStock.id_formula,
+        });
+        const rows = (await Promise.all(
+          productoKeys.map((productoId) => ApiService.empaquesProducto.listByProducto(productoId))
+        )).flat();
+        const activos = Array.from(new Map(rows.filter((item) => item.activo).map((item) => [item.id, item])).values());
         setEmpaques(activos);
         setSelectedEmpaqueId((current) => {
           if (activos.length === 0) return '';
