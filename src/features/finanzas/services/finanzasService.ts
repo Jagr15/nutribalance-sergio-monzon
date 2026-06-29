@@ -552,7 +552,7 @@ export const finanzasService = {
       throw new Error('Tipo de movimiento inválido.');
     }
     const tipoContable = payload.tipo === 'COBRANZA' ? 'INGRESO' : payload.tipo === 'PAGO' ? 'EGRESO' : payload.tipo;
-    const origenOperativo = payload.origen_operativo?.trim() || (payload.tipo === 'COBRANZA' || payload.tipo === 'INGRESO' ? 'COBRANZA_MANUAL' : payload.tipo === 'PAGO' || payload.tipo === 'EGRESO' ? 'PAGO_MANUAL' : 'AJUSTE_MANUAL');
+    const origenOperativo = payload.origen_operativo?.trim() || (payload.tipo === 'COBRANZA' || payload.tipo === 'INGRESO' ? 'COSTOS_INGRESO' : payload.tipo === 'PAGO' || payload.tipo === 'EGRESO' ? 'COSTOS_EGRESO' : 'COSTOS_AJUSTE');
     const uniqueId = hashText([
       fechaDia(new Date().toISOString()),
       tipoContable,
@@ -563,10 +563,12 @@ export const finanzasService = {
       payload.centro_costo_id ?? '',
     ].join('|'));
 
-    await contabilidadOperativaService.ensureMovimiento({
-      legacy_uid: uniqueId,
+    const tipoCosto = tipoContable === 'TRANSFERENCIA' ? 'EGRESO' : tipoContable;
+
+    await contabilidadOperativaService.sincronizarMovimientoCostos({
+      origen_id: uniqueId,
       fecha: new Date().toISOString(),
-      tipo: tipoContable,
+      tipo: tipoCosto,
       descripcion,
       monto: payload.monto,
       origen_operativo: origenOperativo,
