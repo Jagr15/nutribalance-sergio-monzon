@@ -10,6 +10,7 @@ const seedClientes = new Map<string, string>([
 
 const seedStockPT: StockProductoTerminado[] = [
   {
+    id: '11111111-1111-4111-8111-111111111111',
     uid: 'pt-001',
     id_orden: 'OP-PLD-001',
     numero_orden: 'OP-PLD-001',
@@ -37,6 +38,7 @@ const seedStockPT: StockProductoTerminado[] = [
     updateAt: '2026-05-26T12:00:00Z',
   },
   {
+    id: '22222222-2222-4222-8222-222222222222',
     uid: 'pt-002',
     id_orden: 'OP-PLD-002',
     numero_orden: 'OP-PLD-002',
@@ -64,6 +66,7 @@ const seedStockPT: StockProductoTerminado[] = [
     updateAt: '2026-05-27T14:10:00Z',
   },
   {
+    id: '33333333-3333-4333-8333-333333333333',
     uid: 'pt-003',
     id_orden: 'OP-PLD-003',
     numero_orden: 'OP-PLD-003',
@@ -202,8 +205,10 @@ export const registerMockIngresoPT = (data: {
   costo_unitario_estimado?: number | null;
 }) => {
   const createdAt = nowIso();
+  const sequence = String(nextUid++).padStart(3, '0');
   const stock: StockProductoTerminado = {
-    uid: `pt-${String(nextUid++).padStart(3, '0')}`,
+    id: `44444444-4444-4444-8444-${sequence.padStart(12, '0')}`,
+    uid: `pt-${sequence}`,
     id_orden: data.id_orden,
     numero_orden: data.numero_orden,
     id_formula: data.id_formula ?? null,
@@ -256,7 +261,7 @@ export const mockStockPTService = {
     }
 
     const nextSaldo = Number((Number(current.cantidad_total) - payload.cantidad).toFixed(3));
-    const nextStock: StockProductoTerminado = {
+  const nextStock: StockProductoTerminado = {
       ...current,
       cantidad_total: nextSaldo,
       estado: recomputeEstado({ ...current, cantidad_total: nextSaldo }),

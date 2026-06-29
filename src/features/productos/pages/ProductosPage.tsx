@@ -18,6 +18,7 @@ import type { Silo } from '../../silos/types';
 type EstadoProductoUi = 'OK' | 'Bajo' | 'Crítico';
 
 interface ProductoUi {
+  dbId: string;
   uid: string;
   nombre: string;
   stockKg: number;
@@ -84,6 +85,7 @@ const toArrayDetalle = (detalle: StockProductoTerminado['detalle_insumos']) => {
 };
 
 const toUi = (item: StockProductoTerminado): ProductoUi => ({
+  dbId: item.id,
   uid: item.uid,
   nombre: item.nombre_producto || 'Sin dato',
   stockKg: Number(item.cantidad_total ?? 0),
@@ -161,7 +163,7 @@ const openSalidaModal = async (
   onSuccess: () => Promise<void> | void
 ) => {
   const opciones = lotes
-    .map((lote) => `<option value="${lote.uid}">${lote.lote} · ${formatKg(lote.stockKg)} · ${lote.silo}</option>`)
+    .map((lote) => `<option value="${lote.dbId}">${lote.lote} · ${formatKg(lote.stockKg)} · ${lote.silo}</option>`)
     .join('');
 
   const result = await Swal.fire({
@@ -204,10 +206,16 @@ const openSalidaModal = async (
         const cantidad = Number((document.getElementById('salida-cantidad') as HTMLInputElement | null)?.value);
         const motivo = (document.getElementById('salida-motivo') as HTMLInputElement | null)?.value.trim();
         const referencia = (document.getElementById('salida-ref') as HTMLInputElement | null)?.value.trim();
-        const selected = lotes.find((lote) => lote.uid === loteId);
+        const selected = lotes.find((lote) => lote.dbId === loteId);
+        const selectedStockPtId = selected?.dbId ?? '';
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
         if (!selected) {
           Swal.showValidationMessage('Seleccioná un lote válido.');
+          return false;
+        }
+        if (!uuidRegex.test(selectedStockPtId)) {
+          Swal.showValidationMessage('No se pudo resolver el UUID real del lote. Recargá el stock de PT e intentá nuevamente.');
           return false;
         }
         if (!Number.isFinite(cantidad) || cantidad <= 0) {
@@ -224,7 +232,7 @@ const openSalidaModal = async (
         }
 
         await ApiService.stockPT.registrarSalida({
-          stock_pt_id: selected.uid,
+          stock_pt_id: selectedStockPtId,
           cantidad,
           motivo,
           referencia: referencia || undefined,
@@ -734,6 +742,7 @@ const ProductosPage = () => {
                           type="button"
                           onClick={() => openSalidaModal(
                             {
+                              dbId: lotesDelProducto[0]?.dbId ?? '',
                               uid: row.producto_id ?? row.nombre_producto,
                               nombre: row.nombre_producto,
                               stockKg: row.stock_actual,

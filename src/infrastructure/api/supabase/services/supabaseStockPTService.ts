@@ -7,6 +7,7 @@ import type {
 import { supabaseClient } from '../client';
 
 interface StockPTRow {
+  id: string;
   legacy_uid: string | null;
   id_orden_legacy: string | null;
   numero_orden: string | null;
@@ -68,6 +69,7 @@ interface StockPTMovimientoRow {
 }
 
 const toStockPT = (row: StockPTRow): StockProductoTerminado => ({
+  id: row.id,
   uid: row.legacy_uid ?? crypto.randomUUID(),
   id_orden: row.id_orden_legacy ?? '',
   numero_orden: row.numero_orden ?? '',
@@ -92,7 +94,7 @@ export const supabaseStockPTService = {
   async getAll(): Promise<StockProductoTerminado[]> {
     const { data, error } = await supabaseClient
       .from('stock_pt')
-      .select('legacy_uid,id_orden_legacy,numero_orden,nombre_producto,cantidad_total,cantidad_inicial,costo_unitario_estimado,lote,unidad_medida,estado,id_silo_legacy,nombre_silo,detalle_insumos,fecha_ingreso,usuario,updated_at,ordenes_produccion(legacy_uid,id_formula_legacy,version_formula,nombre_producto)')
+      .select('id,legacy_uid,id_orden_legacy,numero_orden,nombre_producto,cantidad_total,cantidad_inicial,costo_unitario_estimado,lote,unidad_medida,estado,id_silo_legacy,nombre_silo,detalle_insumos,fecha_ingreso,usuario,updated_at,ordenes_produccion(legacy_uid,id_formula_legacy,version_formula,nombre_producto)')
       .is('deleted_at', null)
       .order('fecha_ingreso', { ascending: false });
 

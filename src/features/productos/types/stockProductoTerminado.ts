@@ -2,6 +2,7 @@ import type { DetalleInsumoLote } from "../../ordenes/types";
 import type { TipoUnidad } from "../../../shared/types/global.interface";
 
 export interface StockProductoTerminado {
+    id: string;
     uid: string;
     id_orden: string;
     numero_orden:string;

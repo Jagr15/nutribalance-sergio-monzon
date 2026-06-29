@@ -6,6 +6,7 @@ describe('buildStockPTResumen', () => {
   it('mantiene cada lote como fila independiente y calcula estado y valor', () => {
     const stock: StockProductoTerminado[] = [
       {
+        id: '00000000-0000-4000-8000-000000000001',
         uid: 'pt-a',
         id_orden: 'op-1',
         numero_orden: 'OP-000001',
@@ -26,6 +27,7 @@ describe('buildStockPTResumen', () => {
         updateAt: '2026-06-16T11:00:00Z',
       },
       {
+        id: '00000000-0000-4000-8000-000000000002',
         uid: 'pt-b',
         id_orden: 'op-2',
         numero_orden: 'OP-000002',
