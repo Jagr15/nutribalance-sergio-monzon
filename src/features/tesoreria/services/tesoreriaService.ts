@@ -21,6 +21,17 @@ type ChequeTesoreriaDbRow = ChequeTesoreriaRow & {
   legacy_uid?: string | null;
 };
 
+const normalizeChequeTipo = (value: unknown): TipoChequeTesoreria => {
+  const text = String(value ?? '').trim().toUpperCase();
+  if (text === 'EMITIDO' || text === 'RECIBIDO') return text;
+  return 'RECIBIDO';
+};
+
+const normalizeChequeEstado = (value: unknown): EstadoChequeTesoreria => {
+  const text = String(value ?? '').trim().toUpperCase();
+  return ESTADOS_VALIDOS.has(text as EstadoChequeTesoreria) ? (text as EstadoChequeTesoreria) : 'PENDIENTE';
+};
+
 const STORAGE_KEY = 'nutribalance_tesoreria_cheques_v1';
 const ESTADOS_VALIDOS = new Set<EstadoChequeTesoreria>(['PENDIENTE', 'A_DEPOSITAR', 'DEPOSITADO', 'COBRADO', 'RECHAZADO', 'ENDOSADO', 'VENCIDO']);
 
@@ -60,14 +71,14 @@ const writeMockCheques = (rows: ChequeTesoreriaDbRow[]) => {
 const normalizeCheque = (row: ChequeTesoreriaDbRow): ChequeTesoreriaRow => ({
   id: row.id,
   numero: row.numero,
-  tipo: row.tipo,
+  tipo: normalizeChequeTipo(row.tipo),
   tercero: row.tercero,
   importe: Number(row.importe ?? 0),
   fecha_emision: row.fecha_emision,
   fecha_vencimiento: row.fecha_vencimiento,
   fecha_acreditacion: row.fecha_acreditacion ?? null,
   created_at: row.created_at ?? null,
-  estado: row.estado,
+  estado: normalizeChequeEstado(row.estado),
   cliente_id: row.cliente_id ?? null,
   cliente_nombre: row.cliente_nombre ?? null,
 });
@@ -128,7 +139,7 @@ export const tesoreriaService = {
         .filter((row) => (params.fechaDesde ? row.fecha_vencimiento >= params.fechaDesde : true))
         .filter((row) => (params.fechaHasta ? row.fecha_vencimiento <= params.fechaHasta : true))
         .sort(compareChequeRecency)
-        .slice(params.offset ?? 0, (params.offset ?? 0) + (params.limit ?? 50))
+        .slice(params.offset ?? 0, (params.offset ?? 0) + (params.limit ?? 500))
         .map(normalizeCheque);
     }
 
@@ -144,7 +155,7 @@ export const tesoreriaService = {
     if (params.fechaDesde) query = query.gte('fecha_vencimiento', params.fechaDesde);
     if (params.fechaHasta) query = query.lte('fecha_vencimiento', params.fechaHasta);
     if (typeof params.limit === 'number') query = query.limit(params.limit);
-    if (typeof params.offset === 'number') query = query.range(params.offset, params.offset + (params.limit ?? 50) - 1);
+    if (typeof params.offset === 'number') query = query.range(params.offset, params.offset + (params.limit ?? 500) - 1);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -271,5 +282,15 @@ export const tesoreriaService = {
       });
     }
     return normalizeCheque(data);
+  },
+
+  async deleteCheque(id: string): Promise<void> {
+    if (!id) throw new Error('El cheque es obligatorio.');
+    if (runtimeConfig.mode === 'mock') {
+      writeMockCheques(readMockCheques().filter((row) => row.id !== id));
+      return;
+    }
+    const { error } = await supabaseClient.from('tesoreria_cheques').delete().eq('id', id);
+    if (error) throw new Error(formatDbError('eliminar el cheque', error));
   },
 };

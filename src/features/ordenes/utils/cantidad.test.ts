@@ -11,7 +11,7 @@ describe('normalizeCantidadOrden', () => {
   });
 
   it('convierte toneladas a kg', () => {
-    expect(normalizeCantidadOrden(1.5, 'tonelada')).toEqual({
+    expect(normalizeCantidadOrden(1.5, 'tn')).toEqual({
       cantidadOriginal: 1.5,
       unidad: 'tonelada',
       cantidadKg: 1500,
@@ -21,7 +21,7 @@ describe('normalizeCantidadOrden', () => {
   it('rechaza valores inválidos', () => {
     expect(() => normalizeCantidadOrden('abc', 'kg')).toThrow('La cantidad debe ser mayor a 0.');
     expect(() => normalizeCantidadOrden(-1, 'kg')).toThrow('La cantidad debe ser mayor a 0.');
-    expect(() => normalizeCantidadOrden(1, 'bolsa')).toThrow('La unidad de medida debe ser kg o tonelada.');
+    expect(() => normalizeCantidadOrden(1, 'bolsa')).toThrow('La unidad de medida debe ser kg o tn.');
   });
 
   it('rechaza cantidades vacías', () => {

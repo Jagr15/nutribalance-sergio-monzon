@@ -8,6 +8,7 @@ import OrdenExpedicionModal from '../components/OrdenExpedicionModal';
 import { cancelarOrdenExpedicionEnLista, puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
+const formatUnidadOrden = (value: string) => (value === 'tonelada' ? 'tn' : 'kg');
 
 const estadoBadge: Record<string, string> = {
   pendiente: 'bg-amber-50 text-amber-700',
@@ -179,7 +180,7 @@ const OrdenesSalidaPage: React.FC = () => {
                     <td className="px-6 py-4 text-slate-700">{orden.nombre_producto}</td>
                     <td className="px-6 py-4 text-slate-700">{orden.lote_pt}</td>
                     <td className="px-6 py-4 text-slate-700">
-                      <div>{Number(orden.cantidad_original ?? orden.cantidad).toLocaleString('es-AR')} {orden.unidad_cantidad}</div>
+                      <div>{Number(orden.cantidad_original ?? orden.cantidad).toLocaleString('es-AR')} {formatUnidadOrden(orden.unidad_cantidad)}</div>
                       <div className="text-xs text-slate-500">{formatKg(Number(orden.cantidad_kg ?? orden.cantidad ?? 0))}</div>
                     </td>
                     <td className="px-6 py-4">
@@ -190,6 +191,16 @@ const OrdenesSalidaPage: React.FC = () => {
                     <td className="px-6 py-4 text-slate-600">{formatDateDDMMYYYY(orden.created_at)}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOrdenEnEdicion(orden);
+                            setIsModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Editar
+                        </button>
                         {puedeMostrarAccionesOrdenSalida(orden.estado) ? (
                           <>
                             {orden.estado === 'pendiente' ? (

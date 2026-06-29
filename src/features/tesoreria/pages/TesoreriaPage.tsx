@@ -6,7 +6,7 @@ import { useFinanzas } from '../../finanzas/hooks/useFinanzas';
 import { useTesoreria } from '../hooks/useTesoreria';
 import { ChequeForm } from '../components/ChequeForm';
 import { EMPTY_CHEQUE_FORM } from '../components/chequeFormDefaults';
-import type { ChequeTesoreriaFormValues } from '../services/tesoreriaService';
+import { tesoreriaService, type ChequeTesoreriaFormValues } from '../services/tesoreriaService';
 import type { ChequeTesoreriaRow, EstadoChequeTesoreria } from '../../finanzas/types';
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
@@ -27,6 +27,14 @@ const normalizeSearchText = (value: string) => value
   .toLowerCase()
   .replace(/\s+/g, ' ')
   .trim();
+
+const normalizeChequeTipo = (value: string): 'EMITIDO' | 'RECIBIDO' => (value.trim().toUpperCase() === 'EMITIDO' ? 'EMITIDO' : 'RECIBIDO');
+const normalizeChequeEstado = (value: string): EstadoChequeTesoreria => {
+  const normalized = value.trim().toUpperCase() as EstadoChequeTesoreria;
+  return ['PENDIENTE', 'A_DEPOSITAR', 'DEPOSITADO', 'COBRADO', 'RECHAZADO', 'ENDOSADO', 'VENCIDO'].includes(normalized)
+    ? normalized
+    : 'PENDIENTE';
+};
 
 const TesoreriaPage = () => {
   const { kpis, reportes, movimientos, tesoreria: tesoreriaFinanzas } = useFinanzas();
@@ -51,7 +59,7 @@ const TesoreriaPage = () => {
 
   const loadAllCheques = useCallback(async () => {
     try {
-      const realCheques = await getCheques({ limit: 50 });
+      const realCheques = await getCheques({ limit: 500 });
       setCheques(realCheques);
       return realCheques;
     } catch (err: unknown) {
@@ -81,9 +89,6 @@ const TesoreriaPage = () => {
     setFormError(null);
   };
 
-  const updateChequeInList = (list: ChequeTesoreriaRow[], nextCheque: ChequeTesoreriaRow) =>
-    list.map((item) => (item.id === nextCheque.id ? nextCheque : item));
-
   const isChequeClosed = (estado: EstadoChequeTesoreria) => ['DEPOSITADO', 'COBRADO', 'RECHAZADO', 'VENCIDO'].includes(estado);
 
   useEffect(() => () => {
@@ -110,19 +115,8 @@ const TesoreriaPage = () => {
     setFormError(null);
     try {
       const savedCheque = editingId ? await updateCheque(editingId, form) : await createCheque(form);
-      setCheques((current) => updateChequeInList(
-        editingId ? current : [savedCheque, ...current.filter((cheque) => cheque.id !== savedCheque.id)],
-        savedCheque,
-      ));
       const refreshedCheques = await loadAllCheques();
-      const foundAfterRefresh = refreshedCheques.some((cheque) => cheque.id === savedCheque.id);
-      if (!foundAfterRefresh) {
-        const optimistic = [savedCheque, ...refreshedCheques.filter((cheque) => cheque.id !== savedCheque.id)];
-        setCheques(optimistic);
-        console.warn('[tesoreria] applied optimistic fallback for created cheque', savedCheque.id);
-      } else {
-        setCheques(refreshedCheques);
-      }
+      setCheques(refreshedCheques);
       setHighlightedChequeId(savedCheque.id);
       if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
       highlightTimerRef.current = window.setTimeout(() => {
@@ -163,11 +157,13 @@ const TesoreriaPage = () => {
   };
 
   const nextDirectState = (cheque: ChequeTesoreriaRow): EstadoChequeTesoreria | null => {
-    if (cheque.tipo === 'RECIBIDO') {
-      if (isChequeClosed(cheque.estado) || cheque.estado === 'A_DEPOSITAR') return null;
+    const tipo = normalizeChequeTipo(cheque.tipo);
+    const estado = normalizeChequeEstado(cheque.estado);
+    if (tipo === 'RECIBIDO') {
+      if (isChequeClosed(estado) || estado === 'A_DEPOSITAR') return null;
       return 'DEPOSITADO';
     }
-    if (isChequeClosed(cheque.estado)) return null;
+    if (isChequeClosed(estado)) return null;
     return 'DEPOSITADO';
   };
 
@@ -178,8 +174,7 @@ const TesoreriaPage = () => {
       return;
     }
     try {
-      const updatedCheque = await updateChequeEstado(cheque.id, next);
-      setCheques((current) => updateChequeInList(current, updatedCheque));
+      await updateChequeEstado(cheque.id, next);
       const refreshed = await loadAllCheques();
       setCheques(refreshed);
       setHighlightedChequeId(cheque.id);
@@ -190,9 +185,31 @@ const TesoreriaPage = () => {
     }
   };
 
+  const handleDeleteCheque = async (cheque: ChequeTesoreriaRow) => {
+    const result = await Swal.fire({
+      title: 'Eliminar cheque',
+      text: `Se eliminará el cheque ${cheque.numero}. Esta acción no se puede deshacer.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626',
+    });
+    if (!result.isConfirmed) return;
+    try {
+      await tesoreriaService.deleteCheque(cheque.id);
+      const refreshed = await loadAllCheques();
+      setCheques(refreshed);
+      await showToast('success', 'Cheque eliminado correctamente.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'No se pudo eliminar el cheque.';
+      console.error('[tesoreria] error eliminando cheque', err);
+      await showToast('error', message);
+    }
+  };
+
   const allCheques = useMemo(
     () => [...cheques]
-      .filter((cheque) => !isDeprecatedText(cheque.numero) && !isDeprecatedText(cheque.tercero))
       .sort((a, b) => new Date(b.created_at ?? b.fecha_emision).getTime() - new Date(a.created_at ?? a.fecha_emision).getTime()),
     [cheques],
   );
@@ -211,8 +228,8 @@ const TesoreriaPage = () => {
       ].some((field) => normalizeSearchText(field).includes(query));
       if (!hayQuery) return false;
 
-      if (filtroEstado && cheque.estado !== filtroEstado) return false;
-      if (filtroTipo && cheque.tipo !== filtroTipo) return false;
+      if (filtroEstado && normalizeChequeEstado(cheque.estado) !== normalizeChequeEstado(filtroEstado)) return false;
+      if (filtroTipo && normalizeChequeTipo(cheque.tipo) !== normalizeChequeTipo(filtroTipo)) return false;
 
       const fechaEmision = new Date(cheque.fecha_emision);
       if (dateFrom && fechaEmision.getTime() < dateFrom.getTime()) return false;
@@ -222,8 +239,8 @@ const TesoreriaPage = () => {
     });
   }, [allCheques, searchInput, filtroEstado, filtroFechaDesde, filtroFechaHasta, filtroTipo]);
 
-  const filteredChequesEmitidos = useMemo(() => filteredCheques.filter((cheque) => cheque.tipo === 'EMITIDO'), [filteredCheques]);
-  const filteredChequesRecibidos = useMemo(() => filteredCheques.filter((cheque) => cheque.tipo === 'RECIBIDO'), [filteredCheques]);
+  const filteredChequesEmitidos = useMemo(() => filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'EMITIDO'), [filteredCheques]);
+  const filteredChequesRecibidos = useMemo(() => filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'RECIBIDO'), [filteredCheques]);
   const getChequeStateLabel = (estado: EstadoChequeTesoreria) => ({
     PENDIENTE: 'Pendiente',
     A_DEPOSITAR: 'A depositar',
@@ -255,8 +272,8 @@ const TesoreriaPage = () => {
         if (to && fecha.getTime() > to.getTime()) return false;
         return true;
       };
-      const recibidosPendientes = filteredCheques.filter((cheque) => cheque.tipo === 'RECIBIDO' && ['PENDIENTE', 'A_DEPOSITAR'].includes(cheque.estado) && inRange(cheque.fecha_vencimiento));
-      const emitidosPendientes = filteredCheques.filter((cheque) => cheque.tipo === 'EMITIDO' && ['PENDIENTE', 'A_DEPOSITAR'].includes(cheque.estado) && inRange(cheque.fecha_vencimiento));
+      const recibidosPendientes = filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'RECIBIDO' && ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && inRange(cheque.fecha_vencimiento));
+      const emitidosPendientes = filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'EMITIDO' && ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && inRange(cheque.fecha_vencimiento));
       const importeTotal = [...recibidosPendientes, ...emitidosPendientes].reduce((acc, cheque) => acc + Number(cheque.importe ?? 0), 0);
       return {
         label,
@@ -279,8 +296,8 @@ const TesoreriaPage = () => {
     const cobrosPeriodo = movimientos
       .filter((movimiento) => movimiento.tipo === 'INGRESO' && /venta|cobranza|cobro/i.test(`${movimiento.descripcion} ${movimiento.origen_operativo ?? ''}`))
       .reduce((acc, movimiento) => acc + Number(movimiento.monto ?? 0), 0);
-    const chequesRecibidosHoy = filteredCheques.filter((cheque) => cheque.tipo === 'RECIBIDO' && (cheque.estado === 'A_DEPOSITAR' || (cheque.estado === 'PENDIENTE' && isDueToday(cheque.fecha_vencimiento))));
-    const chequesEmitidosHoy = filteredCheques.filter((cheque) => cheque.tipo === 'EMITIDO' && cheque.estado === 'PENDIENTE' && isDueToday(cheque.fecha_vencimiento));
+    const chequesRecibidosHoy = filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'RECIBIDO' && (normalizeChequeEstado(cheque.estado) === 'A_DEPOSITAR' || (normalizeChequeEstado(cheque.estado) === 'PENDIENTE' && isDueToday(cheque.fecha_vencimiento))));
+    const chequesEmitidosHoy = filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'EMITIDO' && normalizeChequeEstado(cheque.estado) === 'PENDIENTE' && isDueToday(cheque.fecha_vencimiento));
     const ctasCobrar = kpis.cuentas_por_cobrar || tesoreria.carteraClientes.reduce((acc, row) => acc + row.saldo_pendiente, 0);
     const cajaDisponible = kpis.saldo_actual;
 
@@ -295,15 +312,15 @@ const TesoreriaPage = () => {
   }, [filteredCheques, kpis.cuentas_por_cobrar, kpis.saldo_actual, movimientos, reportes.ingresos_pt_por_producto, tesoreria.carteraClientes]);
 
   const alertaPrioritaria = useMemo(() => {
-    const emitidoVenceHoy = filteredChequesEmitidos.find((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(cheque.estado) && isDueToday(cheque.fecha_vencimiento));
+    const emitidoVenceHoy = filteredChequesEmitidos.find((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && isDueToday(cheque.fecha_vencimiento));
     if (emitidoVenceHoy) {
       return `Cheque emitido ${emitidoVenceHoy.numero} por cubrir hoy por ${formatCurrency(emitidoVenceHoy.importe)}.`;
     }
-    const recibidoListoDepositar = filteredChequesRecibidos.find((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(cheque.estado) && isDueToday(cheque.fecha_vencimiento));
+    const recibidoListoDepositar = filteredChequesRecibidos.find((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && isDueToday(cheque.fecha_vencimiento));
     if (recibidoListoDepositar) {
       return `Cheque recibido ${recibidoListoDepositar.numero} listo para depositar por ${formatCurrency(recibidoListoDepositar.importe)}.`;
     }
-    const recibidoADepositar = filteredChequesRecibidos.find((cheque) => cheque.estado === 'A_DEPOSITAR');
+    const recibidoADepositar = filteredChequesRecibidos.find((cheque) => normalizeChequeEstado(cheque.estado) === 'A_DEPOSITAR');
     if (recibidoADepositar) {
       return `Cheque recibido ${recibidoADepositar.numero} listo para depositar por ${formatCurrency(recibidoADepositar.importe)}.`;
     }
@@ -438,8 +455,8 @@ const TesoreriaPage = () => {
           <button type="button" onClick={openCreateForm} className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">+ Registrar cheque</button>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setActiveTab('RECIBIDOS')} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === 'RECIBIDOS' ? 'bg-emerald-600 text-white' : 'border border-slate-200 bg-white text-slate-700'}`}>Cheques recibidos</button>
-          <button type="button" onClick={() => setActiveTab('EMITIDOS')} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === 'EMITIDOS' ? 'bg-rose-600 text-white' : 'border border-slate-200 bg-white text-slate-700'}`}>Cheques emitidos</button>
+      <button type="button" onClick={() => setActiveTab('RECIBIDOS')} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === 'RECIBIDOS' ? 'bg-emerald-600 text-white' : 'border border-slate-200 bg-white text-slate-700'}`}>Cheques recibidos</button>
+      <button type="button" onClick={() => setActiveTab('EMITIDOS')} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === 'EMITIDOS' ? 'bg-rose-600 text-white' : 'border border-slate-200 bg-white text-slate-700'}`}>Cheques emitidos</button>
         </div>
         {filteredCheques.length === 0 ? (
           <Card className="border-dashed border-slate-200">
@@ -464,26 +481,28 @@ const TesoreriaPage = () => {
               <tbody className="divide-y divide-slate-200">
                 {(activeTab === 'RECIBIDOS' ? filteredChequesRecibidos : filteredChequesEmitidos).map((cheque) => {
                   const isHighlighted = highlightedChequeId === cheque.id;
-                  const band = cheque.tipo === 'RECIBIDO'
-                    ? cheque.estado === 'COBRADO' || cheque.estado === 'DEPOSITADO' || cheque.estado === 'RECHAZADO'
+                  const tipoNormalizado = normalizeChequeTipo(cheque.tipo);
+                  const estadoNormalizado = normalizeChequeEstado(cheque.estado);
+                  const band = tipoNormalizado === 'RECIBIDO'
+                    ? estadoNormalizado === 'COBRADO' || estadoNormalizado === 'DEPOSITADO' || estadoNormalizado === 'RECHAZADO'
                       ? 'bg-emerald-50'
-                      : cheque.estado === 'PENDIENTE'
+                      : estadoNormalizado === 'PENDIENTE'
                         ? 'bg-amber-50'
                         : 'bg-slate-50'
-                    : cheque.estado === 'DEPOSITADO' || cheque.estado === 'COBRADO' || cheque.estado === 'RECHAZADO'
+                    : estadoNormalizado === 'DEPOSITADO' || estadoNormalizado === 'COBRADO' || estadoNormalizado === 'RECHAZADO'
                       ? 'bg-slate-100'
-                      : cheque.estado === 'PENDIENTE'
+                      : estadoNormalizado === 'PENDIENTE'
                         ? 'bg-rose-50'
                         : 'bg-amber-50';
-                  const directState = isChequeClosed(cheque.estado) ? null : nextDirectState(cheque);
+                  const directState = isChequeClosed(estadoNormalizado) ? null : nextDirectState(cheque);
                   return (
                     <tr key={cheque.id} className={`${band} ${isHighlighted ? 'ring-2 ring-blue-400 ring-inset' : ''}`}>
                       <td className="px-3 py-2 font-semibold text-slate-900">{cheque.numero}</td>
-                      <td className="px-3 py-2 text-slate-700">{cheque.tipo === 'RECIBIDO' ? 'Recibido' : 'Emitido'}</td>
+                      <td className="px-3 py-2 text-slate-700">{tipoNormalizado === 'RECIBIDO' ? 'Recibido' : 'Emitido'}</td>
                       <td className="px-3 py-2 text-slate-700">{cheque.tercero || cheque.cliente_nombre || 'Sin tercero'}</td>
                       <td className="px-3 py-2 text-slate-700">{formatDate(cheque.fecha_vencimiento)}</td>
                       <td className="px-3 py-2 text-slate-700">{formatDate(cheque.fecha_acreditacion)}</td>
-                      <td className="px-3 py-2"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${getChequeStateTone(cheque.estado)}`}>{getChequeStateLabel(cheque.estado)}</span></td>
+                      <td className="px-3 py-2"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${getChequeStateTone(estadoNormalizado)}`}>{getChequeStateLabel(estadoNormalizado)}</span></td>
                       <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatCurrency(cheque.importe)}</td>
                       <td className="px-3 py-2">
                         <div className="flex justify-end gap-2">
@@ -495,6 +514,7 @@ const TesoreriaPage = () => {
                             <span className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-slate-500">Procesado</span>
                           )}
                           <button type="button" onClick={() => startEdit(cheque)} className="rounded-xl border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100">Editar</button>
+                          <button type="button" onClick={() => void handleDeleteCheque(cheque)} className="rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50">Eliminar</button>
                         </div>
                       </td>
                     </tr>

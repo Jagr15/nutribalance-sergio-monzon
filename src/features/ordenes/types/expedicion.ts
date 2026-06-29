@@ -50,6 +50,7 @@ export interface RegistrarOrdenExpedicionPayload {
   cliente_id: string;
   presentacion: PresentacionExpedicion;
   cantidad: number;
+  cantidad_original?: number;
   unidad_cantidad: 'kg' | 'tonelada';
   motivo?: string | null;
   referencia?: string | null;

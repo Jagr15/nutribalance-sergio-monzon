@@ -15,13 +15,14 @@ const UNIT_TO_KG: Record<UnidadCantidadOrden, number> = {
 
 export const normalizeCantidadOrden = (cantidad: unknown, unidad: unknown): CantidadNormalizadaOrden => {
   const cantidadOriginal = Number(cantidad);
-  const normalizedUnidad = String(unidad ?? '').trim().toLowerCase() as UnidadCantidadOrden;
+  const rawUnidad = String(unidad ?? '').trim().toLowerCase();
+  const normalizedUnidad = (rawUnidad === 'tn' || rawUnidad === 'ton' ? 'tonelada' : rawUnidad) as UnidadCantidadOrden;
 
   if (!Number.isFinite(cantidadOriginal) || cantidadOriginal <= 0) {
     throw new Error('La cantidad debe ser mayor a 0.');
   }
   if (!UNIDADES_CANTIDAD_ORDEN.includes(normalizedUnidad)) {
-    throw new Error('La unidad de medida debe ser kg o tonelada.');
+    throw new Error('La unidad de medida debe ser kg o tn.');
   }
 
   return {

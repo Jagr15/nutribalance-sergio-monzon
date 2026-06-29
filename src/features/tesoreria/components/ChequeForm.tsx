@@ -9,9 +9,11 @@ const tipoOptions: Array<{ value: TipoChequeTesoreria; label: string }> = [
 
 const estadoOptions: Array<{ value: EstadoChequeTesoreria; label: string }> = [
   { value: 'PENDIENTE', label: 'Pendiente' },
+  { value: 'A_DEPOSITAR', label: 'A depositar' },
   { value: 'DEPOSITADO', label: 'Depositado' },
   { value: 'COBRADO', label: 'Cobrado' },
   { value: 'RECHAZADO', label: 'Rechazado' },
+  { value: 'ENDOSADO', label: 'Endosado' },
   { value: 'VENCIDO', label: 'Vencido' },
 ];
 

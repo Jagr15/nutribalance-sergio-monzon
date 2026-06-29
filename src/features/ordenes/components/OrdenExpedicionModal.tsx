@@ -15,6 +15,7 @@ interface Props {
 }
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
+const normalizeUnidad = (value?: string | null) => (String(value ?? 'kg').trim().toLowerCase() === 'tonelada' ? 'tonelada' : 'kg');
 
 const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = null }) => {
   const [stockPT, setStockPT] = useState<StockProductoTerminado[]>([]);
@@ -26,6 +27,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
   const [modoCalculo, setModoCalculo] = useState<'EMPAQUES' | 'KG'>('EMPAQUES');
   const [selectedEmpaqueId, setSelectedEmpaqueId] = useState('');
   const [valorEntrada, setValorEntrada] = useState<number | ''>(orden?.cantidad_original ?? '');
+  const [unidadCantidad, setUnidadCantidad] = useState<'kg' | 'tonelada'>(normalizeUnidad(orden?.unidad_cantidad ?? orden?.unidad_original));
   const [motivo, setMotivo] = useState('');
   const [referencia, setReferencia] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -55,7 +57,13 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
         setClientes(clientesData);
         setSelectedStockId((current) => current || (disponibles[0]?.uid ?? ''));
         setSelectedClienteId((current) => current || (clientesData[0]?.uid ?? ''));
-        if (orden) setPresentacion(orden.presentacion);
+        if (orden) {
+          setPresentacion(orden.presentacion);
+          setUnidadCantidad(normalizeUnidad(orden.unidad_cantidad ?? orden.unidad_original));
+          setValorEntrada(orden.cantidad_original ?? '');
+          setMotivo(orden.motivo ?? '');
+          setReferencia(orden.referencia ?? '');
+        }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'No se pudo cargar la información para expedición.');
       } finally {
@@ -64,6 +72,17 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
     };
 
     void load();
+  }, [orden]);
+
+  useEffect(() => {
+    if (!orden) return;
+    setSelectedStockId(orden.stock_pt_id);
+    setSelectedClienteId(orden.cliente_id ?? '');
+    setPresentacion(orden.presentacion);
+    setUnidadCantidad(normalizeUnidad(orden.unidad_cantidad ?? orden.unidad_original));
+    setValorEntrada(orden.cantidad_original ?? '');
+    setMotivo(orden.motivo ?? '');
+    setReferencia(orden.referencia ?? '');
   }, [orden]);
 
   const selectedStock = useMemo(
@@ -178,7 +197,8 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
         cliente_id: selectedClienteId,
         presentacion,
         cantidad: calculo.total_kg,
-        unidad_cantidad: 'kg' as const,
+        cantidad_original: Number(valorEntrada),
+        unidad_cantidad: unidadCantidad,
         motivo: motivo.trim() || undefined,
         referencia: referencia.trim() || undefined,
       } as const;
@@ -346,7 +366,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
 
             <label className="space-y-2">
               <span className="ml-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
-                <FiPackage size={12} /> {modoCalculo === 'EMPAQUES' ? 'Cantidad de empaques' : 'Kg requeridos'}
+                <FiPackage size={12} /> {modoCalculo === 'EMPAQUES' ? 'Cantidad de empaques' : 'Cantidad'}
               </span>
               <input
                 type="number"
@@ -357,6 +377,20 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
                 disabled={!isEditable}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
               />
+              <div className="flex items-center gap-2">
+                <select
+                  value={unidadCantidad}
+                  onChange={(e) => setUnidadCantidad(e.target.value as 'kg' | 'tonelada')}
+                  disabled={!isEditable}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
+                >
+                  <option value="kg">kg</option>
+                  <option value="tonelada">tn</option>
+                </select>
+              </div>
+              <p className="text-xs text-slate-500">
+                Se guardará como {formatKg(Number(valorEntrada || 0) * (unidadCantidad === 'tonelada' ? 1000 : 1))} en inventario.
+              </p>
             </label>
 
             <label className="space-y-2">
