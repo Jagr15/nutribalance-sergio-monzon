@@ -10,6 +10,7 @@ import { RegistrarMovimientoForm } from '../components/RegistrarMovimientoForm';
 import { usePermissions } from '../../auth/usePermissions';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { ROUTES } from '../../../app/config/routes';
+import { normalizeNumericInputChange, parseNumericInput } from '../../../shared/utils/formatters';
 import {
   enrichIngresosPtPorProducto,
   RUBRO_AREA_DEFAULT,
@@ -941,7 +942,17 @@ const FinanzasPage = () => {
                 </label>
                 <label className="block">
                   <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Monto máximo de gastos</span>
-                  <input type="number" step="0.01" value={budgetDraft.monto_maximo ?? ''} onChange={(event) => setBudgetDraft((current) => ({ ...current, monto_maximo: event.target.value === '' ? null : Number(event.target.value) }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" placeholder="Ej: 250000" />
+            <input
+              type="number"
+              step="0.01"
+              value={budgetDraft.monto_maximo ?? ''}
+              onChange={(event) => setBudgetDraft((current) => ({
+                ...current,
+                monto_maximo: parseNumericInput(normalizeNumericInputChange(event.target.value)),
+              }))}
+              className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+              placeholder="Ej: 250000"
+            />
                 </label>
                 <label className="block">
                   <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Rubros incluidos</span>

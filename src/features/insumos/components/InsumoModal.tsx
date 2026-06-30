@@ -6,6 +6,7 @@ import { TipoUnidad } from '../../../shared/types/global.interface'; // Usamos t
 import { useInsumos } from '../hooks/useInsumos';
 import Swal from 'sweetalert2';
 import { normalizarCostoInsumo, type UnidadCostoInsumo } from '../utils/costoInsumo';
+import { formatNumericInput, normalizeNumericInputChange, parseNumericInput } from '../../../shared/utils/formatters';
 
 interface InsumoModalProps {
   insumo?: Insumo;
@@ -24,8 +25,16 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
   const [categoria, setCategoria] = useState<TipoCategoria>(
     (insumo?.categoria as TipoCategoria) || '' as TipoCategoria
   );
-  const [umbral, setUmbral] = useState(insumo?.umbral_alerta?.toString() || '0');
-  const [costo, setCosto] = useState(insumo?.costo_por_kg ?? insumo?.ref_costo_unitario ?? insumo?.costo ?? 0);
+  const [umbral, setUmbral] = useState(insumo?.umbral_alerta?.toString() || '');
+  const [costo, setCosto] = useState<string>(
+    insumo?.costo_por_kg !== undefined && insumo?.costo_por_kg !== null
+      ? String(insumo.costo_por_kg)
+      : insumo?.ref_costo_unitario !== undefined && insumo?.ref_costo_unitario !== null
+        ? String(insumo.ref_costo_unitario)
+        : insumo?.costo !== undefined && insumo?.costo !== null
+          ? String(insumo.costo)
+          : ''
+  );
   const [unidadCosto, setUnidadCosto] = useState<UnidadCostoInsumo>(insumo?.unidad_costo ?? 'KG');
   
   // Nuevo estado para la Unidad de Medida
@@ -33,7 +42,9 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
     insumo?.unidad_medida || TipoUnidad.KG
   );
 
-  const isUmbralInvalid = parseInt(umbral, 10) <= 0 || umbral === '';
+  const umbralValue = parseNumericInput(umbral);
+  const costoValue = parseNumericInput(costo);
+  const isUmbralInvalid = umbralValue === null || umbralValue <= 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,11 +72,11 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
       return;
     }
 
-    const costoNormalizado = normalizarCostoInsumo({ costo, unidad_costo: unidadCosto });
+    const costoNormalizado = normalizarCostoInsumo({ costo: costoValue ?? 0, unidad_costo: unidadCosto });
     const payload = {
       nombre: normalizedNombre,
       categoria,
-      umbral_alerta: parseInt(umbral, 10),
+      umbral_alerta: umbralValue ?? 0,
       unidad_medida: unidad,
       costo: costoNormalizado?.costo,
       unidad_costo: costoNormalizado?.unidad_costo,
@@ -167,7 +178,7 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
                     type="text" 
                     placeholder="Umbral alerta"
                     value={umbral}
-                    onChange={(e) => /^\d*$/.test(e.target.value) && setUmbral(e.target.value)}
+                    onChange={(e) => /^\d*([.,]\d*)?$/.test(e.target.value) && setUmbral(normalizeNumericInputChange(e.target.value))}
                     className={`ui-input w-full ${isUmbralInvalid ? 'border-orange-500/40' : ''} rounded-lg py-2.5 px-3 text-sm text-slate-700 font-mono`}
                   />
                 </div>
@@ -202,8 +213,8 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
                     type="number"
                     min="0"
                     step="0.000001"
-                    value={costo}
-                    onChange={(e) => setCosto(Number(e.target.value))}
+                    value={formatNumericInput(costoValue)}
+                    onChange={(e) => setCosto(normalizeNumericInputChange(e.target.value))}
                     placeholder="Costo"
                     className="ui-input w-full rounded-lg py-2.5 px-3 text-sm text-slate-700 font-mono"
                   />

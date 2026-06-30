@@ -7,6 +7,7 @@ import type { Insumo } from '../types';
 import type { Proveedor } from '../../proveedores/types';
 import type { Silo } from '../../silos/types';
 import { findSiloByName, getMateriaPrimaSilos } from '../../silos/utils/siloFilters';
+import { normalizeNumericInputChange, parseNumericInput } from '../../../shared/utils/formatters';
 
 interface Props {
   onClose: () => void;
@@ -35,7 +36,7 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     ubicacion: '', // Representa el Silo/Almacén
     lote: '',
     remito_nro: '',
-    cantidad: 0,
+    cantidad: '',
     unidad_entrada: 'KG' as 'KG' | 'TON',
     fecha_ingreso: new Date().toISOString().split('T')[0]
   });
@@ -74,7 +75,8 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       setSubmitError('El lote es obligatorio.');
       return;
     }
-    if (formData.cantidad <= 0) {
+    const cantidad = parseNumericInput(String(formData.cantidad));
+    if (cantidad === null || cantidad <= 0) {
       setSubmitError('La cantidad debe ser mayor a 0.');
       return;
     }
@@ -92,8 +94,9 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       ...formData,
       lote: formData.lote.trim().toUpperCase(),
       remito_nro: formData.remito_nro.trim(),
-      cantidad_actual: formData.cantidad,
-      cantidad_inicial: formData.cantidad,
+      cantidad_actual: cantidad,
+      cantidad_inicial: cantidad,
+      cantidad,
     };
 
     try {
@@ -217,7 +220,8 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                   required type="number" step="any" 
                   className={`w-full bg-transparent px-4 py-2.5 text-xs text-slate-900 outline-none ${noSpinnerClasses}`}
                   placeholder="0.00" 
-                  onChange={e => setFormData({ ...formData, cantidad: Number(e.target.value) })} 
+                  value={formData.cantidad}
+                  onChange={e => setFormData({ ...formData, cantidad: normalizeNumericInputChange(e.target.value) })} 
                 />
                 <select 
                   className="bg-slate-50 text-[10px] font-bold text-blue-600 px-3 border-l border-slate-200 outline-none cursor-pointer"

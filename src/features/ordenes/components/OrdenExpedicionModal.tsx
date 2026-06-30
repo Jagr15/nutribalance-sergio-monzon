@@ -9,6 +9,7 @@ import { openConfiguracionEmpaquesModal } from '../../productos/utils/openConfig
 import type { OrdenExpedicion } from '../types';
 import { PresentacionExpedicion } from '../types';
 import { calcularEmpaques } from '../utils/empaques';
+import { normalizeNumericInputChange, parseNumericInput } from '../../../shared/utils/formatters';
 
 interface Props {
   onClose: () => void;
@@ -28,7 +29,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
   const [presentacion, setPresentacion] = useState<keyof typeof PresentacionExpedicion>('GRANEL');
   const [modoCalculo, setModoCalculo] = useState<'EMPAQUES' | 'KG'>('EMPAQUES');
   const [selectedEmpaqueId, setSelectedEmpaqueId] = useState('');
-  const [valorEntrada, setValorEntrada] = useState<number | ''>(orden?.cantidad_original ?? '');
+  const [valorEntrada, setValorEntrada] = useState<string>(() => (orden?.cantidad_original ? String(orden.cantidad_original) : ''));
   const [unidadCantidad, setUnidadCantidad] = useState<'kg' | 'tonelada'>(normalizeUnidad(orden?.unidad_cantidad ?? orden?.unidad_original));
   const [motivo, setMotivo] = useState('');
   const [referencia, setReferencia] = useState('');
@@ -63,7 +64,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
         if (orden) {
           setPresentacion(orden.presentacion);
           setUnidadCantidad(normalizeUnidad(orden.unidad_cantidad ?? orden.unidad_original));
-          setValorEntrada(orden.cantidad_original ?? '');
+          setValorEntrada(orden.cantidad_original ? String(orden.cantidad_original) : '');
           setMotivo(orden.motivo ?? '');
           setReferencia(orden.referencia ?? '');
         }
@@ -83,7 +84,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
     setSelectedClienteId(orden.cliente_id ?? '');
     setPresentacion(orden.presentacion);
     setUnidadCantidad(normalizeUnidad(orden.unidad_cantidad ?? orden.unidad_original));
-    setValorEntrada(orden.cantidad_original ?? '');
+    setValorEntrada(orden.cantidad_original ? String(orden.cantidad_original) : '');
     setMotivo(orden.motivo ?? '');
     setReferencia(orden.referencia ?? '');
   }, [orden]);
@@ -117,11 +118,11 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
   const isEditable = !orden || orden.estado === 'pendiente';
   const selectedEmpaque = empaques.find((item) => item.id === selectedEmpaqueId) ?? null;
   const calculo =
-    valorEntrada === ''
+    valorEntrada.trim() === ''
       ? null
       : selectedEmpaque
-        ? calcularEmpaques(modoCalculo, Number(valorEntrada), selectedEmpaque)
-        : modoCalculo === 'KG' && Number(valorEntrada) > 0
+        ? calcularEmpaques(modoCalculo, parseNumericInput(valorEntrada) ?? 0, selectedEmpaque)
+        : modoCalculo === 'KG' && (parseNumericInput(valorEntrada) ?? 0) > 0
           ? {
               tipo_empaque: 'BOLSA' as const,
               capacidad_kg: 1 as const,
@@ -148,7 +149,8 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
       setError('Seleccioná un cliente destino.');
       return;
     }
-    if (valorEntrada === '' || Number.isNaN(Number(valorEntrada)) || Number(valorEntrada) <= 0) {
+    const valorNumerico = parseNumericInput(valorEntrada);
+    if (valorNumerico === null || valorNumerico <= 0) {
       setError('La cantidad debe ser mayor a 0.');
       return;
     }
@@ -194,7 +196,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
         cliente_id: selectedClienteId,
         presentacion,
         cantidad: calculo.total_kg,
-        cantidad_original: Number(valorEntrada),
+        cantidad_original: valorNumerico,
         unidad_cantidad: unidadCantidad,
         motivo: motivo.trim() || undefined,
         referencia: referencia.trim() || undefined,
@@ -382,7 +384,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
                 min="0"
                 step="0.001"
                 value={valorEntrada}
-                onChange={(e) => setValorEntrada(e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={(e) => setValorEntrada(normalizeNumericInputChange(e.target.value))}
                 disabled={!isEditable}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
               />
@@ -398,7 +400,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
                 </select>
               </div>
               <p className="text-xs text-slate-500">
-                Se guardará como {formatKg(Number(valorEntrada || 0) * (unidadCantidad === 'tonelada' ? 1000 : 1))} en inventario.
+                Se guardará como {formatKg((parseNumericInput(valorEntrada) ?? 0) * (unidadCantidad === 'tonelada' ? 1000 : 1))} en inventario.
               </p>
             </label>
 

@@ -16,4 +16,13 @@ export const parseNumericInput = (value: string) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-export const formatNumericInput = (value: number | null | undefined) => (typeof value === 'number' && Number.isFinite(value) ? String(value) : '');
+export const formatNumericInput = (value: number | null | undefined) => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value === 0) return '';
+  return String(value);
+};
+
+export const normalizeNumericInputChange = (value: string) => {
+  if (value.trim() === '') return '';
+  const cleaned = value.replace(',', '.').replace(/^0+(?=\d)/, '');
+  return cleaned === '0' ? '' : cleaned;
+};

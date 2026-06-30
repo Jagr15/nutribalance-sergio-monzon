@@ -28,8 +28,8 @@ interface Props {
 }
 
 const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => {
-  const [merma, setMerma] = useState<number>(0);
-  const [cantidadReal, setCantidadReal] = useState<number>(orden.cantidad_real ?? orden.cantidad_objetivo);
+  const [merma, setMerma] = useState<string>('');
+  const [cantidadReal, setCantidadReal] = useState<string>(orden.cantidad_real ? String(orden.cantidad_real) : String(orden.cantidad_objetivo ?? ''));
   const [destinoSilo, setDestinoSilo] = useState("");
   const [silos, setSilos] = useState<Silo[]>([]);
   const [stockLotes, setStockLotes] = useState<StockLoteForFlow[]>([]);
@@ -107,7 +107,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
 
     return buildFinalizationStockCheck(
       orden.cantidad_objetivo,
-      cantidadReal,
+      parseNumericInput(cantidadReal) ?? orden.cantidad_objetivo,
       orden.detalle_insumos,
       stockLotes
     );
@@ -136,15 +136,17 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
       setSubmitError('Solo se puede finalizar la orden en silos de Producto Terminado.');
       return;
     }
-    if (Number.isNaN(cantidadReal) || cantidadReal <= 0) {
+    const cantidadRealValue = parseNumericInput(cantidadReal);
+    const mermaValue = parseNumericInput(merma) ?? 0;
+    if (cantidadRealValue === null || cantidadRealValue <= 0) {
       setSubmitError('La cantidad real debe ser mayor a 0.');
       return;
     }
-    if (Number.isNaN(merma) || merma < 0) {
+    if (mermaValue < 0) {
       setSubmitError('La merma no puede ser negativa.');
       return;
     }
-    if (merma > orden.cantidad_objetivo) {
+    if (mermaValue > orden.cantidad_objetivo) {
       setSubmitError('La merma no puede superar la cantidad planificada.');
       return;
     }
@@ -159,8 +161,8 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
     setIsSubmitting(true);
     Promise.resolve(onConfirm({
       lote_salida: loteNormalizado,
-      merma: merma,
-      cantidad_real: cantidadReal,
+      merma: mermaValue,
+      cantidad_real: cantidadRealValue,
       destino_silo: destinoSilo
     }))
       .catch((error: unknown) => {
@@ -281,7 +283,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
               <input 
                 type="number"
                 value={cantidadReal}
-                onChange={(e) => setCantidadReal(parseNumericInput(e.target.value) ?? 0)}
+                onChange={(e) => setCantidadReal(e.target.value === '' ? '' : e.target.value.replace(/^0+(?=\d)/, ''))}
                 onFocus={(e) => e.target.select()}
                 className="w-full bg-emerald-500/[0.02] border border-emerald-500/10 rounded-xl py-2.5 px-4 text-[13px] text-emerald-600 font-mono font-black outline-none focus:border-emerald-500/30 transition-all duration-200 ease-out [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
@@ -294,7 +296,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
               <input 
                 type="number"
                 value={merma}
-                onChange={(e) => setMerma(parseNumericInput(e.target.value) ?? 0)}
+                onChange={(e) => setMerma(e.target.value === '' ? '' : e.target.value.replace(/^0+(?=\d)/, ''))}
                 onFocus={(e) => e.target.select()}
                 className="w-full bg-red-500/[0.02] border border-red-500/10 rounded-xl py-2.5 px-4 text-[13px] text-red-400 font-mono font-black outline-none focus:border-red-500/30 transition-all duration-200 ease-out [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
@@ -310,7 +312,7 @@ const FinalizarOrdenModal: React.FC<Props> = ({ orden, onClose, onConfirm }) => 
              <FiArrowRight className="text-gray-800" size={14}/>
              <div className="flex flex-col text-right">
                <span className="text-[7px] font-black text-emerald-600 uppercase tracking-widest">Cantidad Real</span>
-               <span className="text-[11px] font-black text-emerald-500 font-mono">{cantidadReal} kg</span>
+               <span className="text-[11px] font-black text-emerald-500 font-mono">{cantidadReal || '0'} kg</span>
              </div>
           </div>
         </div>

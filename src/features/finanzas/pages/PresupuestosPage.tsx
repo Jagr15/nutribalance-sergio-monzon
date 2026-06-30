@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { FiArrowLeft, FiPlus, FiX } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../../shared/components/card';
+import { normalizeNumericInputChange, parseNumericInput } from '../../../shared/utils/formatters';
 import { ROUTES } from '../../../app/config/routes';
 import { useFinanzas } from '../hooks/useFinanzas';
 
@@ -162,7 +163,16 @@ const PresupuestosPage = () => {
           </label>
           <label className="block">
             <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Monto máximo de gastos</span>
-            <input type="number" step="0.01" value={budgetDraft.monto_maximo ?? ''} onChange={(event) => setBudgetDraft((current) => ({ ...current, monto_maximo: event.target.value === '' ? null : Number(event.target.value) }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" />
+            <input
+              type="number"
+              step="0.01"
+              value={budgetDraft.monto_maximo ?? ''}
+              onChange={(event) => setBudgetDraft((current) => ({
+                ...current,
+                monto_maximo: parseNumericInput(normalizeNumericInputChange(event.target.value)),
+              }))}
+              className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+            />
           </label>
           <div className="flex justify-end gap-3">
             <button type="button" onClick={() => openBudgetEditor()} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700">Nuevo</button>
