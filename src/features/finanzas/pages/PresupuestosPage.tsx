@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FiArrowLeft, FiPlus, FiX } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../../shared/components/card';
 import { normalizeNumericInputChange, parseNumericInput } from '../../../shared/utils/formatters';
 import { ROUTES } from '../../../app/config/routes';
 import { useFinanzas } from '../hooks/useFinanzas';
+import { finanzasService } from '../services/finanzasService';
+import type { RubroFinancieroCatalogo } from '../types';
 
 type BudgetPeriodicidad = 'semanal' | 'quincenal' | 'mensual';
 type BudgetConfig = {
@@ -68,6 +70,19 @@ const PresupuestosPage = () => {
   const [budgetDraft, setBudgetDraft] = useState<BudgetConfig>(() => createDefaultBudgetConfig());
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [budgetFeedback, setBudgetFeedback] = useState<string | null>(null);
+  const [rubrosCatalog, setRubrosCatalog] = useState<RubroFinancieroCatalogo[]>([]);
+
+  useEffect(() => {
+    void finanzasService.getRubrosFinancieros().then((rows) => {
+      setRubrosCatalog(rows);
+    }).catch((error) => {
+      console.error('No se pudieron cargar los rubros financieros:', error);
+      setRubrosCatalog([]);
+    });
+  }, []);
+
+  const rubrosActivos = useMemo(() => rubrosCatalog.filter((rubro) => rubro.activo), [rubrosCatalog]);
+  const rubrosSeleccionadosNombres = useMemo(() => budgetDraft.rubros.filter((rubro) => typeof rubro === 'string' && rubro.trim().length > 0), [budgetDraft.rubros]);
 
   const budgetRows = useMemo(() => budgetConfigs.map((config) => {
     const rubrosSeleccionados = config.rubros.length > 0 ? tesoreria.gastosPorRubro.filter((row) => config.rubros.includes(row.rubro)) : tesoreria.gastosPorRubro;
@@ -97,6 +112,10 @@ const PresupuestosPage = () => {
 
   const handleSaveBudgetConfig = () => {
     const normalizedRubros = Array.from(new Set(budgetDraft.rubros));
+    if (rubrosActivos.length === 0) {
+      setBudgetFeedback('No hay rubros activos disponibles. Crea o activa rubros desde Costos > Ver todos los rubros.');
+      return;
+    }
     const nextConfig: BudgetConfig = {
       id: budgetDraft.id || `budget-${Date.now()}`,
       nombre: budgetDraft.nombre.trim() || 'Presupuesto sin nombre',
@@ -109,7 +128,7 @@ const PresupuestosPage = () => {
       return;
     }
     if (nextConfig.rubros.length === 0) {
-      setBudgetFeedback('Selecciona al menos un rubro.');
+      setBudgetFeedback('Selecciona al menos un rubro para crear el presupuesto.');
       return;
     }
     setBudgetConfigs((current) => {
@@ -121,6 +140,10 @@ const PresupuestosPage = () => {
     });
     setBudgetFeedback('Configuración guardada correctamente.');
     closeBudgetEditor();
+  };
+
+  const updateSelectedRubros = (nextRubros: string[]) => {
+    setBudgetDraft((current) => ({ ...current, rubros: Array.from(new Set(nextRubros)) }));
   };
 
   return (
@@ -151,7 +174,7 @@ const PresupuestosPage = () => {
           </div>
           <label className="block">
             <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Nombre</span>
-            <input value={budgetDraft.nombre} onChange={(event) => setBudgetDraft((current) => ({ ...current, nombre: event.target.value }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" />
+            <input value={budgetDraft.nombre} onChange={(event) => setBudgetDraft((current) => ({ ...current, nombre: event.target.value }))} className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm" placeholder="Ej: Presupuesto julio" />
           </label>
           <label className="block">
             <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Periodicidad</span>
@@ -174,10 +197,57 @@ const PresupuestosPage = () => {
               className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
             />
           </label>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Rubros activos</span>
+              <button
+                type="button"
+                onClick={() => updateSelectedRubros(rubrosActivos.map((rubro) => rubro.nombre))}
+                className="text-xs font-semibold text-blue-700 hover:text-blue-600"
+                disabled={rubrosActivos.length === 0}
+              >
+                Seleccionar todos
+              </button>
+            </div>
+            <select
+              multiple
+              value={budgetDraft.rubros}
+              onChange={(event) => updateSelectedRubros(Array.from(event.target.selectedOptions, (option) => option.value))}
+              className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm min-h-40"
+              aria-label="Seleccionar rubros del presupuesto"
+            >
+              {rubrosActivos.map((rubro) => (
+                <option key={rubro.id} value={rubro.nombre}>{rubro.nombre}</option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500">
+              Selecciona uno o más rubros activos creados en Costos / Finanzas. Si no hay rubros activos, activa alguno desde “Ver todos los rubros”.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Rubros seleccionados</span>
+            <div className="flex flex-wrap gap-2">
+              {rubrosSeleccionadosNombres.length > 0 ? rubrosSeleccionadosNombres.map((rubro) => (
+                <span key={rubro} className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                  {rubro}
+                </span>
+              )) : (
+                <span className="text-sm text-slate-500">Ninguno seleccionado</span>
+              )}
+            </div>
+          </div>
           <div className="flex justify-end gap-3">
             <button type="button" onClick={() => openBudgetEditor()} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700">Nuevo</button>
             <button type="button" onClick={handleSaveBudgetConfig} className="rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20">Guardar configuración</button>
           </div>
+          <p className="text-sm text-slate-600">
+            Primero escribe el nombre del presupuesto, selecciona uno o más rubros activos y define el monto máximo de gastos.
+          </p>
+          {rubrosActivos.length === 0 ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              No hay rubros activos disponibles. Crea o activa rubros desde Costos &gt; Ver todos los rubros.
+            </div>
+          ) : null}
           {budgetFeedback ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{budgetFeedback}</div> : null}
         </Card>
 
@@ -203,6 +273,15 @@ const PresupuestosPage = () => {
                     </div>
                     <p className="mt-1 text-xs text-slate-500">{row.periodicidad} · {row.rubros.length > 0 ? `${row.rubros.length} rubros` : 'Todos los rubros'}</p>
                     <p className="mt-1 text-sm text-slate-700">Presupuesto: {row.monto_maximo !== null ? formatCurrency(row.monto_maximo) : 'Sin definir'} · Ejecutado: {formatCurrency(row.ejecutado)}</p>
+                    {row.rubros.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {row.rubros.map((rubro) => (
+                          <span key={`${row.id}-${rubro}`} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                            {rubro}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                   <button type="button" onClick={() => openBudgetEditor(row)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
                     Editar
