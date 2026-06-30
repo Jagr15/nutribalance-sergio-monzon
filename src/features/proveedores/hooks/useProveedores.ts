@@ -13,8 +13,7 @@ export const useProveedores = () => {
     setLoadError(null);
     try {
       const data = await proveedorService.findAll();
-      // Mostramos solo los activos en la lista principal
-      setProveedores(data.filter((p: Proveedor) => p.esta_activo));
+      setProveedores(data);
     } catch (error) {
       console.error("Error al cargar proveedores:", error);
       setLoadError("No se pudo cargar el directorio de proveedores.");
@@ -56,18 +55,30 @@ export const useProveedores = () => {
     }
   };
 
-  const remove = async (uid: string) => {
+  const toggleActive = async (uid: string, activo: boolean) => {
+    setIsLoading(true);
     setLoadError(null);
     try {
-      await proveedorService.delete(uid);
-      setProveedores(prev => prev.filter(p => p.uid !== uid));
-      return true;
+      const actualizado = await proveedorService.toggleActive(uid, activo);
+      setProveedores(prev => prev.map((p) => (p.uid === uid ? actualizado : p)));
+      return actualizado;
     } catch (error) {
-      console.error("Error al desactivar proveedor:", error);
-      setLoadError("No se pudo desactivar el proveedor.");
+      console.error("Error al cambiar estado del proveedor:", error);
+      setLoadError(activo ? "No se pudo activar el proveedor." : "No se pudo desactivar el proveedor.");
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const remove = async (uid: string) => {
+    try {
+      await toggleActive(uid, false);
+      return true;
+    } catch {
       return false;
     }
   };
 
-  return { proveedores, isLoading, getAll, create, update, remove, loadError };
+  return { proveedores, isLoading, getAll, create, update, remove, toggleActive, loadError };
 };

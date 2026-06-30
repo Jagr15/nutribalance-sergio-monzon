@@ -7,9 +7,12 @@ import ProveedorModal from '../components/ProveedorModal';
 import type { Proveedor } from '../types/proveedor'; // Importamos la interface
 import Swal from 'sweetalert2';
 
+type EstadoFiltro = 'ACTIVOS' | 'INACTIVOS' | 'TODOS';
+
 const ProveedorPage: React.FC = () => {
-  const { proveedores, isLoading, getAll, remove, loadError } = useProveedores();
+  const { proveedores, isLoading, getAll, toggleActive, loadError } = useProveedores();
   const [searchTerm, setSearchTerm] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>('ACTIVOS');
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   // Tipamos el estado correctamente en lugar de 'any'
@@ -21,24 +24,35 @@ const ProveedorPage: React.FC = () => {
 
   // Corregido para usar nombre_empresa y documento (interfaz actualizada)
   const filtered = useMemo(() => {
-    return proveedores.filter(p => 
-      (p.nombre_empresa ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.producto_que_provee ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.documento ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.contacto_nombre ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.email ?? '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [proveedores, searchTerm]);
+    const q = searchTerm.toLowerCase();
+    return proveedores.filter(p => {
+      const matchesSearch =
+        (p.nombre_empresa ?? '').toLowerCase().includes(q) ||
+        (p.producto_que_provee ?? '').toLowerCase().includes(q) ||
+        (p.documento ?? '').toLowerCase().includes(q) ||
+        (p.contacto_nombre ?? '').toLowerCase().includes(q) ||
+        (p.email ?? '').toLowerCase().includes(q);
+      const isActive = Boolean(p.esta_activo);
+      const matchesEstado =
+        estadoFiltro === 'TODOS' ||
+        (estadoFiltro === 'ACTIVOS' && isActive) ||
+        (estadoFiltro === 'INACTIVOS' && !isActive);
+      return matchesSearch && matchesEstado;
+    });
+  }, [estadoFiltro, proveedores, searchTerm]);
 
-  const handleDelete = async (uid: string) => {
+  const handleToggleActive = async (proveedor: Proveedor) => {
+    const activar = !Boolean(proveedor.esta_activo);
     const result = await Swal.fire({
-      title: '¿Desactivar proveedor?',
-      text: "Se marcará como inactivo en el sistema",
+      title: activar ? '¿Activar proveedor?' : '¿Desactivar proveedor?',
+      text: activar
+        ? 'El proveedor volverá a estar disponible en el sistema.'
+        : 'Se marcará como inactivo en el sistema',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#2563eb',
       cancelButtonColor: '#1f2937',
-      confirmButtonText: 'SÍ, DESACTIVAR',
+      confirmButtonText: activar ? 'SÍ, ACTIVAR' : 'SÍ, DESACTIVAR',
       cancelButtonText: 'CANCELAR',
       background: '#ffffff',
       color: '#0f172a',
@@ -48,10 +62,10 @@ const ProveedorPage: React.FC = () => {
     });
 
     if (result.isConfirmed) {
-      const success = await remove(uid);
-      if (success) {
+      try {
+        await toggleActive(proveedor.uid, activar);
         Swal.fire({ 
-          title: 'Eliminado', 
+          title: activar ? 'Activado' : 'Desactivado', 
           icon: 'success', 
           background: '#ffffff', 
           color: '#0f172a', 
@@ -59,10 +73,13 @@ const ProveedorPage: React.FC = () => {
           showConfirmButton: false,
           customClass: { popup: 'border border-slate-200 rounded-2xl' }
         });
-      } else {
+        await getAll();
+      } catch {
         Swal.fire({
-          title: 'No se pudo desactivar',
-          text: 'Ocurrió un error al desactivar el proveedor.',
+          title: activar ? 'No se pudo activar' : 'No se pudo desactivar',
+          text: activar
+            ? 'Ocurrió un error al activar el proveedor.'
+            : 'Ocurrió un error al desactivar el proveedor.',
           icon: 'error',
           background: '#ffffff',
           color: '#0f172a',
@@ -115,6 +132,15 @@ const ProveedorPage: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <select
+            value={estadoFiltro}
+            onChange={(e) => setEstadoFiltro(e.target.value as EstadoFiltro)}
+            className="w-full md:w-44 bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-sm text-slate-700 focus:border-blue-500/50 outline-none transition-all"
+          >
+            <option value="ACTIVOS">Activos</option>
+            <option value="INACTIVOS">Inactivos</option>
+            <option value="TODOS">Todos</option>
+          </select>
         </div>
 
         {loadError ? (
@@ -133,8 +159,8 @@ const ProveedorPage: React.FC = () => {
           <ProveedorTable 
             data={filtered} 
             onEdit={handleEdit} 
-            onDelete={handleDelete} 
-            emptyMessage={proveedores.length === 0 ? 'No hay proveedores activos registrados.' : 'No se encontraron proveedores para la búsqueda.'}
+            onToggleActive={handleToggleActive} 
+            emptyMessage={proveedores.length === 0 ? 'No hay proveedores registrados.' : 'No se encontraron proveedores para el filtro y búsqueda aplicados.'}
           />
         )}
       </section>

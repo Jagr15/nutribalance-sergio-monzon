@@ -39,4 +39,12 @@ export const mockProveedorService = {
     );
     return mockApiCall(true);
   },
+
+  toggleActive: async (uid: string, activo: boolean): Promise<Proveedor> => {
+    mockSuppliers = mockSuppliers.map((s) =>
+      s.uid === uid ? { ...s, esta_activo: activo } : s
+    );
+    const updatedSupplier = mockSuppliers.find((s) => s.uid === uid)!;
+    return mockApiCall(updatedSupplier);
+  },
 };

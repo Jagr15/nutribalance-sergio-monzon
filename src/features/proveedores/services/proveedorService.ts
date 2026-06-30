@@ -11,8 +11,11 @@ export const proveedorService = {
   ApiService.proveedores.create(data as Omit<Proveedor, 'uid'>),
   
   update: (uid: string, data: Partial<Proveedor>) => 
-  ApiService.proveedores.update(uid, data),
+    ApiService.proveedores.update(uid, data),
   
   delete: (uid: string) => 
-  ApiService.proveedores.delete(uid)
+    ApiService.proveedores.delete(uid),
+
+  toggleActive: (uid: string, activo: boolean) =>
+    ApiService.proveedores.toggleActive(uid, activo),
 };

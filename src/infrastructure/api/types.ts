@@ -51,6 +51,7 @@ export interface ProveedoresService {
   create: (data: Omit<Proveedor, 'uid'>) => Promise<Proveedor>;
   update: (uid: string, data: Partial<Proveedor>) => Promise<Proveedor>;
   delete: (uid: string) => Promise<boolean>;
+  toggleActive: (uid: string, activo: boolean) => Promise<Proveedor>;
 }
 
 export interface InsumosService {

@@ -30,7 +30,6 @@ export const supabaseProveedorService = {
     const { data, error } = await supabaseClient
       .from('proveedores')
       .select('legacy_uid,nombre_empresa,producto_que_provee,contacto_nombre,telefono,email,direccion,documento,esta_activo')
-      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -42,7 +41,6 @@ export const supabaseProveedorService = {
       .from('proveedores')
       .select('legacy_uid,nombre_empresa,producto_que_provee,contacto_nombre,telefono,email,direccion,documento,esta_activo')
       .eq('legacy_uid', uid)
-      .is('deleted_at', null)
       .maybeSingle<ProveedorRow>();
 
     if (error) throw error;
@@ -102,5 +100,20 @@ export const supabaseProveedorService = {
 
     if (error) throw error;
     return true;
+  },
+
+  async toggleActive(uid: string, activo: boolean): Promise<Proveedor> {
+    const { data, error } = await supabaseClient
+      .from('proveedores')
+      .update({
+        esta_activo: activo,
+        deleted_at: activo ? null : new Date().toISOString(),
+      })
+      .eq('legacy_uid', uid)
+      .select('legacy_uid,nombre_empresa,producto_que_provee,contacto_nombre,telefono,email,direccion,documento,esta_activo')
+      .single<ProveedorRow>();
+
+    if (error) throw error;
+    return mapRowToProveedor(data);
   },
 };

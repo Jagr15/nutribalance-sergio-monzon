@@ -7,11 +7,11 @@ import { DataTable, EmptyState, TableActions, TableActionButton, TableBody, Tabl
 interface Props {
   data: Proveedor[];
   onEdit: (p: Proveedor) => void;
-  onDelete: (uid: string) => void;
+  onToggleActive: (p: Proveedor) => void;
   emptyMessage?: string;
 }
 
-const ProveedorTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) => {
+const ProveedorTable: React.FC<Props> = ({ data, onEdit, onToggleActive, emptyMessage }) => {
   return (
     <DataTable minWidthClassName="min-w-[1100px]">
       <TableHeader>
@@ -52,7 +52,11 @@ const ProveedorTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage 
               <TableCell className="text-right">
                 <TableActions>
                   <TableActionButton label="Editar" tone="secondary" onClick={() => onEdit(p)} />
-                  <TableActionButton label="Desactivar" tone="danger" onClick={() => onDelete(p.uid)} />
+                  <TableActionButton
+                    label={p.esta_activo ? 'Desactivar' : 'Activar'}
+                    tone={p.esta_activo ? 'danger' : 'primary'}
+                    onClick={() => onToggleActive(p)}
+                  />
                 </TableActions>
               </TableCell>
             </TableRow>
