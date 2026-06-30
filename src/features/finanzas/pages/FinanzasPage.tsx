@@ -458,6 +458,114 @@ const FinanzasPage = () => {
     setRubrosSavedMessage(null);
   };
 
+  const renderRubroEditorForm = (compact = false) => (
+    <form
+      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      onSubmit={(event) => {
+        event.preventDefault();
+        handleRubroSubmit();
+      }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+            {editingRubroId ? 'Editar rubro' : 'Crear rubro'}
+          </p>
+          <h4 className="mt-1 text-base font-semibold text-slate-900">
+            {editingRubroId ? 'Modificar rubro financiero' : 'Nuevo rubro financiero'}
+          </h4>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setEditingRubroId(null);
+            setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
+            setRubroError(null);
+            setRubrosSavedMessage(null);
+          }}
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+        >
+          <FiRotateCcw size={13} />
+          Limpiar
+        </button>
+      </div>
+
+      {rubroError ? (
+        <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {rubroError}
+        </div>
+      ) : null}
+
+      {rubrosSavedMessage ? (
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {rubrosSavedMessage}
+        </div>
+      ) : null}
+
+      <div className={`mt-4 ${compact ? 'space-y-3' : 'space-y-4'}`}>
+        <label className="block">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Nombre</span>
+          <input
+            value={rubroForm.nombre}
+            onChange={(event) => setRubroForm((current) => ({ ...current, nombre: event.target.value }))}
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+            placeholder="Ej: Materia prima"
+          />
+        </label>
+
+        <label className="block">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Tipo</span>
+          <select
+            value={rubroForm.tipo}
+            onChange={(event) => setRubroForm((current) => ({ ...current, tipo: event.target.value as 'INGRESO' | 'EGRESO' | '' }))}
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+          >
+            <option value="">Seleccionar tipo</option>
+            {rubroTipoOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Área</span>
+          <select
+            value={rubroForm.area}
+            onChange={(event) => setRubroForm((current) => ({ ...current, area: event.target.value }))}
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+          >
+            {RUBRO_AREA_OPTIONS.map((area) => (
+              <option key={area} value={area}>
+                {area}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+          <input
+            type="checkbox"
+            checked={rubroForm.activo}
+            onChange={(event) => setRubroForm((current) => ({ ...current, activo: event.target.checked }))}
+            className="h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <span className="text-slate-700">Rubro activo</span>
+        </label>
+
+        <div className="flex justify-end gap-3">
+          <button
+            type="submit"
+            className="rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
+          >
+            {editingRubroId ? 'Guardar cambios' : 'Crear rubro'}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+
   const ingresosPtMax = Math.max(1, ...ingresosPtPorProducto.map((row) => row.importe_total));
 
   return (
@@ -582,110 +690,7 @@ const FinanzasPage = () => {
                 </div>
               </div>
 
-              <form
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  handleRubroSubmit();
-                }}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-                      {editingRubroId ? 'Editar rubro' : 'Crear rubro'}
-                    </p>
-                    <h4 className="mt-1 text-base font-semibold text-slate-900">
-                      {editingRubroId ? 'Modificar rubro financiero' : 'Nuevo rubro financiero'}
-                    </h4>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingRubroId(null);
-                      setRubroForm({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
-                      setRubroError(null);
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                  >
-                    <FiRotateCcw size={13} />
-                    Limpiar
-                  </button>
-                </div>
-
-                {rubroError ? (
-                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {rubroError}
-                  </div>
-                ) : null}
-
-                {rubrosSavedMessage ? (
-                  <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                    {rubrosSavedMessage}
-                  </div>
-                ) : null}
-
-                <div className="mt-4 space-y-4">
-                  <label className="block">
-                    <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Nombre</span>
-                    <input
-                      value={rubroForm.nombre}
-                      onChange={(event) => setRubroForm((current) => ({ ...current, nombre: event.target.value }))}
-                      className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
-                      placeholder="Ej: Materia prima"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Tipo</span>
-                    <select
-                      value={rubroForm.tipo}
-                      onChange={(event) => setRubroForm((current) => ({ ...current, tipo: event.target.value as 'INGRESO' | 'EGRESO' | '' }))}
-                      className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
-                    >
-                      <option value="">Seleccionar tipo</option>
-                      {rubroTipoOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="block">
-                    <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Área</span>
-                    <select
-                      value={rubroForm.area}
-                      onChange={(event) => setRubroForm((current) => ({ ...current, area: event.target.value }))}
-                      className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
-                    >
-                      {RUBRO_AREA_OPTIONS.map((area) => (
-                        <option key={area} value={area}>
-                          {area}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={rubroForm.activo}
-                      onChange={(event) => setRubroForm((current) => ({ ...current, activo: event.target.checked }))}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600"
-                    />
-                    <span className="text-slate-700">Rubro activo</span>
-                  </label>
-
-                  <div className="flex justify-end gap-3">
-                    <button
-                      type="submit"
-                      className="rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
-                    >
-                      {editingRubroId ? 'Guardar cambios' : 'Crear rubro'}
-                    </button>
-                  </div>
-                </div>
-              </form>
+              {renderRubroEditorForm()}
             </div>
           </div>
         </div>
@@ -720,7 +725,7 @@ const FinanzasPage = () => {
               </button>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
               <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50">
                 <table className="w-full min-w-[680px] text-sm">
                   <thead className="border-b border-slate-200 bg-slate-100 text-slate-500">
@@ -771,6 +776,9 @@ const FinanzasPage = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                {renderRubroEditorForm(true)}
               </div>
             </div>
           </div>

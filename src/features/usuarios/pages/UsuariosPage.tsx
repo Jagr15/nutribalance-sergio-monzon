@@ -5,6 +5,7 @@ import { Card } from '../../../shared/components/card';
 import { ApiService } from '../../../infrastructure/api';
 import { usePermissions } from '../../auth/usePermissions';
 import { getSessionUser } from '../../auth/session';
+import { normalizeRole } from '../../auth/permissions';
 import { usuarioService, type UsuarioWritePayload } from '../services/usuarioService';
 import UsuarioModal from '../components/UsuarioModal';
 import type { Usuario } from '../types/usuario';
@@ -27,8 +28,18 @@ const roleLabel: Record<string, string> = {
   FINANZAS: 'Finanzas',
 };
 
+const normalizeDbRole = (value?: string | null) => {
+  const normalized = (value ?? '').trim().toUpperCase().replace(/[\s_-]+/g, '_');
+  if (normalized.includes('SUPERADMIN')) return 'SUPERADMIN';
+  if (normalized.includes('ADMIN')) return 'ADMIN';
+  if (normalized.includes('ENCARG')) return 'ENCARGADO';
+  if (normalized.includes('OPER')) return 'OPERARIO';
+  if (normalized.includes('FINAN')) return 'FINANZAS';
+  return normalized || 'ENCARGADO';
+};
+
 const UsuariosPage = () => {
-  const { canAccess, user } = usePermissions();
+  const { canAccess } = usePermissions();
   const currentUser = getSessionUser();
   const canManageUsers = canAccess('usuarios', 'create');
 
@@ -70,6 +81,25 @@ const UsuariosPage = () => {
     const administradores = usuarios.filter((item) => item.role === 'SUPERADMIN' || item.role === 'ADMIN').length;
     return { total, activos, inactivos, administradores };
   }, [usuarios]);
+
+  const currentDbUser = useMemo(() => {
+    const login = currentUser.login.trim().toLowerCase();
+    const managedUid = currentUser.managedUserUid?.trim().toLowerCase();
+    return usuarios.find((usuario) => {
+      const candidates = [
+        usuario.uid,
+        usuario.username,
+        usuario.email,
+        usuario.nombre_completo,
+      ]
+        .filter(Boolean)
+        .map((value) => String(value).trim().toLowerCase());
+      return Boolean(
+        candidates.includes(login)
+        || (managedUid ? candidates.includes(managedUid) : false),
+      );
+    }) ?? null;
+  }, [currentUser.login, currentUser.managedUserUid, usuarios]);
 
   const openCreateModal = () => {
     setSelectedUsuario(null);
@@ -142,8 +172,12 @@ const UsuariosPage = () => {
     }
   };
 
-  const currentRoleLabel = user.roleLabel;
-  const canResetSystem = canManageUsers && (currentUser.role === 'superadmin' || currentUser.role === 'admin');
+  const currentRoleCode = normalizeDbRole(currentDbUser?.role ?? currentUser.role);
+  const currentRoleLabel = roleLabel[currentRoleCode] ?? currentRoleCode;
+  const normalizedCurrentRole = normalizeRole(currentRoleCode);
+  const canResetSystem = canManageUsers && (normalizedCurrentRole === 'superadmin' || normalizedCurrentRole === 'admin');
+
+  console.log('[usuarios] currentUser', currentUser, currentDbUser);
 
   const handleResetSystem = async () => {
     if (!canResetSystem || resettingSystem) return;
@@ -248,16 +282,6 @@ const UsuariosPage = () => {
           >
             Configurar permisos
           </button>
-          {canResetSystem ? (
-            <button
-              type="button"
-              onClick={() => void handleResetSystem()}
-              disabled={resettingSystem}
-              className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/20 transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {resettingSystem ? 'Ejecutando...' : 'Reset del sistema'}
-            </button>
-          ) : null}
         </div>
       </section>
 
@@ -391,6 +415,52 @@ const UsuariosPage = () => {
           onClose={closeModal}
           onSave={handleSaveUsuario}
         />
+      ) : null}
+
+      {canResetSystem ? (
+        <Card className="border-rose-200 bg-gradient-to-br from-rose-50 via-white to-white shadow-xl shadow-rose-950/5">
+          <div className="flex flex-col gap-5">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-rose-600">Administración del sistema</p>
+              <h2 className="mt-2 text-2xl font-black text-slate-900">Herramientas críticas de mantenimiento</h2>
+              <p className="mt-2 max-w-3xl text-sm text-slate-600">
+                Estas acciones afectan toda la base de datos y solo deben ser ejecutadas por administradores.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-rose-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-3xl space-y-3">
+                  <p className="inline-flex items-center rounded-full bg-rose-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-rose-700">
+                    ⚠ Reset del sistema
+                  </p>
+                  <div className="space-y-2 text-sm text-slate-700">
+                    <p>Borra TODOS los datos del ERP conservando únicamente:</p>
+                    <ul className="space-y-1.5 pl-5 text-slate-700">
+                      <li>• Usuarios</li>
+                      <li>• Auth</li>
+                      <li>• Estructura de la base</li>
+                      <li>• Migraciones</li>
+                      <li>• Funciones</li>
+                      <li>• Triggers</li>
+                      <li>• RLS</li>
+                    </ul>
+                    <p className="font-bold text-rose-700">Esta acción NO puede deshacerse.</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void handleResetSystem()}
+                  disabled={resettingSystem}
+                  className="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-rose-900/15 transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {resettingSystem ? 'Ejecutando...' : 'Reset del sistema'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Card>
       ) : null}
     </div>
   );

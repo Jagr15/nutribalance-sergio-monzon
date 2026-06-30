@@ -7,7 +7,7 @@ import type { AppModule } from '../../features/auth/permissions';
 import { usePermissions } from '../../features/auth/usePermissions';
 
 const DashboardPage = lazy(() => import('../../features/dashboard/pages/DashboardExecutivePage'));
-const DashboardOperativoPage = lazy(() => import('../../features/dashboard/pages/DashboardOperativoPage'));
+import DashboardOperativoPage from '../../features/dashboard/pages/DashboardOperativoPage';
 const InsumoPage = lazy(() => import('../../features/insumos/pages/InsumoPage'));
 const ProveedorPage = lazy(() => import('../../features/proveedores/pages/ProveedorPage'));
 const StockMateriaPrimaPage = lazy(() => import('../../features/insumos/pages/StockMateriaPrimaPage'));
