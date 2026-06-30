@@ -8,7 +8,7 @@ import { supabaseProveedorService } from '../supabase/services/supabaseProveedor
 import { supabaseSiloService } from '../supabase/services/supabaseSiloService';
 import { supabaseStockMPService } from '../supabase/services/supabaseStockMPService';
 import { supabaseStockPTService } from '../supabase/services/supabaseStockPTService';
-import { supabaseEmpaquesProductoService } from '../supabase/services/supabaseEmpaquesProductoService';
+import { supabaseConfiguracionEmpaqueService } from '../supabase/services/supabaseConfiguracionEmpaqueService';
 import { supabaseTrazabilidadService } from '../supabase/services/supabaseTrazabilidadService';
 import type { ApiServices } from '../types';
 
@@ -24,7 +24,8 @@ export const supabaseAdapter: ApiServices = {
   insumos: supabaseInsumoService,
   stockMP: supabaseStockMPService,
   stockPT: supabaseStockPTService,
-  empaquesProducto: supabaseEmpaquesProductoService,
+  configuracionEmpaques: supabaseConfiguracionEmpaqueService,
+  empaquesProducto: supabaseConfiguracionEmpaqueService,
   trazabilidad: supabaseTrazabilidadService,
   silos: supabaseSiloService,
 };

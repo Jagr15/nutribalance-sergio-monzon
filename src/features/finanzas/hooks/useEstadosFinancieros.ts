@@ -136,6 +136,14 @@ export const useEstadosFinancieros = () => {
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    const handle = () => {
+      void refresh();
+    };
+    window.addEventListener('finanzas-updated', handle);
+    return () => window.removeEventListener('finanzas-updated', handle);
+  }, [refresh]);
+
   const data = useMemo(() => buildEstadosFinancieros({ movimientos, kpis, tesoreria, inventario, periodo, rangoCustom }), [inventario, kpis, movimientos, periodo, rangoCustom, tesoreria]);
 
   return { loading, error, data, periodo, setPeriodo, rangoCustom, setRangoCustom, refresh };

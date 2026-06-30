@@ -46,6 +46,12 @@ export interface EstadosFinancierosData {
 
 const num = (value: unknown) => Number(value ?? 0);
 const toDate = (value: string) => new Date(value);
+const toLocalDateInput = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 const keyMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const startOfQuarter = (date: Date) => new Date(date.getFullYear(), Math.floor(date.getMonth() / 3) * 3, 1);
@@ -54,16 +60,16 @@ const startOfYear = (date: Date) => new Date(date.getFullYear(), 0, 1);
 export const getPeriodoRango = (periodo: PeriodoFiltro, custom?: RangoFechas): RangoFechas | null => {
   const today = new Date();
   if (periodo === 'TODO') return null;
-  if (periodo === 'MES_ACTUAL') return { desde: startOfMonth(today).toISOString(), hasta: today.toISOString() };
-  if (periodo === 'TRIMESTRE_ACTUAL') return { desde: startOfQuarter(today).toISOString(), hasta: today.toISOString() };
-  if (periodo === 'ANIO_ACTUAL') return { desde: startOfYear(today).toISOString(), hasta: today.toISOString() };
+  if (periodo === 'MES_ACTUAL') return { desde: toLocalDateInput(startOfMonth(today)), hasta: toLocalDateInput(today) };
+  if (periodo === 'TRIMESTRE_ACTUAL') return { desde: toLocalDateInput(startOfQuarter(today)), hasta: toLocalDateInput(today) };
+  if (periodo === 'ANIO_ACTUAL') return { desde: toLocalDateInput(startOfYear(today)), hasta: toLocalDateInput(today) };
   return custom?.desde && custom?.hasta ? custom : null;
 };
 
 export const filtrarMovimientosPorPeriodo = (movimientos: MovimientoFinanciero[], rango: RangoFechas | null) => {
   if (!rango) return movimientos;
-  const desde = toDate(rango.desde).getTime();
-  const hasta = toDate(rango.hasta).getTime();
+  const desde = new Date(`${rango.desde}T00:00:00`).getTime();
+  const hasta = new Date(`${rango.hasta}T23:59:59.999`).getTime();
   return movimientos.filter((movimiento) => {
     const fecha = toDate(movimiento.fecha).getTime();
     return Number.isFinite(fecha) && fecha >= desde && fecha <= hasta;

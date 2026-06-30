@@ -117,6 +117,12 @@ const compareChequeRecency = (a: ChequeTesoreriaDbRow, b: ChequeTesoreriaDbRow) 
   return bTime - aTime;
 };
 
+const emitFinanceRefresh = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('finanzas-updated'));
+  }
+};
+
 export const tesoreriaService = {
   async getCheques(params: {
     tipo?: TipoChequeTesoreria;
@@ -194,6 +200,7 @@ export const tesoreriaService = {
       console.error('[tesoreria] create cheque failed', { error: new Error('Supabase returned no row after insert'), payload: insertPayload });
       throw new Error('No se pudo guardar el cheque: Supabase no devolvió el registro creado.');
     }
+    emitFinanceRefresh();
     return normalizeCheque(data);
   },
 
@@ -219,6 +226,7 @@ export const tesoreriaService = {
       cliente_nombre: normalized.cliente_nombre,
     }).eq('id', id).select('id,numero,tipo,tercero,importe,created_at,fecha_emision,fecha_vencimiento,fecha_acreditacion,estado,cliente_id,cliente_nombre').single<ChequeTesoreriaDbRow>();
     if (error) throw new Error(formatDbError('actualizar el cheque', error));
+    emitFinanceRefresh();
     return normalizeCheque(data);
   },
 
@@ -281,6 +289,7 @@ export const tesoreriaService = {
         referencia: `Pago por cheque ${current.numero}`,
       });
     }
+    emitFinanceRefresh();
     return normalizeCheque(data);
   },
 
@@ -292,5 +301,6 @@ export const tesoreriaService = {
     }
     const { error } = await supabaseClient.from('tesoreria_cheques').delete().eq('id', id);
     if (error) throw new Error(formatDbError('eliminar el cheque', error));
+    emitFinanceRefresh();
   },
 };

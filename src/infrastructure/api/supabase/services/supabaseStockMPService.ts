@@ -6,7 +6,7 @@ import type {
 } from '../../../../features/insumos/types';
 import type { StockMPCreateData } from '../../types';
 import { supabaseClient } from '../client';
-import { endOfDay, endOfMonth, endOfWeek, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
+import { formatISO } from 'date-fns';
 import { runtimeConfig } from '../../runtimeConfig';
 
 interface StockLoteRow {
@@ -67,11 +67,18 @@ const isProductionDataRow = (legacyUid: string | null | undefined, lote: string 
 };
 
 const getPeriodoRange = (periodo: HistorialPeriodo, now = new Date()) => {
-  if (periodo === 'HOY') return { start: startOfDay(now), end: endOfDay(now) };
-  if (periodo === 'SEMANA') return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
-  if (periodo === 'MES') return { start: startOfMonth(now), end: endOfMonth(now) };
+  if (periodo === 'HOY') return { start: startOfDayLocal(now), end: endOfDayLocal(now) };
+  if (periodo === 'SEMANA') return { start: startOfWeekLocal(now), end: endOfWeekLocal(now) };
+  if (periodo === 'MES') return { start: startOfMonthLocal(now), end: endOfMonthLocal(now) };
   return null;
 };
+
+const startOfDayLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+const endOfDayLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+const startOfWeekLocal = (date: Date) => startOfDayLocal(new Date(date.getFullYear(), date.getMonth(), date.getDate() - ((date.getDay() + 6) % 7)));
+const endOfWeekLocal = (date: Date) => endOfDayLocal(new Date(date.getFullYear(), date.getMonth(), date.getDate() + (6 - ((date.getDay() + 6) % 7))));
+const startOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+const endOfMonthLocal = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 
 const mapHistorial = (rows: HistorialCompraRow[]): HistorialCompraMP[] => rows.map((row) => ({
   proveedor: row.proveedor,
@@ -240,7 +247,7 @@ export const supabaseStockMPService = {
       .order('lote', { ascending: false });
 
     if (range) {
-      query = query.gte('fecha_compra', range.start.toISOString()).lte('fecha_compra', range.end.toISOString());
+      query = query.gte('fecha_compra', formatISO(range.start)).lte('fecha_compra', formatISO(range.end));
     }
 
     const { data, error, count } = await query.range(from, to);

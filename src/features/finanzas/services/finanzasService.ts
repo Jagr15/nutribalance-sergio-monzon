@@ -590,6 +590,9 @@ export const finanzasService = {
         origen_operativo: origenOperativo,
       },
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('finanzas-updated'));
+    }
   },
 
   async getOperationalFallback(): Promise<{ kpis: FinanzasKPIs; reportes: FinanzasReportes; tesoreria: FinanzasTesoreriaInsights; movimientos: MovimientoFinanciero[]; costosComparativos: CostosFormulaVsReal[]; inventario: FinanzasInventarioResumen }> {

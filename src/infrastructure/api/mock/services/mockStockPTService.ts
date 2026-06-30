@@ -261,7 +261,7 @@ export const mockStockPTService = {
     }
 
     const nextSaldo = Number((Number(current.cantidad_total) - payload.cantidad).toFixed(3));
-  const nextStock: StockProductoTerminado = {
+    const nextStock: StockProductoTerminado = {
       ...current,
       cantidad_total: nextSaldo,
       estado: recomputeEstado({ ...current, cantidad_total: nextSaldo }),

@@ -42,5 +42,9 @@ export const siloService = {
    */
   delete: (uid: string): Promise<boolean> => {
     return ApiService.silos.delete(uid);
+  },
+
+  toggleActive: (uid: string, activo: boolean): Promise<Silo> => {
+    return ApiService.silos.toggleActive(uid, activo);
   }
 };

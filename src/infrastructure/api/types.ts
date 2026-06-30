@@ -16,10 +16,10 @@ import type {
   StockProductoTerminadoResumen,
 } from '../../features/productos/types';
 import type {
-  ActualizarEmpaqueProductoPayload,
-  CrearEmpaqueProductoPayload,
-  EmpaqueProducto,
-} from '../../features/productos/types';
+  ActualizarConfiguracionEmpaquePayload,
+  ConfiguracionEmpaque,
+  CrearConfiguracionEmpaquePayload,
+} from '../../features/productos/types/configuracionEmpaque';
 import type {
   MovimientoMPAuditoria,
   TrazabilidadPorOP,
@@ -104,6 +104,7 @@ export interface SilosService {
   create: (data: Omit<Silo, 'uid'>) => Promise<Silo>;
   update: (uid: string, data: Partial<Silo>) => Promise<Silo>;
   delete: (uid: string) => Promise<boolean>;
+  toggleActive: (uid: string, activo: boolean) => Promise<Silo>;
 }
 
 export interface OrdenesService {
@@ -130,11 +131,12 @@ export interface StockPTService {
   registrarSalida: (data: RegistrarSalidaStockPTData) => Promise<StockProductoTerminado>;
 }
 
-export interface EmpaquesProductoService {
-  listByProducto: (productoId: string) => Promise<EmpaqueProducto[]>;
-  create: (data: CrearEmpaqueProductoPayload) => Promise<EmpaqueProducto>;
-  update: (id: string, data: ActualizarEmpaqueProductoPayload) => Promise<EmpaqueProducto>;
-  toggleActive: (id: string, activo: boolean) => Promise<EmpaqueProducto>;
+export interface ConfiguracionEmpaquesService {
+  getAll: () => Promise<ConfiguracionEmpaque[]>;
+  listByProducto: (productoId: string) => Promise<ConfiguracionEmpaque[]>;
+  create: (data: CrearConfiguracionEmpaquePayload) => Promise<ConfiguracionEmpaque>;
+  update: (id: string, data: ActualizarConfiguracionEmpaquePayload) => Promise<ConfiguracionEmpaque>;
+  toggleActive: (id: string, activo: boolean) => Promise<ConfiguracionEmpaque>;
 }
 
 export interface TrazabilidadService {
@@ -150,7 +152,8 @@ export interface ApiServices {
   formulas: FormulasService;
   stockMP: StockMPService;
   stockPT: StockPTService;
-  empaquesProducto: EmpaquesProductoService;
+  configuracionEmpaques: ConfiguracionEmpaquesService;
+  empaquesProducto: ConfiguracionEmpaquesService;
   trazabilidad: TrazabilidadService;
   silos: SilosService;
   ordenes: OrdenesService;

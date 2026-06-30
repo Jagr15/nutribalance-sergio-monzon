@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { FiX, FiTruck, FiPackage, FiUser, FiFileText } from 'react-icons/fi';
 import { ApiService } from '../../../infrastructure/api';
 import type { Cliente } from '../../clientes/types/cliente';
-import type { EmpaqueProducto, StockProductoTerminado } from '../../productos/types';
-import { getProductoEmpaquesKeys } from '../../productos/utils/empaquesProducto';
+import type { StockProductoTerminado } from '../../productos/types';
+import type { ConfiguracionEmpaque } from '../../productos/types/configuracionEmpaque';
+import { openConfiguracionEmpaquesModal } from '../../productos/utils/openConfiguracionEmpaquesModal';
 import type { OrdenExpedicion } from '../types';
 import { PresentacionExpedicion } from '../types';
 import { calcularEmpaques } from '../utils/empaques';
@@ -21,7 +22,7 @@ const normalizeUnidad = (value?: string | null) => (String(value ?? 'kg').trim()
 const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = null }) => {
   const [stockPT, setStockPT] = useState<StockProductoTerminado[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [empaques, setEmpaques] = useState<EmpaqueProducto[]>([]);
+  const [empaques, setEmpaques] = useState<ConfiguracionEmpaque[]>([]);
   const [selectedStockId, setSelectedStockId] = useState(orden?.stock_pt_id ?? '');
   const [selectedClienteId, setSelectedClienteId] = useState(orden?.cliente_id ?? '');
   const [presentacion, setPresentacion] = useState<keyof typeof PresentacionExpedicion>('GRANEL');
@@ -31,6 +32,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
   const [unidadCantidad, setUnidadCantidad] = useState<'kg' | 'tonelada'>(normalizeUnidad(orden?.unidad_cantidad ?? orden?.unidad_original));
   const [motivo, setMotivo] = useState('');
   const [referencia, setReferencia] = useState('');
+  const [empaquesVersion, setEmpaquesVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,20 +94,9 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
   );
   useEffect(() => {
     const loadEmpaques = async () => {
-      if (!selectedStock) {
-        setEmpaques([]);
-        setSelectedEmpaqueId('');
-        return;
-      }
       try {
-        const productoKeys = getProductoEmpaquesKeys({
-          nombre: selectedStock.nombre_producto,
-          idFormula: selectedStock.id_formula,
-        });
-        const rows = (await Promise.all(
-          productoKeys.map((productoId) => ApiService.empaquesProducto.listByProducto(productoId))
-        )).flat();
-        const activos = Array.from(new Map(rows.filter((item) => item.activo).map((item) => [item.id, item])).values());
+        const rows = await ApiService.configuracionEmpaques.getAll();
+        const activos = rows.filter((item) => item.esta_activo);
         setEmpaques(activos);
         setSelectedEmpaqueId((current) => {
           if (activos.length === 0) return '';
@@ -121,7 +112,7 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
       }
     };
     void loadEmpaques();
-  }, [selectedStock]);
+  }, [selectedStock, empaquesVersion]);
 
   const isEditable = !orden || orden.estado === 'pendiente';
   const selectedEmpaque = empaques.find((item) => item.id === selectedEmpaqueId) ?? null;
@@ -364,8 +355,20 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
                   ))}
                 </select>
               ) : (
-                <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
-                  Este producto todavía no tiene empaques configurados. Podés registrar la orden en kg.
+                <div className="space-y-3 rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                  <p>No hay empaques configurados. Podés registrar la orden en kg.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void openConfiguracionEmpaquesModal(async () => {
+                        setEmpaquesVersion((current) => current + 1);
+                        await Promise.resolve();
+                      });
+                    }}
+                    className="inline-flex items-center rounded-xl bg-amber-500 px-3 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-white hover:bg-amber-400"
+                  >
+                    Configurar empaques
+                  </button>
                 </div>
               )}
             </label>

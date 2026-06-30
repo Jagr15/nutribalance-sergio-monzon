@@ -56,7 +56,7 @@ export const useSilos = () => {
   };
 
 // src/features/silos/hooks/useSilos.ts (o useInsumos.ts)
-const remove = async (uid: string): Promise<boolean> => { // Agrega el tipo de retorno
+  const remove = async (uid: string): Promise<boolean> => { // Agrega el tipo de retorno
     setLoadError(null);
     try {
       await siloService.delete(uid); // Este servicio devuelve void
@@ -69,5 +69,21 @@ const remove = async (uid: string): Promise<boolean> => { // Agrega el tipo de r
     }
   };
 
-  return { silos, isLoading, getAll, create, update, remove, loadError };
+  const toggleActive = async (uid: string, activo: boolean) => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const actualizado = await siloService.toggleActive(uid, activo);
+      setSilos((prev) => prev.map((s) => (s.uid === uid ? actualizado : s)));
+      return actualizado;
+    } catch (error) {
+      console.error("Error cambiando estado del silo:", error);
+      setLoadError("No se pudo cambiar el estado del silo.");
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return { silos, isLoading, getAll, create, update, remove, toggleActive, loadError };
 };

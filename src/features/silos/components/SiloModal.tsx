@@ -45,7 +45,7 @@ const SiloModal: React.FC<Props> = ({ silo, existingSilos, onClose, onSuccess })
       (item) => item.uid !== silo?.uid && item.nombre.trim().toUpperCase() === normalized.nombre
     );
     if (duplicated) {
-      setSubmitError('Ya existe un silo activo con ese nombre.');
+      setSubmitError('Ya existe un silo con ese nombre.');
       return;
     }
 

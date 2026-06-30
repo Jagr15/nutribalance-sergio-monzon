@@ -5,11 +5,11 @@ import { DataTable, EmptyState, TableActions, TableActionButton, TableBody, Tabl
 interface Props {
   data: Silo[];
   onEdit: (silo: Silo) => void;
-  onDelete: (uid: string) => void;
+  onToggleActive: (silo: Silo) => void;
   emptyMessage?: string;
 }
 
-const SiloTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) => {
+const SiloTable: React.FC<Props> = ({ data, onEdit, onToggleActive, emptyMessage }) => {
   return (
     <DataTable minWidthClassName="min-w-[780px]">
       <TableHeader>
@@ -42,7 +42,7 @@ const SiloTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) =>
             <TableCell className="text-right">
               <TableActions>
                 <TableActionButton label="Editar" onClick={() => onEdit(silo)} />
-                <TableActionButton label="Desactivar" tone="danger" onClick={() => onDelete(silo.uid)} />
+                <TableActionButton label={silo.esta_activo === false ? 'Activar' : 'Desactivar'} tone={silo.esta_activo === false ? 'primary' : 'danger'} onClick={() => onToggleActive(silo)} />
               </TableActions>
             </TableCell>
           </TableRow>

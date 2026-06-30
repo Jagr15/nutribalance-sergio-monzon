@@ -10,13 +10,15 @@ import { useSilos } from '../hooks/useSilos';
 import type { Silo } from '../types/silo';
 
 const MySwal = withReactContent(Swal);
+type EstadoFiltro = 'ACTIVOS' | 'INACTIVOS' | 'TODOS';
 
 const SiloPage: React.FC = () => {
   // Extraemos lógica y estado del Hook de Silos
-  const { silos, isLoading, getAll, remove, loadError } = useSilos();
+  const { silos, isLoading, getAll, toggleActive, loadError } = useSilos();
 
   // Estados locales de la UI
   const [searchTerm, setSearchTerm] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>('ACTIVOS');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSilo, setSelectedSilo] = useState<Silo | undefined>();
 
@@ -36,15 +38,18 @@ const SiloPage: React.FC = () => {
   };
 
   // Confirmación de eliminación con el estilo de la plataforma
-  const handleDelete = async (uid: string) => {
+  const handleToggleActive = async (silo: Silo) => {
+    const activar = !Boolean(silo.esta_activo);
     const result = await MySwal.fire({
-      title: '¿Desactivar silo?',
-      text: "Se marcará como inactivo/no disponible para nuevas operaciones.",
+      title: activar ? '¿Activar silo?' : '¿Desactivar silo?',
+      text: activar
+        ? 'El silo volverá a estar disponible para nuevas operaciones.'
+        : 'Se marcará como inactivo/no disponible para nuevas operaciones.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#2563eb',
       cancelButtonColor: '#1f2937',
-      confirmButtonText: 'SÍ, DESACTIVAR',
+      confirmButtonText: activar ? 'SÍ, ACTIVAR' : 'SÍ, DESACTIVAR',
       cancelButtonText: 'CANCELAR',
       background: '#ffffff',
       color: '#0f172a',
@@ -56,12 +61,12 @@ const SiloPage: React.FC = () => {
         cancelButton: 'rounded-xl px-6 py-3 text-xs font-bold'
       }
     });
-  
+
     if (result.isConfirmed) {
-      const success = await remove(uid);
-      if (success) {
+      try {
+        await toggleActive(silo.uid, activar);
         MySwal.fire({
-          title: 'Desactivado',
+          title: activar ? 'Activado' : 'Desactivado',
           icon: 'success',
           background: '#ffffff',
           color: '#0f172a',
@@ -69,10 +74,11 @@ const SiloPage: React.FC = () => {
           showConfirmButton: false,
           customClass: { popup: 'border border-slate-200 rounded-2xl' }
         });
-      } else {
+        await getAll();
+      } catch {
         MySwal.fire({
-          title: 'No se pudo desactivar',
-          text: 'Ocurrió un error al desactivar el silo.',
+          title: activar ? 'No se pudo activar' : 'No se pudo desactivar',
+          text: activar ? 'Ocurrió un error al activar el silo.' : 'Ocurrió un error al desactivar el silo.',
           icon: 'error',
           background: '#ffffff',
           color: '#0f172a',
@@ -85,11 +91,19 @@ const SiloPage: React.FC = () => {
 
   // Filtrado optimizado por búsqueda
   const filteredSilos = useMemo(() => {
-    return silos.filter(s => 
-      (s.nombre ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.descripcion ?? '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [searchTerm, silos]);
+    const q = searchTerm.toLowerCase();
+    return silos.filter((s) => {
+      const matchesSearch =
+        (s.nombre ?? '').toLowerCase().includes(q) ||
+        (s.descripcion ?? '').toLowerCase().includes(q);
+      const isActive = Boolean(s.esta_activo ?? true);
+      const matchesEstado =
+        estadoFiltro === 'TODOS' ||
+        (estadoFiltro === 'ACTIVOS' && isActive) ||
+        (estadoFiltro === 'INACTIVOS' && !isActive);
+      return matchesSearch && matchesEstado;
+    });
+  }, [estadoFiltro, searchTerm, silos]);
 
   const silosMateriaPrima = useMemo(
     () => silos.filter((silo) => silo.tipo_uso === 'MATERIA_PRIMA'),
@@ -164,15 +178,24 @@ const SiloPage: React.FC = () => {
           </div>
           
           <div className="relative">
-             <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input 
-              type="text" 
-              placeholder="Buscar por nombre o descripción..." 
-              className="w-full md:w-80 bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-11 pr-4 text-sm text-slate-700 focus:border-blue-500/50 outline-none transition-all" 
+            <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre o descripción..."
+              className="w-full md:w-80 bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-11 pr-4 text-sm text-slate-700 focus:border-blue-500/50 outline-none transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <select
+            value={estadoFiltro}
+            onChange={(e) => setEstadoFiltro(e.target.value as EstadoFiltro)}
+            className="w-full md:w-44 bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-sm text-slate-700 focus:border-blue-500/50 outline-none transition-all"
+          >
+            <option value="ACTIVOS">Activos</option>
+            <option value="INACTIVOS">Inactivos</option>
+            <option value="TODOS">Todos</option>
+          </select>
         </div>
 
         {loadError ? (
@@ -192,11 +215,11 @@ const SiloPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <SiloTable 
-            data={filteredSilos} 
-            onEdit={handleOpenModal} 
-            onDelete={handleDelete} 
-            emptyMessage={silos.length === 0 ? 'No hay silos activos registrados.' : 'No se encontraron silos para la búsqueda.'}
+          <SiloTable
+            data={filteredSilos}
+            onEdit={handleOpenModal}
+            onToggleActive={handleToggleActive}
+            emptyMessage={silos.length === 0 ? 'No hay silos registrados.' : 'No se encontraron silos para el filtro y búsqueda aplicados.'}
           />
         )}
       </section>

@@ -5,6 +5,7 @@ import initialData from '../data/silo.json';
 let silosDb: Silo[] = (initialData as Silo[]).map((silo) => ({
   ...silo,
   tipo_uso: silo.tipo_uso ?? 'MATERIA_PRIMA',
+  esta_activo: silo.esta_activo ?? true,
 }));
 
 export const mockSiloService = {
@@ -62,9 +63,18 @@ export const mockSiloService = {
    */
   delete: async (uid: string): Promise<boolean> => {
     return new Promise((resolve) => {
-      const initialLength = silosDb.length;
-      silosDb = silosDb.filter(s => s.uid !== uid);
-      setTimeout(() => resolve(silosDb.length < initialLength), 500);
+      silosDb = silosDb.map((s) => (s.uid === uid ? { ...s, esta_activo: false } : s));
+      setTimeout(() => resolve(true), 500);
+    });
+  },
+
+  toggleActive: async (uid: string, activo: boolean): Promise<Silo> => {
+    return new Promise((resolve, reject) => {
+      const index = silosDb.findIndex((s) => s.uid === uid);
+      if (index === -1) return reject(new Error('Silo no encontrado'));
+      const actualizado = { ...silosDb[index], esta_activo: activo };
+      silosDb[index] = actualizado;
+      setTimeout(() => resolve(actualizado), 300);
     });
   }
 };
