@@ -188,12 +188,16 @@ const DashboardExecutivePage = () => {
       const pageHeight = doc.internal.pageSize.getHeight();
       const marginX = 12;
       const contentWidth = pageWidth - marginX * 2;
-      const footerHeight = 14;
-      let cursorY = 46;
+      const footerHeight = 16;
+      const topStartY = 46;
+      const bottomLimit = pageHeight - footerHeight - 4;
+      const sectionGap = 6;
+      let currentY = topStartY;
+      let pageReady = false;
 
       const addFooter = () => {
         const page = doc.getCurrentPageInfo().pageNumber;
-        const footerY = pageHeight - 8;
+        const footerY = pageHeight - 7;
         doc.setDrawColor(...COLORS.border);
         doc.line(marginX, footerY - 5, pageWidth - marginX, footerY - 5);
         doc.setFont('helvetica', 'normal');
@@ -243,30 +247,49 @@ const DashboardExecutivePage = () => {
         doc.text(`Período: ${periodLabel}`, pageWidth - marginX, 20, { align: 'right' });
       };
 
-      const ensureSpace = (required: number) => {
-        if (cursorY + required <= pageHeight - footerHeight - 2) return;
-        addFooter();
+      const startNewPage = async () => {
+        if (pageReady) addFooter();
         doc.addPage();
-        cursorY = 46;
+        await addHeader();
+        currentY = topStartY;
+        pageReady = true;
       };
 
-      const addSectionTitle = (title: string, subtitle?: string) => {
-        ensureSpace(subtitle ? 14 : 10);
+      const ensureSpace = async (required: number) => {
+        if (currentY + required <= bottomLimit) return;
+        await startNewPage();
+      };
+
+      const reserveGap = async (gap = sectionGap) => {
+        await ensureSpace(gap);
+        currentY += gap;
+      };
+
+      const estimateLines = (text: string, width: number) => Math.max(1, doc.splitTextToSize(text, width).length);
+
+      const estimateTableHeight = (rows: string[][], widths: number[], rowMinHeight: number) => {
+        const rowHeights = rows.map((row) => Math.max(rowMinHeight, ...row.map((cell, index) => estimateLines(cell, widths[index] - 3) * 4.5 + 2)));
+        return 9 + rowHeights.reduce((sum, value) => sum + value, 0) + 2;
+      };
+
+      const addSectionTitle = async (title: string, subtitle?: string) => {
+        await reserveGap();
+        await ensureSpace(subtitle ? 16 : 12);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);
         doc.setTextColor(...COLORS.navy);
-        doc.text(title, marginX, cursorY);
-        cursorY += subtitle ? 5 : 4;
+        doc.text(title, marginX, currentY);
+        currentY += subtitle ? 5 : 4;
         if (subtitle) {
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(9);
           doc.setTextColor(...COLORS.slate);
-          doc.text(subtitle, marginX, cursorY);
-          cursorY += 4;
+          doc.text(subtitle, marginX, currentY);
+          currentY += 4;
         }
         doc.setDrawColor(...COLORS.border);
-        doc.line(marginX, cursorY + 1, pageWidth - marginX, cursorY + 1);
-        cursorY += 5;
+        doc.line(marginX, currentY + 1, pageWidth - marginX, currentY + 1);
+        currentY += 5;
       };
 
       const addCard = (x: number, y: number, w: number, h: number, title: string, body: string, state: AreaEstado) => {
@@ -283,43 +306,61 @@ const DashboardExecutivePage = () => {
         doc.text(doc.splitTextToSize(body, w - 8), x + 4, y + 12);
       };
 
-      const addTable = (headers: string[], rows: string[][], widths: number[], opts?: { softRows?: boolean[] }) => {
-        const rowH = 8;
-        const headH = 9;
-        const totalH = headH + rows.length * rowH + 2;
-        ensureSpace(totalH);
+      const addTable = async (headers: string[], rows: string[][], widths: number[], opts?: { softRows?: boolean[]; rowMinHeight?: number }) => {
+        const rowMinHeight = opts?.rowMinHeight ?? 8;
+        const estimatedHeight = estimateTableHeight(rows, widths, rowMinHeight);
+        await ensureSpace(estimatedHeight);
         let x = marginX;
         doc.setFillColor(...COLORS.navy);
         doc.setTextColor(255, 255, 255);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         headers.forEach((header, index) => {
-          doc.rect(x, cursorY, widths[index], headH, 'F');
-          doc.text(header, x + 2, cursorY + 6);
+          doc.rect(x, currentY, widths[index], 9, 'F');
+          doc.text(header, x + 2, currentY + 6);
           x += widths[index];
         });
-        cursorY += headH;
+        currentY += 9;
         doc.setFont('helvetica', 'normal');
-        rows.forEach((row, rowIndex) => {
-          ensureSpace(rowH);
+        for (const [rowIndex, row] of rows.entries()) {
+          const rowHeight = Math.max(rowMinHeight, ...row.map((cell, index) => estimateLines(cell, widths[index] - 3) * 4.5 + 2));
+          if (currentY + rowHeight > bottomLimit) {
+            addFooter();
+            doc.addPage();
+            await addHeader();
+            currentY = topStartY;
+            let headerX = marginX;
+            doc.setFillColor(...COLORS.navy);
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            headers.forEach((header, index) => {
+              doc.rect(headerX, currentY, widths[index], 9, 'F');
+              doc.text(header, headerX + 2, currentY + 6);
+              headerX += widths[index];
+            });
+            currentY += 9;
+            doc.setFont('helvetica', 'normal');
+          }
           const fill = opts?.softRows?.[rowIndex] ? COLORS.slateSoft : [255, 255, 255] as PdfColor;
           let cellX = marginX;
           row.forEach((cell, index) => {
             doc.setFillColor(...fill);
             doc.setDrawColor(...COLORS.border);
-            doc.rect(cellX, cursorY, widths[index], rowH, 'FD');
+            doc.rect(cellX, currentY, widths[index], rowHeight, 'FD');
             doc.setTextColor(...COLORS.navy);
-            doc.text(doc.splitTextToSize(cell, widths[index] - 3), cellX + 1.5, cursorY + 5.5);
+            doc.text(doc.splitTextToSize(cell, widths[index] - 3), cellX + 1.5, currentY + 5.5);
             cellX += widths[index];
           });
-          cursorY += rowH;
-        });
-        cursorY += 2;
+          currentY += rowHeight;
+        }
+        currentY += 2;
       };
 
       await addHeader();
+      pageReady = true;
 
-      addSectionTitle('Salud del negocio', 'Estados ejecutivos del período actual.');
+      await addSectionTitle('Salud del negocio', 'Estados ejecutivos del período actual.');
       const cards = [
         { label: 'Producción', state: productionState, detail: kpis.ordenes_pendientes === 0 ? 'Sin órdenes pendientes relevantes.' : `${kpis.ordenes_pendientes} órdenes pendientes y ${kpis.ordenes_en_proceso} en proceso.` },
         { label: 'Inventario', state: inventoryState, detail: kpis.stock_critico === 0 ? 'Sin stock crítico detectado.' : `${kpis.stock_critico} insumos críticos.` },
@@ -327,16 +368,17 @@ const DashboardExecutivePage = () => {
         { label: 'Ventas', state: salesState, detail: executiveInsights.clientesAtendidos > 0 ? `${executiveInsights.clientesAtendidos} clientes atendidos y ${fmtARS(executiveInsights.totalImporte)} vendidos.` : 'Sin ventas suficientes en el período actual.' },
       ];
       const cardW = (contentWidth - 4) / 2;
-      const cardH = 24;
+      const cardH = 26;
+      await ensureSpace(cardH * 2 + 4);
       cards.forEach((item, index) => {
         const x = marginX + (index % 2) * (cardW + 4);
-        const y = cursorY + Math.floor(index / 2) * (cardH + 4);
+        const y = currentY + Math.floor(index / 2) * (cardH + 4);
         addCard(x, y, cardW, cardH, item.label, item.detail, item.state);
       });
-      cursorY += 54;
+      currentY += cardH * 2 + 4;
 
-      addSectionTitle('KPIs principales', 'Tabla limpia con métricas clave.');
-      addTable(
+      await addSectionTitle('KPIs principales', 'Tabla limpia con métricas clave.');
+      await addTable(
         ['Indicador', 'Valor'],
         [
           ['Producción total', `${kpis.produccion_total.toLocaleString('es-AR')} kg`],
@@ -347,61 +389,67 @@ const DashboardExecutivePage = () => {
           ['Stock crítico', `${kpis.stock_critico}`],
         ],
         [110, 74],
-        { softRows: [true, false, true, false, true, false] },
+        { softRows: [true, false, true, false, true, false], rowMinHeight: 8 },
       );
 
-      addSectionTitle('Alertas prioritarias', 'Cada alerta ocupa su propia línea.');
+      await addSectionTitle('Alertas prioritarias', 'Cada alerta ocupa su propia línea.');
       if (alertasPriorizadas.length === 0) {
-        ensureSpace(10);
+        await ensureSpace(10);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9.5);
         doc.setTextColor(...COLORS.green);
-        doc.text('Sin alertas prioritarias activas.', marginX, cursorY);
-        cursorY += 5;
+        doc.text('Sin alertas prioritarias activas.', marginX, currentY);
+        currentY += 5;
       } else {
-        alertasPriorizadas.forEach((item) => {
-          ensureSpace(14);
+        for (const item of alertasPriorizadas) {
+          const wrapped = doc.splitTextToSize(item.descripcion, contentWidth - 12);
+          const alertH = Math.max(14, 10 + wrapped.length * 4);
+          await ensureSpace(alertH);
           doc.setFillColor(...COLORS.redSoft);
           doc.setDrawColor(...COLORS.red);
-          doc.roundedRect(marginX, cursorY - 1, contentWidth, 14, 2, 2, 'FD');
+          doc.roundedRect(marginX, currentY - 1, contentWidth, alertH, 2, 2, 'FD');
           doc.setFillColor(...COLORS.red);
-          doc.circle(marginX + 4, cursorY + 4, 1.3, 'F');
+          doc.circle(marginX + 4, currentY + 4, 1.3, 'F');
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(9);
           doc.setTextColor(...COLORS.navy);
-          doc.text(item.titulo, marginX + 9, cursorY + 4);
+          doc.text(item.titulo, marginX + 9, currentY + 4);
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(8);
           doc.setTextColor(...COLORS.slate);
-          doc.text(doc.splitTextToSize(item.descripcion, contentWidth - 12), marginX + 9, cursorY + 8.5);
-          cursorY += 15;
-        });
+          doc.text(wrapped, marginX + 9, currentY + 8.5);
+          currentY += alertH + 1;
+        }
       }
 
-      addSectionTitle('Acciones recomendadas', 'Bloque limpio sin repetir la palabra "Acción".');
-      addTable(
-        ['✓', 'Recomendación'],
+      await addSectionTitle('Acciones recomendadas', 'Bloque limpio y sin columnas extra.');
+      await addTable(
+        ['Indicador', 'Recomendación'],
         accionesRecomendadas.map((item) => ['✓', item]),
-        [14, 170],
-        { softRows: accionesRecomendadas.map((_, index) => index % 2 === 0) },
+        [22, 162],
+        { softRows: accionesRecomendadas.map((_, index) => index % 2 === 0), rowMinHeight: 10 },
       );
 
-      addSectionTitle('Producto terminado / Clientes', 'Tablas de alto nivel por producto y cliente.');
-      addTable(
-        ['Producto', 'Cantidad'],
-        (executiveInsights.ventasPorProducto.slice(0, 5).length > 0
-          ? executiveInsights.ventasPorProducto.slice(0, 5).map((item) => [item.producto_nombre, `${item.kg.toLocaleString('es-AR')} kg`])
-          : [['Sin datos', '0 kg']]),
+      await addSectionTitle('Producto terminado / Clientes', 'Tablas separadas por entidad.');
+      const productoRows = executiveInsights.ventasPorProducto.slice(0, 5).length > 0
+        ? executiveInsights.ventasPorProducto.slice(0, 5).map((item) => [item.producto_nombre, item.kg.toLocaleString('es-AR')])
+        : [['Sin datos', '0']];
+      const clienteRows = executiveInsights.topClientesPorVolumen.slice(0, 5).length > 0
+        ? executiveInsights.topClientesPorVolumen.slice(0, 5).map((item) => [item.cliente_nombre, item.kg.toLocaleString('es-AR')])
+        : [['Sin datos', '0']];
+      await addSectionTitle('Producto terminado', 'Nombre y cantidad.');
+      await addTable(
+        ['Nombre', 'Cantidad'],
+        productoRows,
         [120, 64],
-        { softRows: [true, false, true, false, true] },
+        { softRows: productoRows.map((_, index) => index % 2 === 0), rowMinHeight: 9 },
       );
-      addTable(
-        ['Cliente', 'Cantidad'],
-        (executiveInsights.topClientesPorVolumen.slice(0, 5).length > 0
-          ? executiveInsights.topClientesPorVolumen.slice(0, 5).map((item) => [item.cliente_nombre, `${item.kg.toLocaleString('es-AR')} kg`])
-          : [['Sin datos', '0 kg']]),
+      await addSectionTitle('Clientes principales', 'Nombre y cantidad.');
+      await addTable(
+        ['Nombre', 'Cantidad'],
+        clienteRows,
         [120, 64],
-        { softRows: [true, false, true, false, true] },
+        { softRows: clienteRows.map((_, index) => index % 2 === 0), rowMinHeight: 9 },
       );
 
       addFooter();
