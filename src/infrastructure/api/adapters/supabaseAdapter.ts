@@ -1,5 +1,6 @@
 import { supabaseClienteService } from '../supabase/services/supabaseClienteService';
 import { mockUsuarioService } from '../mock/services/mockUsuarioService';
+import { supabaseSystemAdminService } from '../supabase/services/supabaseSystemAdminService';
 import { supabaseFormulaService } from '../supabase/services/supabaseFormulaService';
 import { supabaseInsumoService } from '../supabase/services/supabaseInsumoService';
 import { supabaseOrdenService } from '../supabase/services/supabaseOrdenService';
@@ -15,6 +16,7 @@ import type { ApiServices } from '../types';
 export const supabaseAdapter: ApiServices = {
   // Sprint 1 Fase 1: usuarios se mantienen en mock; formulas/ordenes ya operan en Supabase.
   usuarios: mockUsuarioService,
+  systemAdmin: supabaseSystemAdminService,
   clientes: supabaseClienteService,
   formulas: supabaseFormulaService,
   ordenes: supabaseOrdenService,

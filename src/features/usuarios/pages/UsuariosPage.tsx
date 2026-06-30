@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiEdit2, FiPlus, FiPower, FiUsers } from 'react-icons/fi';
+import Swal from 'sweetalert2';
 import { Card } from '../../../shared/components/card';
+import { ApiService } from '../../../infrastructure/api';
 import { usePermissions } from '../../auth/usePermissions';
 import { getSessionUser } from '../../auth/session';
 import { usuarioService, type UsuarioWritePayload } from '../services/usuarioService';
@@ -38,6 +40,7 @@ const UsuariosPage = () => {
   const [selectedUsuario, setSelectedUsuario] = useState<Usuario | null>(null);
   const [savingUser, setSavingUser] = useState(false);
   const [actionUid, setActionUid] = useState<string | null>(null);
+  const [resettingSystem, setResettingSystem] = useState(false);
 
   const refreshUsuarios = useCallback(async () => {
     setIsLoading(true);
@@ -140,6 +143,79 @@ const UsuariosPage = () => {
   };
 
   const currentRoleLabel = user.roleLabel;
+  const canResetSystem = canManageUsers && (currentUser.role === 'superadmin' || currentUser.role === 'admin');
+
+  const handleResetSystem = async () => {
+    if (!canResetSystem || resettingSystem) return;
+
+    const confirmation = await Swal.fire({
+      title: 'Reset del sistema',
+      html: `
+        <div style="text-align:left; color:#0f172a;">
+          <p style="margin:0 0 10px; color:#7f1d1d; font-weight:700;">Esta acción eliminará todos los datos operativos, maestros y de configuración.</p>
+          <p style="margin:0 0 12px; color:#334155;">Se conservarán únicamente <strong>auth.users</strong> y <strong>public.usuarios</strong>.</p>
+          <p style="margin:0 0 14px; color:#334155;">Escribe exactamente <strong>BORRAR TODO</strong> para habilitar la ejecución.</p>
+        </div>
+      `,
+      input: 'text',
+      inputPlaceholder: 'BORRAR TODO',
+      inputAttributes: {
+        autocapitalize: 'off',
+        autocomplete: 'off',
+        autocorrect: 'off',
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Borrar definitivamente',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#334155',
+      background: '#fff1f2',
+      color: '#0f172a',
+      focusCancel: true,
+      showLoaderOnConfirm: true,
+      preConfirm: (value: string | null) => {
+        if (String(value ?? '').trim() !== 'BORRAR TODO') {
+          Swal.showValidationMessage('Debes escribir exactamente BORRAR TODO.');
+          return false;
+        }
+        return true;
+      },
+    });
+
+    if (!confirmation.isConfirmed) return;
+
+    setResettingSystem(true);
+    try {
+      const result = await ApiService.systemAdmin.resetTotalSoloUsuarios();
+      await Swal.fire({
+        title: 'Reset completado',
+        html: `
+          <div style="text-align:left; color:#0f172a;">
+            <p style="margin:0 0 8px;">Tablas limpiadas: <strong>${result.tablas_totales}</strong></p>
+            <p style="margin:0 0 8px;">${result.tablas_limpiadas.join(', ') || 'Sin tablas para limpiar.'}</p>
+            <p style="margin:12px 0 0; color:#b91c1c; font-weight:700;">La app se recargará para reflejar el estado limpio.</p>
+          </div>
+        `,
+        icon: 'success',
+        confirmButtonText: 'Recargar app',
+        confirmButtonColor: '#2563eb',
+        background: '#ffffff',
+        color: '#0f172a',
+      });
+      window.location.reload();
+    } catch (error: unknown) {
+      await Swal.fire({
+        title: 'No se pudo ejecutar el reset',
+        text: error instanceof Error ? error.message : 'Error inesperado al ejecutar la acción.',
+        icon: 'error',
+        confirmButtonColor: '#2563eb',
+        background: '#ffffff',
+        color: '#0f172a',
+      });
+    } finally {
+      setResettingSystem(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -172,6 +248,16 @@ const UsuariosPage = () => {
           >
             Configurar permisos
           </button>
+          {canResetSystem ? (
+            <button
+              type="button"
+              onClick={() => void handleResetSystem()}
+              disabled={resettingSystem}
+              className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-red-900/20 transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {resettingSystem ? 'Ejecutando...' : 'Reset del sistema'}
+            </button>
+          ) : null}
         </div>
       </section>
 

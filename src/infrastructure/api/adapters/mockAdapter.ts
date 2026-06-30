@@ -10,10 +10,12 @@ import { mockEmpaquesProductoService } from '../mock/services/mockEmpaquesProduc
 import { mockUsuarioService } from '../mock/services/mockUsuarioService';
 import { mockMateriaPrimaService } from '../mock/services/mockMateriaPrimaService';
 import { mockTrazabilidadService } from '../mock/services/mockTrazabilidadService';
+import { mockSystemAdminService } from '../mock/services/mockSystemAdminService';
 import type { ApiServices } from '../types';
 
 export const mockAdapter: ApiServices = {
   usuarios: mockUsuarioService,
+  systemAdmin: mockSystemAdminService,
   clientes: mockClienteService,
   proveedores: mockProveedorService,
   insumos: mockInsumoService,

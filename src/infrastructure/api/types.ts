@@ -37,6 +37,12 @@ export interface UsuariosService {
   delete: (uid: string) => Promise<boolean>;
 }
 
+export interface ResetSystemResult {
+  ok: boolean;
+  tablas_limpiadas: string[];
+  tablas_totales: number;
+}
+
 export interface ClientesService {
   getAll: () => Promise<Cliente[]>;
   getById: (uid: string) => Promise<Cliente | undefined>;
@@ -147,6 +153,9 @@ export interface TrazabilidadService {
 
 export interface ApiServices {
   usuarios: UsuariosService;
+  systemAdmin: {
+    resetTotalSoloUsuarios: () => Promise<ResetSystemResult>;
+  };
   clientes: ClientesService;
   proveedores: ProveedoresService;
   insumos: InsumosService;
