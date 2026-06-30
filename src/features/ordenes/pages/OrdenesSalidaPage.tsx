@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FiPlus, FiSearch, FiTruck, FiCheckCircle, FiXCircle } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiTruck, FiCheckCircle, FiXCircle, FiSliders } from 'react-icons/fi';
 import { ApiService } from '../../../infrastructure/api';
 import { Card } from '../../../shared/components/card';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import type { OrdenExpedicion } from '../types';
 import OrdenExpedicionModal from '../components/OrdenExpedicionModal';
 import { cancelarOrdenExpedicionEnLista, puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
+import { openConfiguracionEmpaquesModal } from '../../productos/utils/openConfiguracionEmpaquesModal';
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
 const formatUnidadOrden = (value: string) => (value === 'tonelada' ? 'tn' : 'kg');
@@ -33,6 +34,8 @@ const OrdenesSalidaPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [ordenEnEdicion, setOrdenEnEdicion] = useState<OrdenExpedicion | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -66,6 +69,20 @@ const OrdenesSalidaPage: React.FC = () => {
     ].some((value) => (value ?? '').toLowerCase().includes(q)));
   }, [ordenesSalida, searchTerm]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+  const paginated = useMemo(() => {
+    const from = (currentPage - 1) * itemsPerPage;
+    return filtered.slice(from, from + itemsPerPage);
+  }, [currentPage, filtered]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
   const totalKg = filtered.reduce((acc, item) => acc + Number(item.cantidad_kg ?? item.cantidad ?? 0), 0);
 
   const handleDespachar = useCallback(async (ordenId: string) => {
@@ -88,6 +105,15 @@ const OrdenesSalidaPage: React.FC = () => {
   const handleLista = useCallback(async (ordenId: string) => {
     await ApiService.ordenesExpedicion.marcarLista(ordenId);
     await load();
+  }, [load]);
+
+  const handleConfigurarEmpaques = useCallback(async () => {
+    try {
+      await openConfiguracionEmpaquesModal(load);
+    } catch (error) {
+      console.error('[ordenes-salida] fallo al abrir configuracion de empaques', error);
+      setError(error instanceof Error ? error.message : 'No se pudo abrir la configuración de empaques.');
+    }
   }, [load]);
 
   return (
@@ -115,6 +141,14 @@ const OrdenesSalidaPage: React.FC = () => {
         >
           <FiPlus />
           Nueva orden de salida
+        </button>
+        <button
+          type="button"
+          onClick={() => { void handleConfigurarEmpaques(); }}
+          className="inline-flex items-center gap-2 rounded-2xl border border-cyan-200 bg-white px-5 py-3 text-sm font-semibold text-cyan-700 shadow-sm transition hover:bg-cyan-50"
+        >
+          <FiSliders />
+          Configurar empaques
         </button>
       </header>
 
@@ -170,7 +204,7 @@ const OrdenesSalidaPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((orden) => (
+                {paginated.map((orden) => (
                   <tr key={orden.id} className="border-b border-slate-100 last:border-b-0">
                     <td className="px-6 py-4">
                       <div className="font-medium text-slate-900">{orden.numero_expedicion}</div>
@@ -238,6 +272,32 @@ const OrdenesSalidaPage: React.FC = () => {
           </div>
         </Card>
       )}
+
+      {!isLoading && filtered.length > 0 ? (
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-600">
+            Total de órdenes: <strong className="text-slate-900">{filtered.length}</strong> · Página <strong className="text-slate-900">{currentPage}</strong> de <strong className="text-slate-900">{totalPages}</strong>
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {isModalOpen ? (
         <OrdenExpedicionModal
