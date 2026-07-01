@@ -1,11 +1,63 @@
-import type{ Silo } from '../../../../features/silos/types';
+import type { Silo } from '../../../../features/silos/types';
 import initialData from '../data/silo.json';
+import { getMockStockSnapshot } from './mockMateriaPrimaService';
+import { getMockStockPTRows } from './mockStockPTService';
+
+type StockMateriaPrimaRow = {
+  cantidad_actual?: number;
+  cantidad_comprometida?: number;
+  ubicacion?: string;
+};
+
+type StockPTRow = {
+  cantidad_total?: number;
+  id_silo?: string | null;
+  nombre_silo?: string | null;
+};
+
+const normalizeText = (value: string) => value.trim().toLowerCase();
+
+const buildMockStockBySilo = () => {
+  const stockMateriaPrima = getMockStockSnapshot().stockDB as StockMateriaPrimaRow[];
+  const stockPT = getMockStockPTRows() as StockPTRow[];
+
+  const mpByLocation = new Map<string, number>();
+  stockMateriaPrima.forEach((row) => {
+    const ubicacion = row.ubicacion?.trim();
+    if (!ubicacion) return;
+    const disponibleKg = Math.max(0, Number(row.cantidad_actual ?? 0) - Number(row.cantidad_comprometida ?? 0));
+    mpByLocation.set(ubicacion, (mpByLocation.get(ubicacion) ?? 0) + disponibleKg);
+  });
+
+  const ptBySilo = new Map<string, number>();
+  stockPT.forEach((row) => {
+    const keys = [row.id_silo, row.nombre_silo].filter((value): value is string => Boolean(value && value.trim()));
+    const saldoKg = Math.max(0, Number(row.cantidad_total ?? 0));
+    keys.forEach((key) => {
+      ptBySilo.set(normalizeText(key), (ptBySilo.get(normalizeText(key)) ?? 0) + saldoKg);
+    });
+  });
+
+  return { mpByLocation, ptBySilo };
+};
+
+const { mpByLocation, ptBySilo } = buildMockStockBySilo();
+const getMockSiloStockTon = (silo: Silo) => {
+  const mpKg = silo.tipo_uso === 'MATERIA_PRIMA'
+    ? mpByLocation.get(silo.nombre.trim()) ?? 0
+    : 0;
+  const ptKg = silo.tipo_uso === 'PRODUCTO_TERMINADO'
+    ? ptBySilo.get(normalizeText(silo.uid)) ?? ptBySilo.get(normalizeText(silo.nombre)) ?? 0
+    : 0;
+  return Number((((mpKg + ptKg) / 1000)).toFixed(2));
+};
 
 // Simulamos una base de datos local para el mock
 let silosDb: Silo[] = (initialData as Silo[]).map((silo) => ({
   ...silo,
   tipo_uso: silo.tipo_uso ?? 'MATERIA_PRIMA',
   esta_activo: silo.esta_activo ?? true,
+  stock_actual_ton: getMockSiloStockTon(silo),
 }));
 
 export const mockSiloService = {
@@ -36,7 +88,8 @@ export const mockSiloService = {
       const nuevoSilo: Silo = {
         ...data,
         tipo_uso: data.tipo_uso ?? 'MATERIA_PRIMA',
-        uid: `silo-${Math.random().toString(36).substr(2, 9)}` // Generación de UID temporal
+        uid: `silo-${Math.random().toString(36).substr(2, 9)}`, // Generación de UID temporal
+        stock_actual_ton: 0,
       };
       silosDb.push(nuevoSilo);
       setTimeout(() => resolve(nuevoSilo), 600);

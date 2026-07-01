@@ -239,6 +239,8 @@ export const registerMockIngresoPT = (data: {
 
 export const resetMockStockPTService = resetMockStockPTState;
 
+export const getMockStockPTRows = () => structuredClone(stockPTMock);
+
 export const mockStockPTService = {
   getAll: async (): Promise<StockProductoTerminado[]> => mockApiCall([...stockPTMock], 450),
 

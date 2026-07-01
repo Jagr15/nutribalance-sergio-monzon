@@ -10,12 +10,15 @@ interface Props {
 }
 
 const SiloTable: React.FC<Props> = ({ data, onEdit, onToggleActive, emptyMessage }) => {
+  const formatStockTon = (value?: number) => `${Number(value ?? 0).toFixed(2)} tn`;
+
   return (
-    <DataTable minWidthClassName="min-w-[780px]">
+    <DataTable minWidthClassName="min-w-[920px]">
       <TableHeader>
         <tr>
           <TableCell header>Identificación del Silo</TableCell>
           <TableCell header>Tipo</TableCell>
+          <TableCell header>Stock actual (tn)</TableCell>
           <TableCell header>Descripción / Ubicación</TableCell>
           <TableCell header className="text-right">Acciones</TableCell>
         </tr>
@@ -38,6 +41,9 @@ const SiloTable: React.FC<Props> = ({ data, onEdit, onToggleActive, emptyMessage
                 {silo.tipo_uso === 'PRODUCTO_TERMINADO' ? 'Producto Terminado' : 'Materia Prima'}
               </span>
             </TableCell>
+            <TableCell className="font-mono text-slate-700">
+              {formatStockTon(silo.stock_actual_ton)}
+            </TableCell>
             <TableCell className="text-slate-500">{silo.descripcion || 'Sin descripción'}</TableCell>
             <TableCell className="text-right">
               <TableActions>
@@ -47,7 +53,7 @@ const SiloTable: React.FC<Props> = ({ data, onEdit, onToggleActive, emptyMessage
             </TableCell>
           </TableRow>
         ))}
-        {data.length === 0 ? <EmptyState colSpan={4} message={emptyMessage || "No hay silos registrados en el sistema."} /> : null}
+        {data.length === 0 ? <EmptyState colSpan={5} message={emptyMessage || "No hay silos registrados en el sistema."} /> : null}
       </TableBody>
     </DataTable>
   );
