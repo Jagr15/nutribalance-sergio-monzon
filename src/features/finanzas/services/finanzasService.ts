@@ -765,9 +765,62 @@ export const finanzasService = {
       };
     }).filter((row) => row.costo_total > 0 || row.kg_total > 0 || formulasCostMap.get(row.id_formula));
 
+    const comprobantesMovimientos: MovimientoFinanciero[] = comprobantes.map((comp, index) => {
+      const isIngreso = comp.tipo === 'FACTURA_VENTA';
+      return {
+        uid: `comp-mov-${index}-${comp.tipo.toLowerCase()}-${comp.fecha_emision}-${comp.tercero}`.replace(/[^a-zA-Z0-9-]/g, '-'),
+        fecha: comp.fecha_emision,
+        tipo: (isIngreso ? 'INGRESO' : 'EGRESO') as any,
+        origen_operativo: comp.tipo,
+        descripcion: `${isIngreso ? 'Venta' : 'Compra'} a ${comp.tercero}`,
+        monto: Number(comp.saldo ?? 0),
+        categoria: isIngreso ? 'Ventas PT' : 'Materia Prima',
+        centro_costo: 'Planta',
+        estado: comp.estado as any,
+        fecha_vencimiento: comp.fecha_vencimiento || undefined,
+        estado_financiero: isIngreso ? 'PENDIENTE_COBRO' : 'PENDIENTE_PAGO',
+      };
+    });
+
+    const customMockMovimientos: MovimientoFinanciero[] = contabilidadOperativaService.getMockMovimientos ? contabilidadOperativaService.getMockMovimientos() : contabilidadOperativaService.getMovimientosMock().map((row: any): MovimientoFinanciero => ({
+      uid: row.legacy_uid || row.id || crypto.randomUUID(),
+      fecha: row.fecha,
+      tipo: row.tipo,
+      origen_operativo: row.origen_operativo || undefined,
+      origen_modulo: row.origen_modulo || undefined,
+      origen_id: row.origen_id || undefined,
+      descripcion: row.descripcion,
+      monto: Number(row.monto ?? 0),
+      estado: row.estado || 'CONFIRMADO',
+      fecha_operacion: row.fecha_operacion || undefined,
+      fecha_vencimiento: row.fecha_vencimiento || undefined,
+      estado_financiero: row.estado_financiero || undefined,
+      fecha_cobro_pago: row.fecha_cobro_pago || undefined,
+    }));
+
+    const movimientosFinancierosUi: MovimientoFinanciero[] = [
+      ...movimientosFinancieros
+        .map((movimiento, index) => ({
+          uid: `fml-${index}-${movimiento.tipo.toLowerCase()}-${movimiento.fecha}-${movimiento.descripcion}`.replace(/[^a-zA-Z0-9-]/g, '-'),
+          fecha: movimiento.fecha,
+          tipo: movimiento.tipo,
+          origen_operativo: movimiento.origen_operativo ?? undefined,
+          descripcion: movimiento.descripcion,
+          monto: Number(movimiento.monto ?? 0),
+          categoria: movimiento.categoria ?? undefined,
+          centro_costo: movimiento.centro_costo ?? undefined,
+          estado: 'CONFIRMADO' as const,
+        })),
+      ...comprobantesMovimientos,
+      ...customMockMovimientos,
+    ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+
     const flujoPorMes = new Map<string, { ingresos: number; egresos: number }>();
-    movimientosFinancieros.forEach((movimiento) => {
-      const mes = `${new Date(movimiento.fecha).getFullYear()}-${String(new Date(movimiento.fecha).getMonth() + 1).padStart(2, '0')}`;
+    movimientosFinancierosUi.forEach((movimiento) => {
+      if (movimiento.estado !== 'CONFIRMADO') return;
+      const date = new Date(movimiento.fecha);
+      if (Number.isNaN(date.getTime())) return;
+      const mes = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const current = flujoPorMes.get(mes) ?? { ingresos: 0, egresos: 0 };
       if (movimiento.tipo === 'INGRESO') current.ingresos += Number(movimiento.monto ?? 0);
       if (movimiento.tipo === 'EGRESO') current.egresos += Number(movimiento.monto ?? 0);
@@ -801,56 +854,6 @@ export const finanzasService = {
       rentabilidad_por_formula: rentabilidadPorFormula,
       costo_operativo_mensual: costoOperativoMensual,
     };
-
-    const comprobantesMovimientos: MovimientoFinanciero[] = comprobantes.map((comp, index) => {
-      const isIngreso = comp.tipo === 'FACTURA_VENTA';
-      return {
-        uid: `comp-mov-${index}-${comp.tipo.toLowerCase()}-${comp.fecha_emision}-${comp.tercero}`.replace(/[^a-zA-Z0-9-]/g, '-'),
-        fecha: comp.fecha_emision,
-        tipo: (isIngreso ? 'INGRESO' : 'EGRESO') as any,
-        origen_operativo: comp.tipo,
-        descripcion: `${isIngreso ? 'Venta' : 'Compra'} a ${comp.tercero}`,
-        monto: Number(comp.saldo ?? 0),
-        categoria: isIngreso ? 'Ventas PT' : 'Materia Prima',
-        centro_costo: 'Planta',
-        estado: comp.estado as any,
-        fecha_vencimiento: comp.fecha_vencimiento || undefined,
-        estado_financiero: isIngreso ? 'PENDIENTE_COBRO' : 'PENDIENTE_PAGO',
-      };
-    });
-
-    const customMockMovimientos: MovimientoFinanciero[] = contabilidadOperativaService.getMovimientosMock().map((row: any): MovimientoFinanciero => ({
-      uid: row.legacy_uid || row.id || crypto.randomUUID(),
-      fecha: row.fecha,
-      tipo: row.tipo,
-      origen_operativo: row.origen_operativo || undefined,
-      origen_modulo: row.origen_modulo || undefined,
-      origen_id: row.origen_id || undefined,
-      descripcion: row.descripcion,
-      monto: Number(row.monto ?? 0),
-      estado: row.estado || 'CONFIRMADO',
-      fecha_operacion: row.fecha_operacion || undefined,
-      fecha_vencimiento: row.fecha_vencimiento || undefined,
-      estado_financiero: row.estado_financiero || undefined,
-      fecha_cobro_pago: row.fecha_cobro_pago || undefined,
-    }));
-
-    const movimientosFinancierosUi: MovimientoFinanciero[] = [
-      ...movimientosFinancieros
-        .map((movimiento, index) => ({
-          uid: `fml-${index}-${movimiento.tipo.toLowerCase()}-${movimiento.fecha}-${movimiento.descripcion}`.replace(/[^a-zA-Z0-9-]/g, '-'),
-          fecha: movimiento.fecha,
-          tipo: movimiento.tipo,
-          origen_operativo: movimiento.origen_operativo ?? undefined,
-          descripcion: movimiento.descripcion,
-          monto: Number(movimiento.monto ?? 0),
-          categoria: movimiento.categoria ?? undefined,
-          centro_costo: movimiento.centro_costo ?? undefined,
-          estado: 'CONFIRMADO' as const,
-        })),
-      ...comprobantesMovimientos,
-      ...customMockMovimientos,
-    ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
     const tesoreria = buildTesoreriaInsights(
       [

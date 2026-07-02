@@ -64,6 +64,8 @@ describe('contabilidadOperativaService', () => {
         descripcion: 'Compra MP L-001 - Maiz',
         monto: 1500,
         categoria_id: 'cat-1',
+        estado: 'PENDIENTE',
+        estado_financiero: 'PENDIENTE_PAGO',
         metadata: expect.objectContaining({
           remito: 'R-100',
           stock_lote_legacy_uid: 'stk-mp-1',

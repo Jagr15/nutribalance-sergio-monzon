@@ -147,6 +147,8 @@ export const contabilidadOperativaService = {
       descripcion: `Compra MP ${payload.lote} - ${payload.insumo}`,
       monto: payload.monto,
       categoria_id: categoriaId,
+      estado: 'PENDIENTE',
+      estado_financiero: 'PENDIENTE_PAGO',
       metadata: {
         lote: payload.lote,
         insumo: payload.insumo,

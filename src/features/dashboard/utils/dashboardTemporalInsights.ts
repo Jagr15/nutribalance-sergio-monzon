@@ -93,7 +93,7 @@ export const buildDashboardTemporalInsights = (
     });
   }
 
-  if (movimientosFlujo && movimientosFlujo.length > 0) {
+  if (movimientosFlujo !== undefined) {
     movimientosFlujo.forEach((mov) => {
       const isIngreso = mov.tipo === 'INGRESO';
       const isEgreso = mov.tipo === 'EGRESO';
