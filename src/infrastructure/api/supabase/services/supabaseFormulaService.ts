@@ -28,7 +28,7 @@ interface FormulaIngredienteRow {
   aporte_proteina_g_kg: number | null;
   costo_unitario_usado: number | null;
   costo_contribucion_kg: number | null;
-  fuente_costo: 'ULTIMO_LOTE' | 'REFERENCIA' | 'SIN_COSTO' | null;
+  fuente_costo: 'PROMEDIO_STOCK' | 'REFERENCIA' | 'SIN_COSTO' | null;
   insumos: { legacy_uid: string | null; nombre: string } | null;
 }
 

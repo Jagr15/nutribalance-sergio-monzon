@@ -274,12 +274,16 @@ const TesoreriaPage = () => {
       };
       const recibidosPendientes = filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'RECIBIDO' && ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && inRange(cheque.fecha_vencimiento));
       const emitidosPendientes = filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'EMITIDO' && ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && inRange(cheque.fecha_vencimiento));
-      const importeTotal = [...recibidosPendientes, ...emitidosPendientes].reduce((acc, cheque) => acc + Number(cheque.importe ?? 0), 0);
+      const recibidosTotal = recibidosPendientes.reduce((acc, cheque) => acc + Number(cheque.importe ?? 0), 0);
+      const emitidosTotal = emitidosPendientes.reduce((acc, cheque) => acc + Number(cheque.importe ?? 0), 0);
+      const netoTotal = recibidosTotal - emitidosTotal;
       return {
         label,
         recibidosPendientes,
         emitidosPendientes,
-        importeTotal,
+        recibidosTotal,
+        emitidosTotal,
+        importeTotal: netoTotal,
       };
     };
     return [
@@ -532,7 +536,9 @@ const TesoreriaPage = () => {
                   <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{bucket.label}</p>
                   <h3 className="mt-1 truncate text-base font-semibold text-slate-900 sm:text-lg">Vencimientos</h3>
                 </div>
-                <span className="shrink-0 whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm">{formatCurrency(bucket.importeTotal)}</span>
+                <span className={`shrink-0 whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide shadow-sm ${bucket.importeTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {formatCurrency(bucket.importeTotal)}
+                </span>
               </div>
               <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2">
@@ -544,17 +550,19 @@ const TesoreriaPage = () => {
                   <p className="mt-1 truncate text-lg font-semibold text-rose-700">{bucket.emitidosPendientes.length}</p>
                 </div>
                 <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Importe acumulado</p>
-                  <p className="mt-1 truncate whitespace-nowrap text-base font-semibold text-emerald-700 sm:text-lg">{formatCurrency(bucket.importeTotal)}</p>
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Total Recibido</p>
+                  <p className="mt-1 truncate whitespace-nowrap text-base font-semibold text-emerald-700 sm:text-lg">{formatCurrency(bucket.recibidosTotal)}</p>
                 </div>
                 <div className="min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Emitidos pendientes</p>
-                  <p className="mt-1 truncate whitespace-nowrap text-base font-semibold text-rose-700 sm:text-lg">{bucket.emitidosPendientes.length}</p>
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Total Emitido</p>
+                  <p className="mt-1 truncate whitespace-nowrap text-base font-semibold text-rose-700 sm:text-lg">{formatCurrency(bucket.emitidosTotal)}</p>
                 </div>
               </div>
               <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Total del tramo</p>
-                <p className="mt-1 truncate whitespace-nowrap text-lg font-semibold text-slate-900 sm:text-xl">{formatCurrency(bucket.importeTotal)}</p>
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Neto del tramo</p>
+                <p className={`mt-1 truncate whitespace-nowrap text-lg font-semibold sm:text-xl ${bucket.importeTotal >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {formatCurrency(bucket.importeTotal)}
+                </p>
               </div>
             </Card>
           ))}

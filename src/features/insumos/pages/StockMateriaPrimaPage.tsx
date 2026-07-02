@@ -124,6 +124,9 @@ const StockMateriaPrimaPage: React.FC = () => {
   const insumosActivos = insumos.length;
   const showLoadingCards = isBusy && comprasRegistradas === 0 && resumen.length === 0;
   const stockRegistroCount = resumen.length;
+  const valorInventarioMp = resumen.reduce((acc, item) => acc + Number(item.valor_inventario ?? 0), 0);
+  const stockActualMp = resumen.reduce((acc, item) => acc + Number(item.stock_actual ?? 0), 0);
+  const costoPromedioVisible = stockActualMp > 0 ? valorInventarioMp / stockActualMp : 0;
   const totalPages = Math.max(1, Math.ceil(comprasTotal / comprasPageSize));
   const emptyBecauseFilter = !comprasLoading && historialCompras.length === 0 && comprasTotal === 0;
 
@@ -161,7 +164,7 @@ const StockMateriaPrimaPage: React.FC = () => {
           </div>
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Compras registradas</p>
             <p className="mt-3 text-3xl font-black text-slate-900">{showLoadingCards ? '—' : comprasRegistradas}</p>
@@ -176,6 +179,20 @@ const StockMateriaPrimaPage: React.FC = () => {
             <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Insumos activos</p>
             <p className="mt-3 text-3xl font-black text-slate-900">{showLoadingCards ? '—' : insumosActivos}</p>
             <p className="mt-2 text-xs text-slate-500">Fuente real desde la tabla `insumos`.</p>
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Valor inventario MP</p>
+            <p className="mt-3 text-3xl font-black text-slate-900">
+              {showLoadingCards ? '—' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(valorInventarioMp)}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">Valorizado con costo real por lote.</p>
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Costo promedio MP</p>
+            <p className="mt-3 text-3xl font-black text-slate-900">
+              {showLoadingCards ? '—' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(costoPromedioVisible)}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">Promedio ponderado visible por insumo.</p>
           </div>
         </div>
 

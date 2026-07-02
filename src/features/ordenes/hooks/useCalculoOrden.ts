@@ -24,6 +24,20 @@ export interface CalculoOrdenResultado {
 export const useCalculoOrden = () => {
   const [isCalculando, setIsCalculando] = useState(false);
 
+  const ordenarLotesFIFO = (a: StockMateriaPrima, b: StockMateriaPrima) => {
+    const fechaA = a.fecha_ingreso ? new Date(a.fecha_ingreso).getTime() : Number.POSITIVE_INFINITY;
+    const fechaB = b.fecha_ingreso ? new Date(b.fecha_ingreso).getTime() : Number.POSITIVE_INFINITY;
+
+    if (fechaA !== fechaB) {
+      return fechaA - fechaB;
+    }
+
+    const createdA = a.createdAt ? new Date(a.createdAt).getTime() : Number.POSITIVE_INFINITY;
+    const createdB = b.createdAt ? new Date(b.createdAt).getTime() : Number.POSITIVE_INFINITY;
+
+    return createdA - createdB;
+  };
+
   const calcularInversionLote = useCallback(async (cantidadObjetivo: number, formula: Formula): Promise<CalculoOrdenResultado | null> => {
     if (!cantidadObjetivo || !formula) return null;
     
@@ -57,7 +71,7 @@ export const useCalculoOrden = () => {
             const disponible = lote.cantidad_actual - (lote.cantidad_comprometida || 0);
             return (lote.insumo_id === ingrediente.id_insumo || lote.id_insumo === ingrediente.id_insumo) && disponible > 0;
           })
-          .sort((a, b) => new Date(a.fecha_ingreso).getTime() - new Date(b.fecha_ingreso).getTime());
+          .sort(ordenarLotesFIFO);
 
         for (const lote of lotesDelInsumo) {
           if (cantidadPendiente <= 0) break;

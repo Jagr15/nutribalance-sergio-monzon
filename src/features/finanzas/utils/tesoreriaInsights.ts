@@ -79,11 +79,6 @@ const monthKey = (isoLike: string) => {
 };
 
 const currentMonthKey = monthKey(today.toISOString());
-const startOfToday = () => {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return now;
-};
 
 const normalize = (value: string | null | undefined) => (value ?? '').trim().toLowerCase();
 const resolveRubroNombre = (
@@ -326,15 +321,122 @@ export const buildAlertasTesoreria = (inputs: {
   proyeccionFlujo: ProyeccionFlujoRow[];
 }): AlertaTesoreriaRaw[] => {
   const alerts: AlertaTesoreriaRaw[] = [];
-  const todayStart = startOfToday();
-  const todayTime = todayStart.getTime();
-  const dayMs = 24 * 60 * 60 * 1000;
-  const within = (date: string, days: number) => {
-    const diff = Math.ceil((new Date(date).getTime() - todayTime) / dayMs);
-    return diff >= 0 && diff <= days;
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  const parseLocalDate = (dateStr: string) => {
+    return dateStr ? dateStr.split('T')[0] : '';
   };
-  const isToday = (date: string) => new Date(date).toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
-  const isTomorrow = (date: string) => Math.ceil((new Date(date).getTime() - todayTime) / dayMs) === 1;
+
+  // Emitidos
+  inputs.chequesEmitidos.forEach((cheque) => {
+    if (['COBRADO', 'DEPOSITADO', 'ENDOSADO', 'PAGADO'].includes(cheque.estado)) {
+      return;
+    }
+
+    const fechaRef = parseLocalDate(cheque.fecha_vencimiento);
+    if (!fechaRef) return;
+
+    // Vencido
+    if (fechaRef < todayStr) {
+      alerts.push({
+        alerta_id: `tes-cheque-emitido-vencido-${cheque.id}`,
+        tipo: 'Cheque emitido vencido',
+        prioridad: 'critica',
+        area: 'tesoreria',
+        titulo: `Cheque emitido ${cheque.numero} vencido`,
+        dato_asociado: {
+          cheque: cheque.numero,
+          tercero: cheque.tercero,
+          importe: cheque.importe,
+          vence: cheque.fecha_vencimiento,
+        },
+        fecha_evento: cheque.fecha_vencimiento,
+      });
+    }
+    // Vence hoy
+    else if (fechaRef === todayStr) {
+      alerts.push({
+        alerta_id: `tes-cheque-emitido-hoy-${cheque.id}`,
+        tipo: 'Cheque emitido vence hoy / cubrir fondos',
+        prioridad: 'critica',
+        area: 'tesoreria',
+        titulo: `Cheque emitido ${cheque.numero} vence hoy / cubrir fondos`,
+        dato_asociado: {
+          cheque: cheque.numero,
+          tercero: cheque.tercero,
+          importe: cheque.importe,
+          vence: cheque.fecha_vencimiento,
+        },
+        fecha_evento: cheque.fecha_vencimiento,
+      });
+    }
+  });
+
+  // Recibidos
+  inputs.chequesRecibidos.forEach((cheque) => {
+    if (['COBRADO', 'DEPOSITADO', 'ENDOSADO', 'PAGADO'].includes(cheque.estado)) {
+      return;
+    }
+
+    const fechaRef = parseLocalDate(cheque.fecha_vencimiento);
+    if (!fechaRef) return;
+
+    if (cheque.estado === 'RECHAZADO') {
+      alerts.push({
+        alerta_id: `tes-cheque-recibido-rechazado-${cheque.id}`,
+        tipo: 'Cheque recibido rechazado',
+        prioridad: 'media',
+        area: 'tesoreria',
+        titulo: `Cheque recibido ${cheque.numero} rechazado`,
+        dato_asociado: {
+          cheque: cheque.numero,
+          tercero: cheque.tercero,
+          importe: cheque.importe,
+          vence: cheque.fecha_vencimiento,
+        },
+        fecha_evento: cheque.fecha_vencimiento,
+      });
+      return;
+    }
+
+    // Vencido
+    if (fechaRef < todayStr) {
+      alerts.push({
+        alerta_id: `tes-cheque-recibido-vencido-${cheque.id}`,
+        tipo: 'Cheque recibido vencido',
+        prioridad: 'critica',
+        area: 'tesoreria',
+        titulo: `Cheque recibido ${cheque.numero} vencido`,
+        dato_asociado: {
+          cheque: cheque.numero,
+          tercero: cheque.tercero,
+          importe: cheque.importe,
+          vence: cheque.fecha_vencimiento,
+        },
+        fecha_evento: cheque.fecha_vencimiento,
+      });
+    }
+    // Vence hoy / listo para depositar
+    else if (fechaRef === todayStr) {
+      alerts.push({
+        alerta_id: `tes-cheque-recibido-hoy-${cheque.id}`,
+        tipo: 'Cheque recibido listo para depositar',
+        prioridad: 'critica',
+        area: 'tesoreria',
+        titulo: `Cheque recibido ${cheque.numero} listo para depositar`,
+        dato_asociado: {
+          cheque: cheque.numero,
+          tercero: cheque.tercero,
+          importe: cheque.importe,
+          vence: cheque.fecha_vencimiento,
+        },
+        fecha_evento: cheque.fecha_vencimiento,
+      });
+    }
+  });
+
+  // Risk of overdraft check
   const pendingChequesEmitidos = inputs.chequesEmitidos.filter((cheque) => cheque.estado === 'PENDIENTE' || cheque.estado === 'A_DEPOSITAR');
   const pendingChequesRecibidos = inputs.chequesRecibidos.filter((cheque) => cheque.estado === 'PENDIENTE' || cheque.estado === 'A_DEPOSITAR');
 
@@ -352,189 +454,26 @@ export const buildAlertasTesoreria = (inputs: {
     return inputs.saldoActual + saldoCxc + recibidosHastaVencimiento - emitidosHastaVencimiento - cheque.importe;
   };
 
-    pendingChequesEmitidos
-    .forEach((cheque) => {
-      const saldoProyectado = saldoProyectadoAlVencimiento(cheque);
-      if (saldoProyectado < 0) {
-        alerts.push({
-          alerta_id: `tes-cheque-descubierto-${cheque.id}`,
-          tipo: 'Riesgo de descubierto por cheque',
-          prioridad: 'critica',
-          area: 'tesoreria',
-          titulo: isToday(cheque.fecha_vencimiento)
-            ? 'Hoy hay un cheque que cubrir'
-            : `Cheque emitido ${cheque.numero} vence pronto`,
-          dato_asociado: {
-            cheque: cheque.numero,
-            tercero: cheque.tercero,
-            importe: cheque.importe,
-            vence: cheque.fecha_vencimiento,
-            saldo_proyectado: Number(saldoProyectado.toFixed(2)),
-          },
-          fecha_evento: cheque.fecha_vencimiento,
-        });
-        return;
-      }
-
-      if (isToday(cheque.fecha_vencimiento)) {
-        alerts.push({
-          alerta_id: `tes-cheque-emitido-hoy-${cheque.id}`,
-          tipo: 'Cheque emitido que vence hoy',
-          prioridad: 'critica',
-          area: 'tesoreria',
-          titulo: `Hoy hay un cheque que cubrir`,
-          dato_asociado: {
-            cheque: cheque.numero,
-            tercero: cheque.tercero,
-            importe: cheque.importe,
-            vence: cheque.fecha_vencimiento,
-            saldo_proyectado: Number(saldoProyectado.toFixed(2)),
-          },
-          fecha_evento: cheque.fecha_vencimiento,
-        });
-        return;
-      }
-
-      if (isTomorrow(cheque.fecha_vencimiento)) {
-        alerts.push({
-          alerta_id: `tes-cheque-emitido-${cheque.id}`,
-          tipo: 'Cheque emitido que vence mañana',
-          prioridad: 'media',
-          area: 'tesoreria',
-          titulo: `Cheque emitido ${cheque.numero} vence mañana`,
-          dato_asociado: {
-            cheque: cheque.numero,
-            tercero: cheque.tercero,
-            importe: cheque.importe,
-            vence: cheque.fecha_vencimiento,
-          },
-          fecha_evento: cheque.fecha_vencimiento,
-        });
-        return;
-      }
-
-      if (within(cheque.fecha_vencimiento, 7)) {
-        alerts.push({
-          alerta_id: `tes-cheque-emitido-${cheque.id}`,
-          tipo: 'Cheque emitido próximo a vencer',
-          prioridad: 'media',
-          area: 'tesoreria',
-          titulo: `Cheque emitido ${cheque.numero} vence pronto`,
-          dato_asociado: {
-            cheque: cheque.numero,
-            tercero: cheque.tercero,
-            importe: cheque.importe,
-            vence: cheque.fecha_vencimiento,
-          },
-          fecha_evento: cheque.fecha_vencimiento,
-        });
-      }
-    });
-
-  inputs.chequesRecibidos
-    .forEach((cheque) => {
-      if (cheque.estado === 'VENCIDO') {
-        alerts.push({
-          alerta_id: `tes-cheque-recibido-vencido-${cheque.id}`,
-          tipo: 'Cheque recibido vencido',
-          prioridad: 'critica',
-          area: 'tesoreria',
-          titulo: `Cheque recibido ${cheque.numero} vencido`,
-          dato_asociado: {
-            cheque: cheque.numero,
-            tercero: cheque.tercero,
-            importe: cheque.importe,
-            vence: cheque.fecha_vencimiento,
-          },
-          fecha_evento: cheque.fecha_vencimiento,
-        });
-        return;
-      }
-      if (cheque.estado === 'RECHAZADO') {
-        alerts.push({
-          alerta_id: `tes-cheque-recibido-rechazado-${cheque.id}`,
-          tipo: 'Cheque recibido rechazado',
-          prioridad: 'media',
-          area: 'tesoreria',
-          titulo: `Cheque recibido ${cheque.numero} rechazado`,
-          dato_asociado: {
-            cheque: cheque.numero,
-            tercero: cheque.tercero,
-            importe: cheque.importe,
-            vence: cheque.fecha_vencimiento,
-          },
-          fecha_evento: cheque.fecha_vencimiento,
-        });
-        return;
-      }
-      if (cheque.estado === 'A_DEPOSITAR' && isToday(cheque.fecha_vencimiento)) {
-        alerts.push({
-          alerta_id: `tes-cheque-recibido-hoy-${cheque.id}`,
-          tipo: 'Cheque recibido listo para depositar',
-          prioridad: 'critica',
-          area: 'tesoreria',
-          titulo: `Cheque recibido ${cheque.numero} listo para depositar`,
-          dato_asociado: {
-            cheque: cheque.numero,
-            tercero: cheque.tercero,
-            importe: cheque.importe,
-            vence: cheque.fecha_vencimiento,
-          },
-          fecha_evento: cheque.fecha_vencimiento,
-        });
-        return;
-      }
-      if (cheque.estado === 'PENDIENTE' && isToday(cheque.fecha_vencimiento)) {
-        alerts.push({
-          alerta_id: `tes-cheque-recibido-hoy-${cheque.id}`,
-          tipo: 'Cheque recibido listo para depositar',
-          prioridad: 'critica',
-          area: 'tesoreria',
-          titulo: `Cheque recibido ${cheque.numero} listo para depositar`,
-          dato_asociado: {
-            cheque: cheque.numero,
-            tercero: cheque.tercero,
-            importe: cheque.importe,
-            vence: cheque.fecha_vencimiento,
-          },
-          fecha_evento: cheque.fecha_vencimiento,
-        });
-        return;
-      }
-      if ((cheque.estado === 'PENDIENTE' || cheque.estado === 'A_DEPOSITAR') && isTomorrow(cheque.fecha_vencimiento)) {
-        alerts.push({
-          alerta_id: `tes-cheque-recibido-manana-${cheque.id}`,
-          tipo: 'Cheque recibido vence mañana',
-          prioridad: 'media',
-          area: 'tesoreria',
-          titulo: `Cheque recibido ${cheque.numero} vence mañana`,
-          dato_asociado: {
-            cheque: cheque.numero,
-            tercero: cheque.tercero,
-            importe: cheque.importe,
-            vence: cheque.fecha_vencimiento,
-          },
-          fecha_evento: cheque.fecha_vencimiento,
-        });
-        return;
-      }
-      if ((cheque.estado === 'PENDIENTE' || cheque.estado === 'A_DEPOSITAR') && within(cheque.fecha_vencimiento, 7)) {
-        alerts.push({
-          alerta_id: `tes-cheque-recibido-${cheque.id}`,
-          tipo: 'Cheque recibido próximo a cobrar',
-          prioridad: 'media',
-          area: 'tesoreria',
-          titulo: `Cheque recibido ${cheque.numero} vence pronto`,
-          dato_asociado: {
-            cheque: cheque.numero,
-            tercero: cheque.tercero,
-            importe: cheque.importe,
-            vence: cheque.fecha_vencimiento,
-          },
-          fecha_evento: cheque.fecha_vencimiento,
-        });
-      }
-    });
+  pendingChequesEmitidos.forEach((cheque) => {
+    const saldoProyectado = saldoProyectadoAlVencimiento(cheque);
+    if (saldoProyectado < 0) {
+      alerts.push({
+        alerta_id: `tes-cheque-descubierto-${cheque.id}`,
+        tipo: 'Riesgo de descubierto por cheque',
+        prioridad: 'critica',
+        area: 'tesoreria',
+        titulo: `Cheque emitido ${cheque.numero} vence pronto`,
+        dato_asociado: {
+          cheque: cheque.numero,
+          tercero: cheque.tercero,
+          importe: cheque.importe,
+          vence: cheque.fecha_vencimiento,
+          saldo_proyectado: Number(saldoProyectado.toFixed(2)),
+        },
+        fecha_evento: cheque.fecha_vencimiento,
+      });
+    }
+  });
 
   inputs.cartera
     .filter((row) => row.dias_atraso !== null && row.dias_atraso > 0)

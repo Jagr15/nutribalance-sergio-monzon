@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FiX, FiTruck, FiPackage, FiUser, FiFileText } from 'react-icons/fi';
+import { FiX, FiTruck, FiPackage, FiUser, FiFileText, FiCheckCircle } from 'react-icons/fi';
 import { ApiService } from '../../../infrastructure/api';
+import { usePermissions } from '../../auth/usePermissions';
 import type { Cliente } from '../../clientes/types/cliente';
 import type { StockProductoTerminado } from '../../productos/types';
 import type { OrdenExpedicion, PresentacionExpedicionKey } from '../types';
 import {
   buildPresentacionPersistencia,
-  formatPresentacionResumen,
   getCantidadEntradaInicialFromOrder,
   getCantidadLabelFromPresentation,
   getKgRealesFromPresentation,
@@ -15,7 +15,7 @@ import {
   getPresentacionExpedicionOption,
   PRESENTACION_EXPEDICION_OPTIONS,
 } from '../utils/presentacionExpedicion';
-import { normalizeNumericInputChange, parseNumericInput } from '../../../shared/utils/formatters';
+import { getTodayDateInputValue, normalizeNumericInputChange, parseNumericInput } from '../../../shared/utils/formatters';
 
 interface Props {
   onClose: () => void;
@@ -24,10 +24,14 @@ interface Props {
 }
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
+const formatMoney = (value: number) =>
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(value);
 const matchesStockSelection = (item: StockProductoTerminado, stockId: string) =>
   item.uid === stockId || item.id === stockId;
 
 const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = null }) => {
+  const { canAccess } = usePermissions();
+  const canManageSalePrice = canAccess('ordenes', 'create') || canAccess('ordenes', 'edit');
   const [stockPTAll, setStockPTAll] = useState<StockProductoTerminado[]>([]);
   const [stockPT, setStockPT] = useState<StockProductoTerminado[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -35,6 +39,8 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
   const [selectedClienteId, setSelectedClienteId] = useState(orden?.cliente_id ?? '');
   const [selectedPresentacionKey, setSelectedPresentacionKey] = useState<PresentacionExpedicionKey>(() => getPresentacionExpedicionKeyFromOrder(orden));
   const [valorEntrada, setValorEntrada] = useState<string>(() => getCantidadEntradaInicialFromOrder(orden, getPresentacionExpedicionKeyFromOrder(orden)));
+  const [precioUnitarioVenta, setPrecioUnitarioVenta] = useState<string>(() => (orden?.precio_unitario_venta ? String(orden.precio_unitario_venta) : ''));
+  const [fechaProgramada, setFechaProgramada] = useState<string>(() => orden?.fecha_programada ?? (orden ? '' : getTodayDateInputValue()));
   const [motivo, setMotivo] = useState('');
   const [referencia, setReferencia] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -65,6 +71,8 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
           const initialKey = getPresentacionExpedicionKeyFromOrder(orden);
           setSelectedPresentacionKey(initialKey);
           setValorEntrada(getCantidadEntradaInicialFromOrder(orden, initialKey));
+          setPrecioUnitarioVenta(orden.precio_unitario_venta ? String(orden.precio_unitario_venta) : '');
+          setFechaProgramada(orden.fecha_programada ?? '');
           setMotivo(orden.motivo ?? '');
           setReferencia(orden.referencia ?? '');
         }
@@ -91,13 +99,17 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
   const isEditable = !orden || orden.estado === 'pendiente';
   const selectedPresentation = getPresentacionExpedicionOption(selectedPresentacionKey);
   const cantidadEntrada = parseNumericInput(valorEntrada) ?? 0;
+  const precioEntrada = parseNumericInput(precioUnitarioVenta);
   const kgReales = getKgRealesFromPresentation(selectedPresentacionKey, cantidadEntrada);
+  const totalVentaEstimado = canManageSalePrice && precioEntrada !== null && precioEntrada > 0
+    ? Number((kgReales * precioEntrada).toFixed(2))
+    : null;
   const persistenciaPresentacion = buildPresentacionPersistencia(selectedPresentacionKey, cantidadEntrada);
   const cantidadCantidadLabel = getCantidadLabelFromPresentation(selectedPresentacionKey);
   const stockDisponibleParaEdicion = selectedStock
     ? Number(selectedStock.cantidad_total ?? 0) + (orden ? Number(orden.cantidad_kg ?? orden.cantidad ?? 0) : 0)
     : 0;
-  const guardarBloqueado = !selectedStock || !selectedClienteId || isSubmitting || !isEditable;
+  const guardarBloqueado = !selectedStock || !selectedClienteId || isSubmitting || !isEditable || !canManageSalePrice;
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
@@ -115,12 +127,24 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
       setError('Seleccioná un cliente destino.');
       return;
     }
+    if (fechaProgramada && fechaProgramada < getTodayDateInputValue()) {
+      setError('La fecha programada no puede ser anterior a hoy.');
+      return;
+    }
     if (cantidadEntrada <= 0) {
       setError('La cantidad debe ser mayor a 0.');
       return;
     }
     if (kgReales <= 0) {
       setError('La cantidad debe ser mayor a 0.');
+      return;
+    }
+    if (!canManageSalePrice) {
+      setError('No tienes permisos para registrar el precio de venta de la expedición.');
+      return;
+    }
+    if (precioEntrada === null || precioEntrada <= 0) {
+      setError('El precio unitario de venta debe ser mayor a 0.');
       return;
     }
     if (kgReales > stockDisponibleParaEdicion) {
@@ -136,6 +160,10 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
         presentacion_key: selectedPresentacionKey,
         ...persistenciaPresentacion,
         cantidad_empaques: persistenciaPresentacion.cantidad_empaques,
+        precio_unitario_venta: precioEntrada,
+        total_venta: totalVentaEstimado,
+        moneda: 'ARS',
+        fecha_programada: fechaProgramada || null,
         cantidad: kgReales,
         cantidad_original: kgReales,
         unidad_cantidad: 'kg' as const,
@@ -252,7 +280,28 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
             </div>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-3">
+          {!canManageSalePrice ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Vista operativa: el precio de venta no se muestra en este perfil.
+            </div>
+          ) : null}
+
+          <div className={`grid gap-4 ${canManageSalePrice ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
+            <label className="space-y-2">
+              <span className="ml-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                <FiCheckCircle size={12} /> Fecha programada
+              </span>
+              <input
+                type="date"
+                min={getTodayDateInputValue()}
+                value={fechaProgramada}
+                onChange={(e) => setFechaProgramada(e.target.value)}
+                disabled={!isEditable}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
+              />
+              <p className="text-xs text-slate-500">Opcional. Si la dejás vacía, se toma la fecha actual.</p>
+            </label>
+
             <label className="space-y-2">
               <span className="ml-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
                 <FiTruck size={12} /> Presentación
@@ -297,6 +346,29 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
               </p>
             </label>
 
+            {canManageSalePrice ? (
+              <label className="space-y-2">
+                <span className="ml-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                  Precio de venta
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={precioUnitarioVenta}
+                  onChange={(e) => setPrecioUnitarioVenta(normalizeNumericInputChange(e.target.value))}
+                  disabled={!isEditable}
+                  placeholder="Ej. 150.00"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
+                />
+                <p className="text-xs text-slate-500">
+                  {totalVentaEstimado !== null
+                    ? `Total estimado: ${formatMoney(totalVentaEstimado)}`
+                    : 'Ingresá el precio unitario para ver el total estimado.'}
+                </p>
+              </label>
+            ) : null}
+
             <label className="space-y-2">
               <span className="ml-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
                 <FiFileText size={12} /> Referencia
@@ -310,14 +382,6 @@ const OrdenExpedicionModal: React.FC<Props> = ({ onClose, onSuccess, orden = nul
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none"
               />
             </label>
-          </div>
-
-          <div className="rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
-            {formatPresentacionResumen(selectedPresentacionKey, cantidadEntrada, kgReales).map((item) => (
-              <div key={item.label}>
-                <strong>{item.label}:</strong> {item.value}
-              </div>
-            ))}
           </div>
 
           <label className="space-y-2">

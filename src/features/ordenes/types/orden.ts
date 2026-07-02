@@ -29,6 +29,7 @@ export interface OrdenProduccion {
   merma_manual?: number;
   estado: EstadoOrden;
   fecha_creacion: string;
+  fecha_programada?: string | null;
   usuario_responsable: string;
   id_silo: string | null;
   destino_silo: string | null;

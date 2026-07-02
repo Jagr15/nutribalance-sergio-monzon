@@ -18,6 +18,10 @@ type MovimientoContablePayload = {
   stock_pt_id?: string | null;
   estado?: 'PENDIENTE' | 'CONFIRMADO' | 'ANULADO';
   metadata?: Record<string, unknown>;
+  fecha_operacion?: string | null;
+  fecha_vencimiento?: string | null;
+  estado_financiero?: string | null;
+  fecha_cobro_pago?: string | null;
 };
 
 const STORAGE_KEY = 'nutribalance_contabilidad_operativa_v1';
@@ -71,6 +75,10 @@ const normalizeBase = (payload: MovimientoContablePayload): MovimientoContablePa
   orden_produccion_id: payload.orden_produccion_id ?? null,
   stock_lote_mp_id: payload.stock_lote_mp_id ?? null,
   stock_pt_id: payload.stock_pt_id ?? null,
+  fecha_operacion: payload.fecha_operacion ?? null,
+  fecha_vencimiento: payload.fecha_vencimiento ?? null,
+  estado_financiero: payload.estado_financiero ?? null,
+  fecha_cobro_pago: payload.fecha_cobro_pago ?? null,
 });
 
 export const contabilidadOperativaService = {
@@ -108,6 +116,10 @@ export const contabilidadOperativaService = {
       stock_pt_id: normalized.stock_pt_id ?? undefined,
       estado: normalized.estado,
       metadata: normalized.metadata,
+      fecha_operacion: normalized.fecha_operacion ?? undefined,
+      fecha_vencimiento: normalized.fecha_vencimiento ?? undefined,
+      estado_financiero: normalized.estado_financiero ?? undefined,
+      fecha_cobro_pago: normalized.fecha_cobro_pago ?? undefined,
     }, { onConflict: 'legacy_uid' });
 
     if (error) throw error;
@@ -212,6 +224,10 @@ export const contabilidadOperativaService = {
     centro_costo_id?: string | null;
     estado?: 'PENDIENTE' | 'CONFIRMADO' | 'ANULADO';
     metadata?: Record<string, unknown>;
+    fecha_operacion?: string | null;
+    fecha_vencimiento?: string | null;
+    estado_financiero?: string | null;
+    fecha_cobro_pago?: string | null;
   }): Promise<void> {
     if (!payload.origen_id.trim()) throw new Error('El origen de costos es obligatorio.');
     ensurePositive(payload.monto, 'El monto contable');
@@ -232,6 +248,10 @@ export const contabilidadOperativaService = {
         origen_modulo: 'costos',
         origen_id: payload.origen_id,
       },
+      fecha_operacion: payload.fecha_operacion,
+      fecha_vencimiento: payload.fecha_vencimiento,
+      estado_financiero: payload.estado_financiero,
+      fecha_cobro_pago: payload.fecha_cobro_pago,
     });
   },
 
@@ -271,5 +291,99 @@ export const contabilidadOperativaService = {
         tercero: payload.tercero,
       },
     });
+  },
+
+  async confirmarMovimiento(legacyUid: string): Promise<void> {
+    if (runtimeConfig.mode === 'mock') {
+      const rows = readMock();
+      const updated = rows.map((row) => {
+        if (row.legacy_uid === legacyUid) {
+          return {
+            ...row,
+            estado: 'CONFIRMADO' as const,
+            estado_financiero: row.tipo === 'INGRESO' ? 'COBRADO' : 'PAGADO',
+            fecha_cobro_pago: new Date().toISOString().split('T')[0],
+          };
+        }
+        return row;
+      });
+      writeMock(updated);
+      return;
+    }
+
+    const { data: currentMov, error: getErr } = await supabaseClient
+      .from('flujo_caja_movimientos')
+      .select('tipo')
+      .eq('legacy_uid', legacyUid)
+      .maybeSingle();
+
+    if (getErr) throw getErr;
+
+    const nextEstadoFinanciero = currentMov?.tipo === 'INGRESO' ? 'COBRADO' : 'PAGADO';
+
+    const { error } = await supabaseClient
+      .from('flujo_caja_movimientos')
+      .update({
+        estado: 'CONFIRMADO',
+        estado_financiero: nextEstadoFinanciero,
+        fecha_cobro_pago: new Date().toISOString().split('T')[0],
+        updated_at: new Date().toISOString(),
+      })
+      .eq('legacy_uid', legacyUid);
+
+    if (error) throw error;
+  },
+
+  async updateMovimiento(legacyUid: string, payload: {
+    descripcion: string;
+    monto: number;
+    fecha_operacion: string;
+    fecha_vencimiento: string;
+    estado_financiero: string;
+    categoria_id?: string | null;
+  }): Promise<void> {
+    let dbEstado: 'PENDIENTE' | 'CONFIRMADO' | 'ANULADO' = 'PENDIENTE';
+    if (['COBRADO', 'PAGADO'].includes(payload.estado_financiero)) {
+      dbEstado = 'CONFIRMADO';
+    } else if (payload.estado_financiero === 'CANCELADO') {
+      dbEstado = 'ANULADO';
+    }
+
+    if (runtimeConfig.mode === 'mock') {
+      const rows = readMock();
+      const updated = rows.map((row) => {
+        if (row.legacy_uid === legacyUid) {
+          return {
+            ...row,
+            descripcion: payload.descripcion,
+            monto: payload.monto,
+            fecha_operacion: payload.fecha_operacion,
+            fecha_vencimiento: payload.fecha_vencimiento,
+            estado_financiero: payload.estado_financiero,
+            categoria_id: payload.categoria_id ?? null,
+            estado: dbEstado,
+          };
+        }
+        return row;
+      });
+      writeMock(updated);
+      return;
+    }
+
+    const { error } = await supabaseClient
+      .from('flujo_caja_movimientos')
+      .update({
+        descripcion: payload.descripcion,
+        monto: payload.monto,
+        fecha_operacion: payload.fecha_operacion,
+        fecha_vencimiento: payload.fecha_vencimiento,
+        estado_financiero: payload.estado_financiero,
+        categoria_id: payload.categoria_id ?? null,
+        estado: dbEstado,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('legacy_uid', legacyUid);
+
+    if (error) throw error;
   },
 };

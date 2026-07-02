@@ -13,6 +13,8 @@ import type { MovimientoStockPT } from '../../productos/types';
 import type { OrdenProduccion } from '../../ordenes/types';
 import type { AlertaOperativa } from '../../alertas/types/alerta';
 import { BRAND_NAME, DITMON_LOGO_PRIMARY_PNG, DITMON_LOGO_PRIMARY, DITMON_LOGO_ALT, DITMON_ICON } from '../../../shared/branding/ditmonBranding';
+import { supabaseClient } from '../../../infrastructure/api/supabase/client';
+import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 
 type AreaEstado = 'OK' | 'Atención' | 'Riesgo';
 
@@ -72,28 +74,62 @@ const DashboardExecutivePage = () => {
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [movimientosPT, setMovimientosPT] = useState<MovimientoStockPT[]>([]);
+  const [movimientosFlujo, setMovimientosFlujo] = useState<any[]>([]);
+  const [comprobantes, setComprobantes] = useState<any[]>([]);
+  const [stockLotesMP, setStockLotesMP] = useState<any[]>([]);
+  const [stockPT, setStockPT] = useState<any[]>([]);
 
   useEffect(() => {
-    void Promise.allSettled([
-      import('../../../infrastructure/api').then((m) => m.ApiService.ordenes.getAll()),
-      import('../../../infrastructure/api').then((m) => m.ApiService.clientes.getAll()),
-      import('../../../infrastructure/api').then((m) => m.ApiService.stockPT.getMovimientos()),
-    ]).then(([ordenesResult, clientesResult, movimientosResult]) => {
-      if (ordenesResult.status === 'fulfilled') setOrdenes(ordenesResult.value);
-      if (clientesResult.status === 'fulfilled') setClientes(clientesResult.value);
-      if (movimientosResult.status === 'fulfilled') setMovimientosPT(movimientosResult.value);
-    });
+    const loadAllData = async () => {
+      try {
+        const [ordenesRes, clientesRes, movimientosRes] = await Promise.all([
+          import('../../../infrastructure/api').then((m) => m.ApiService.ordenes.getAll()),
+          import('../../../infrastructure/api').then((m) => m.ApiService.clientes.getAll()),
+          import('../../../infrastructure/api').then((m) => m.ApiService.stockPT.getMovimientos()),
+        ]);
+        setOrdenes(ordenesRes);
+        setClientes(clientesRes);
+        setMovimientosPT(movimientosRes);
+
+        const mode = runtimeConfig.mode;
+        if (mode === 'supabase') {
+          const [flujoRes, compRes, stockLotesRes, stockPtRes] = await Promise.all([
+            supabaseClient.from('flujo_caja_movimientos').select('fecha,created_at,tipo,monto,origen_operativo,estado').is('deleted_at', null).eq('estado', 'CONFIRMADO'),
+            supabaseClient.from('comprobantes').select('fecha_emision,created_at,tipo,total,saldo').is('deleted_at', null),
+            supabaseClient.from('stock_lotes_mp').select('cantidad_actual,costo_unitario').is('deleted_at', null),
+            supabaseClient.from('stock_pt').select('costo_total').is('deleted_at', null),
+          ]);
+          if (flujoRes.data) setMovimientosFlujo(flujoRes.data);
+          if (compRes.data) setComprobantes(compRes.data);
+          if (stockLotesRes.data) setStockLotesMP(stockLotesRes.data);
+          if (stockPtRes.data) setStockPT(stockPtRes.data);
+        } else {
+          // Fallback mock data
+          setMovimientosFlujo([
+            { fecha: new Date().toISOString(), tipo: 'INGRESO', monto: 1200000, origen_operativo: 'VENTA_PT', estado: 'CONFIRMADO' },
+            { fecha: new Date().toISOString(), tipo: 'EGRESO', monto: 800000, origen_operativo: 'PAGO', estado: 'CONFIRMADO' },
+          ]);
+          setComprobantes([
+            { fecha_emision: new Date().toISOString(), tipo: 'FACTURA_VENTA', total: 1200000, saldo: 400000 }
+          ]);
+        }
+      } catch (e) {
+        console.error('Error loading executive dashboard data:', e);
+      }
+    };
+    void loadAllData();
   }, []);
 
   const executiveMovimientos = useMemo(() => movimientosPT.filter((mov) => isWithinDashboardPeriodo(mov.created_at, 'MES', dashboardNow)), [dashboardNow, movimientosPT]);
   const executiveInsights = useMemo(() => buildDashboardExecutiveInsights(executiveMovimientos, clientes, 'MES', dashboardNow), [clientes, dashboardNow, executiveMovimientos]);
-  const temporalInsights = useMemo(() => buildDashboardTemporalInsights(ordenes, movimientosPT, alertas, 'MES', dashboardNow), [alertas, dashboardNow, movimientosPT, ordenes]);
+  const temporalInsights = useMemo(() => buildDashboardTemporalInsights(ordenes, movimientosPT, alertas, 'MES', dashboardNow, movimientosFlujo, comprobantes, stockLotesMP, stockPT), [alertas, dashboardNow, movimientosPT, ordenes, movimientosFlujo, comprobantes, stockLotesMP, stockPT]);
   const periodLabel = getDashboardPeriodoLabel('MES');
   const updatedAtLabel = fmtDateTime(lastUpdatedAt);
   const productionState: AreaEstado = kpis.ordenes_pendientes === 0 && kpis.ordenes_en_proceso > 0 ? 'OK' : kpis.ordenes_pendientes > 10 ? 'Riesgo' : 'Atención';
   const inventoryState: AreaEstado = kpis.stock_critico > 15 ? 'Riesgo' : kpis.stock_critico > 0 ? 'Atención' : 'OK';
   const financeState: AreaEstado = temporalInsights.flujoCaja < 0 ? 'Riesgo' : temporalInsights.flujoCaja === 0 ? 'Atención' : 'OK';
-  const salesState: AreaEstado = executiveInsights.totalImporte > 0 && executiveInsights.clientesAtendidos > 0 ? 'OK' : executiveInsights.totalImporte === 0 ? 'Riesgo' : 'Atención';
+  const salesAmount = temporalInsights.ventas > 0 ? temporalInsights.ventas : executiveInsights.totalImporte;
+  const salesState: AreaEstado = salesAmount > 0 && executiveInsights.clientesAtendidos > 0 ? 'OK' : salesAmount === 0 ? 'Riesgo' : 'Atención';
 
   const areaMatrix = [
     {
@@ -121,7 +157,7 @@ const DashboardExecutivePage = () => {
       label: 'Ventas',
       state: salesState,
       detail: executiveInsights.clientesAtendidos > 0
-        ? `${executiveInsights.clientesAtendidos} clientes atendidos y ${fmtARS(executiveInsights.totalImporte)} vendidos.`
+        ? `${executiveInsights.clientesAtendidos} clientes atendidos y ${fmtARS(salesAmount)} vendidos.`
         : 'Sin ventas suficientes en el período actual.',
     },
   ];
@@ -383,7 +419,7 @@ const DashboardExecutivePage = () => {
         [
           ['Producción total', `${kpis.produccion_total.toLocaleString('es-AR')} kg`],
           ['Ingresos', fmtARS(temporalInsights.ingresos)],
-          ['Costos', fmtARS(temporalInsights.costos)],
+          ['Egresos', fmtARS(temporalInsights.costos)],
           ['Flujo de caja', fmtARS(temporalInsights.flujoCaja)],
           ['Stock disponible MP', `${kpis.stock_disponible_mp.toLocaleString('es-AR')} kg`],
           ['Stock crítico', `${kpis.stock_critico}`],
@@ -534,7 +570,7 @@ const DashboardExecutivePage = () => {
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card><h3 className="font-semibold mb-3">Producción por estado</h3>{productionItems.map((item) => <div key={item.label} className="mb-3"><div className="flex justify-between text-xs mb-1"><span>{item.label}</span><span>{item.value}</span></div><div className="h-3 rounded-full bg-slate-200 overflow-hidden"><div className={`h-full rounded-full ${item.tone}`} style={{ width: `${Math.max(10, (item.value / Math.max(1, kpis.ordenes_pendientes, kpis.ordenes_en_proceso, kpis.ordenes_finalizadas)) * 100)}%` }} /></div></div>)}</Card>
         <Card><h3 className="font-semibold mb-3">Inventario crítico</h3>{inventoryItems.map((item) => <div key={item.label} className="mb-3"><div className="flex justify-between text-xs mb-1"><span>{item.label}</span><span>{item.value.toLocaleString('es-AR')}</span></div><div className="h-3 rounded-full bg-slate-200 overflow-hidden"><div className={`h-full rounded-full ${item.tone}`} style={{ width: `${Math.max(10, (item.value / Math.max(1, kpis.stock_disponible_mp, kpis.stock_comprometido_mp, kpis.stock_critico)) * 100)}%` }} /></div></div>)}</Card>
-        <Card><h3 className="font-semibold mb-3">Finanzas rápidas</h3><KPIBox label="Ingresos" value={fmtARS(temporalInsights.ingresos)} trend="unknown" updatedAt={updatedAtLabel} tone="emerald" /><div className="h-2" /><KPIBox label="Costos" value={fmtARS(temporalInsights.costos)} trend="unknown" updatedAt={updatedAtLabel} tone="orange" /><div className="h-2" /><KPIBox label="Flujo de caja" value={fmtARS(temporalInsights.flujoCaja)} trend="unknown" updatedAt={updatedAtLabel} tone={temporalInsights.flujoCaja >= 0 ? 'cyan' : 'red'} /></Card>
+        <Card><h3 className="font-semibold mb-3">Finanzas rápidas</h3><KPIBox label="Ingresos" value={fmtARS(temporalInsights.ingresos)} trend="unknown" updatedAt={updatedAtLabel} tone="emerald" /><div className="h-2" /><KPIBox label="Egresos" value={fmtARS(temporalInsights.costos)} trend="unknown" updatedAt={updatedAtLabel} tone="orange" /><div className="h-2" /><KPIBox label="Flujo de caja" value={fmtARS(temporalInsights.flujoCaja)} trend="unknown" updatedAt={updatedAtLabel} tone={temporalInsights.flujoCaja >= 0 ? 'cyan' : 'red'} /></Card>
         <Card><h3 className="font-semibold mb-3">Producto terminado / ventas</h3>{executiveInsights.ventasPorProducto.slice(0, 3).map((item) => <div key={`${item.producto_nombre}-${item.producto_id ?? 'x'}`} className="mb-3"><div className="flex justify-between text-xs mb-1"><span className="truncate">{item.producto_nombre}</span><span>{item.kg.toLocaleString('es-AR')} kg</span></div><div className="h-3 rounded-full bg-slate-200 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-500" style={{ width: `${Math.max(10, (item.kg / Math.max(1, executiveInsights.ventasPorProducto[0]?.kg ?? 1)) * 100)}%` }} /></div></div>)}{executiveInsights.topClientesPorVolumen.slice(0, 3).map((item) => <div key={item.cliente_nombre} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm"><span className="truncate">{item.cliente_nombre}</span><span className="font-semibold text-cyan-700">{item.kg.toLocaleString('es-AR')} kg</span></div>)}</Card>
       </section>
     </div>

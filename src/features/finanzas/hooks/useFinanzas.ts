@@ -120,5 +120,5 @@ export const useFinanzas = () => {
     return () => clearTimeout(timer);
   }, [refresh]);
 
-  return { kpis, reportes, tesoreria, movimientos, costosComparativos, inventario, loading, loadError, infoMessage, refresh, createMovimiento: finanzasService.createMovimiento };
+  return { kpis, reportes, tesoreria, movimientos, costosComparativos, inventario, loading, loadError, infoMessage, refresh, createMovimiento: finanzasService.createMovimiento, confirmarMovimiento: finanzasService.confirmarMovimiento, updateMovimiento: finanzasService.updateMovimiento };
 };

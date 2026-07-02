@@ -167,6 +167,24 @@ const buildResumenFromSources = (lotes: StockMateriaPrima[], insumos: SourceInsu
   const insumoById = new Map(insumos.map((item) => [item.uid, item]));
   const grouped = new Map<string, StockMateriaPrima[]>();
 
+  const calculateInventoryMetrics = (items: StockMateriaPrima[]) => {
+    const stockActual = items.reduce((acc, lote) => acc + Number(lote.cantidad_actual ?? 0), 0);
+    const stockComprometido = items.reduce((acc, lote) => acc + Number(lote.cantidad_comprometida ?? 0), 0);
+    const stockDisponible = items.reduce((acc, lote) => acc + (Number(lote.cantidad_actual ?? 0) - Number(lote.cantidad_comprometida ?? 0)), 0);
+    const valorInventario = items.reduce((acc, lote) => acc + (Number(lote.cantidad_actual ?? 0) * Number(lote.costo_unitario ?? 0)), 0);
+    const costoPromedioPonderado = stockActual > 0 ? valorInventario / stockActual : 0;
+    const lotesSinCosto = items.filter((lote) => Number(lote.costo_unitario ?? 0) <= 0).length;
+
+    return {
+      stockActual,
+      stockComprometido,
+      stockDisponible,
+      valorInventario,
+      costoPromedioPonderado,
+      lotesSinCosto,
+    };
+  };
+
   lotes.forEach((lote) => {
     const insumoId = lote.insumo_id ?? lote.id_insumo;
     const current = grouped.get(insumoId) ?? [];
@@ -176,10 +194,14 @@ const buildResumenFromSources = (lotes: StockMateriaPrima[], insumos: SourceInsu
 
   const resumenDesdeInsumos = insumos.map((insumo) => {
     const lotesInsumo = grouped.get(insumo.uid) ?? [];
-    const stockActual = lotesInsumo.reduce((acc, lote) => acc + Number(lote.cantidad_actual ?? 0), 0);
-    const stockComprometido = lotesInsumo.reduce((acc, lote) => acc + Number(lote.cantidad_comprometida ?? 0), 0);
-    const stockDisponible = lotesInsumo.reduce((acc, lote) => acc + (Number(lote.cantidad_actual ?? 0) - Number(lote.cantidad_comprometida ?? 0)), 0);
-    const valorInventario = stockActual * insumo.costo_por_kg;
+    const {
+      stockActual,
+      stockComprometido,
+      stockDisponible,
+      valorInventario,
+      costoPromedioPonderado,
+      lotesSinCosto,
+    } = calculateInventoryMetrics(lotesInsumo);
 
     return {
       insumo_id: insumo.uid,
@@ -190,7 +212,9 @@ const buildResumenFromSources = (lotes: StockMateriaPrima[], insumos: SourceInsu
       stock_disponible: stockDisponible,
       umbral_alerta: insumo.umbral_alerta,
       estado: stockDisponible <= insumo.umbral_alerta ? 'CRITICO' : stockDisponible <= insumo.umbral_alerta * 2 ? 'BAJO' : 'OK',
+      costo_promedio_ponderado: costoPromedioPonderado,
       valor_inventario: valorInventario,
+      lotes_sin_costo: lotesSinCosto,
     } satisfies StockMateriaPrimaResumen;
   });
 
@@ -198,9 +222,14 @@ const buildResumenFromSources = (lotes: StockMateriaPrima[], insumos: SourceInsu
     .filter(([insumoId]) => !insumoById.has(insumoId))
     .map(([insumoId, lotesInsumo]) => {
       const nombreDesdeLote = lotesInsumo.find((lote) => lote.nombre_insumo?.trim())?.nombre_insumo?.trim() ?? 'Sin dato';
-      const stockActual = lotesInsumo.reduce((acc, lote) => acc + Number(lote.cantidad_actual ?? 0), 0);
-      const stockComprometido = lotesInsumo.reduce((acc, lote) => acc + Number(lote.cantidad_comprometida ?? 0), 0);
-      const stockDisponible = lotesInsumo.reduce((acc, lote) => acc + (Number(lote.cantidad_actual ?? 0) - Number(lote.cantidad_comprometida ?? 0)), 0);
+      const {
+        stockActual,
+        stockComprometido,
+        stockDisponible,
+        valorInventario,
+        costoPromedioPonderado,
+        lotesSinCosto,
+      } = calculateInventoryMetrics(lotesInsumo);
 
       return {
         insumo_id: insumoId,
@@ -211,7 +240,9 @@ const buildResumenFromSources = (lotes: StockMateriaPrima[], insumos: SourceInsu
         stock_disponible: stockDisponible,
         umbral_alerta: 0,
         estado: stockDisponible <= 0 ? 'CRITICO' : 'OK',
-        valor_inventario: 0,
+        costo_promedio_ponderado: costoPromedioPonderado,
+        valor_inventario: valorInventario,
+        lotes_sin_costo: lotesSinCosto,
       } satisfies StockMateriaPrimaResumen;
     });
 
@@ -277,7 +308,7 @@ export const supabaseStockMPService = {
         .order('created_at', { ascending: false }),
       supabaseClient
         .from('insumos')
-        .select('legacy_uid,nombre,unidad_medida,umbral_alerta,costo_por_kg,deleted_at,esta_activo')
+        .select('id,legacy_uid,nombre,unidad_medida,umbral_alerta,costo_por_kg,deleted_at,esta_activo')
         .is('deleted_at', null)
         .eq('esta_activo', true)
         .order('nombre', { ascending: true }),
@@ -293,7 +324,7 @@ export const supabaseStockMPService = {
     const sourceInsumos = (insumos.data ?? [])
       .filter((row) => isProductionDataRow((row as { legacy_uid?: string | null }).legacy_uid, (row as { nombre?: string | null }).nombre))
       .map((row) => ({
-        uid: (row as { legacy_uid?: string | null }).legacy_uid ?? crypto.randomUUID(),
+        uid: (row as { id?: string | null }).id ?? crypto.randomUUID(),
         nombre: (row as { nombre?: string | null }).nombre ?? 'Sin dato',
         unidad_medida: (row as { unidad_medida?: string | null }).unidad_medida ?? 'KG',
         umbral_alerta: Number((row as { umbral_alerta?: number | null }).umbral_alerta ?? 0),

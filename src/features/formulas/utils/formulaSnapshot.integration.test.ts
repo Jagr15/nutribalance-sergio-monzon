@@ -60,6 +60,6 @@ describe('nutrition + cost snapshot compatibility', () => {
     expect(typeof snapshot.costo_total).toBe('number');
     expect(snapshot.ingredientes[0]).toHaveProperty('aporte_proteina_pct');
     expect(snapshot.ingredientes[0]).toHaveProperty('costo_unitario_usado');
-    expect(['ULTIMO_LOTE', 'REFERENCIA', 'SIN_COSTO']).toContain(snapshot.ingredientes[0].fuente_costo);
+    expect(['PROMEDIO_STOCK', 'REFERENCIA', 'SIN_COSTO']).toContain(snapshot.ingredientes[0].fuente_costo);
   });
 });

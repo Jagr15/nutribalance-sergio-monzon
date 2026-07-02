@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { FiChevronDown, FiChevronLeft, FiChevronRight, FiFileText, FiMapPin, FiSearch } from 'react-icons/fi';
 import type { StockMateriaPrima, StockMateriaPrimaResumen } from '../types';
 import type { Proveedor } from '../../proveedores/types';
+import { resolveStockMPGroupingKey } from '../utils/stockResumen';
 import {
   DataTable,
   EmptyState,
@@ -22,6 +23,11 @@ interface Props {
 }
 
 const unitLabel = (value: string) => (value || 'KG').toUpperCase();
+const formatMoney = (value: number) => new Intl.NumberFormat('es-AR', {
+  style: 'currency',
+  currency: 'ARS',
+  maximumFractionDigits: 2,
+}).format(value);
 
 const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], proveedores, onDelete }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -34,15 +40,28 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
     [proveedores]
   );
 
+  const resumenByKey = useMemo(() => {
+    const map = new Map<string, StockMateriaPrimaResumen>();
+    resumen.forEach((item) => {
+      map.set(item.insumo_id.trim().toLowerCase(), item);
+      map.set(item.nombre_insumo.trim().toLowerCase(), item);
+    });
+    return map;
+  }, [resumen]);
+
   const lotesByInsumo = useMemo(() => {
     const map = new Map<string, StockMateriaPrima[]>();
     lotes.forEach((lote) => {
-      const current = map.get(lote.id_insumo) ?? [];
+      const resolvedSummary = resumenByKey.get((lote.insumo_id ?? '').trim().toLowerCase())
+        ?? resumenByKey.get((lote.id_insumo ?? '').trim().toLowerCase())
+        ?? resumenByKey.get((lote.nombre_insumo ?? '').trim().toLowerCase());
+      const key = resolvedSummary?.insumo_id ?? resolveStockMPGroupingKey(lote, []);
+      const current = map.get(key) ?? [];
       current.push(lote);
-      map.set(lote.id_insumo, current);
+      map.set(key, current);
     });
     return map;
-  }, [lotes]);
+  }, [lotes, resumenByKey]);
 
   const filteredData = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
@@ -88,15 +107,17 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
         />
       </div>
 
-      <DataTable minWidthClassName="table-fixed min-w-[1280px]">
+      <DataTable minWidthClassName="table-fixed min-w-[1560px]">
         <TableHeader>
           <tr>
-            <TableCell header className="w-[24%]">Insumo</TableCell>
-            <TableCell header className="w-[14%] text-right">Stock actual</TableCell>
-            <TableCell header className="w-[14%] text-right">Comprometido</TableCell>
-            <TableCell header className="w-[14%] text-right">Disponible</TableCell>
-            <TableCell header className="w-[12%] text-center">Estado</TableCell>
-            <TableCell header className="w-[10%] text-right">Umbral</TableCell>
+            <TableCell header className="w-[22%]">Insumo</TableCell>
+            <TableCell header className="w-[12%] text-right">Stock actual</TableCell>
+            <TableCell header className="w-[12%] text-right">Comprometido</TableCell>
+            <TableCell header className="w-[12%] text-right">Disponible</TableCell>
+            <TableCell header className="w-[12%] text-right">Costo promedio</TableCell>
+            <TableCell header className="w-[12%] text-right">Valor inventario</TableCell>
+            <TableCell header className="w-[8%] text-center">Estado</TableCell>
+            <TableCell header className="w-[8%] text-right">Umbral</TableCell>
             <TableCell header className="w-[12%] text-right">Acciones</TableCell>
           </tr>
         </TableHeader>
@@ -140,6 +161,22 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
                     </div>
                   </TableCell>
 
+                  <TableCell className="text-right">
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-sm text-slate-900 font-semibold">{formatMoney(item.costo_promedio_ponderado)}</span>
+                      <span className="text-xs text-slate-500">Costo promedio ponderado</span>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-sm text-blue-700 font-semibold">{formatMoney(Number(item.valor_inventario ?? 0))}</span>
+                      <span className="text-xs text-slate-500">
+                        {item.lotes_sin_costo ? `${item.lotes_sin_costo} lotes sin costo` : 'Valorizado por lotes'}
+                      </span>
+                    </div>
+                  </TableCell>
+
                   <TableCell className="text-center">
                     <StatusBadge value={item.estado} />
                   </TableCell>
@@ -164,7 +201,7 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
 
                 {isExpanded ? (
                   <tr className="bg-slate-50">
-                    <td colSpan={7} className="px-6 py-5 border-l-2 border-blue-200">
+                    <td colSpan={9} className="px-6 py-5 border-l-2 border-blue-200">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
@@ -181,6 +218,8 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
                                   <th className="text-left px-4 py-3">Lote</th>
                                   <th className="text-left px-4 py-3">Proveedor</th>
                                   <th className="text-center px-4 py-3">Ubicación</th>
+                                  <th className="text-right px-4 py-3">Costo unitario</th>
+                                  <th className="text-right px-4 py-3">Costo total</th>
                                   <th className="text-right px-4 py-3">Actual</th>
                                   <th className="text-right px-4 py-3">Comprometido</th>
                                   <th className="text-right px-4 py-3">Disponible</th>
@@ -204,6 +243,8 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
                                           <FiMapPin size={10} /> {lote.ubicacion}
                                         </span>
                                       </td>
+                                      <td className="px-4 py-3 text-right text-xs text-slate-700 font-semibold">{formatMoney(Number(lote.costo_unitario ?? 0))}</td>
+                                      <td className="px-4 py-3 text-right text-xs text-slate-700 font-semibold">{formatMoney(Number(lote.costo_total ?? 0))}</td>
                                       <td className="px-4 py-3 text-right text-xs text-slate-900 font-semibold">{(lote.cantidad_actual || 0).toLocaleString()}</td>
                                       <td className="px-4 py-3 text-right text-xs text-orange-700 font-semibold">{(lote.cantidad_comprometida || 0).toLocaleString()}</td>
                                       <td className="px-4 py-3 text-right text-xs text-emerald-700 font-semibold">{disponible.toLocaleString()}</td>
@@ -233,7 +274,7 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
 
           {paginatedData.length === 0 ? (
             <EmptyState
-              colSpan={7}
+              colSpan={9}
               title="No hay insumos para mostrar"
               message={searchTerm.trim()
                 ? 'No se encontraron resultados con el filtro aplicado.'

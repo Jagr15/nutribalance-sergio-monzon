@@ -29,6 +29,10 @@ export interface CrearMovimientoPayload {
   categoria_id?: string;
   centro_costo_id?: string;
   estado?: 'PENDIENTE' | 'CONFIRMADO' | 'ANULADO';
+  fecha_operacion?: string;
+  fecha_vencimiento?: string;
+  estado_financiero?: string;
+  fecha_cobro_pago?: string;
 }
 type FinanzasReportesRow = { payload?: Record<string, unknown> };
 type CategoriaNested = { nombre?: string } | null;
@@ -45,6 +49,10 @@ type FlujoCajaMovimientoRow = {
   categorias_financieras?: CategoriaNested;
   centros_costo?: CentroCostoNested;
   estado: MovimientoFinanciero['estado'];
+  fecha_operacion?: string | null;
+  fecha_vencimiento?: string | null;
+  estado_financiero?: string | null;
+  fecha_cobro_pago?: string | null;
 };
 type CostosFormulaVsRealRow = {
   producto_formula_id: string | null;
@@ -414,7 +422,7 @@ export const finanzasService = {
   async getMovimientos(): Promise<MovimientoFinanciero[]> {
     const { data, error } = await supabaseClient
       .from('flujo_caja_movimientos')
-      .select('legacy_uid,fecha,tipo,origen_operativo,origen_modulo,origen_id,descripcion,monto,estado,categorias_financieras(nombre),centros_costo(nombre)')
+      .select('legacy_uid,fecha,tipo,origen_operativo,origen_modulo,origen_id,descripcion,monto,estado,categorias_financieras(nombre),centros_costo(nombre),fecha_operacion,fecha_vencimiento,estado_financiero,fecha_cobro_pago')
       .is('deleted_at', null)
       .order('fecha', { ascending: false });
 
@@ -431,6 +439,10 @@ export const finanzasService = {
       categoria: row.categorias_financieras?.nombre,
       centro_costo: row.centros_costo?.nombre,
       estado: row.estado,
+      fecha_operacion: row.fecha_operacion ?? undefined,
+      fecha_vencimiento: row.fecha_vencimiento ?? undefined,
+      estado_financiero: row.estado_financiero ?? undefined,
+      fecha_cobro_pago: row.fecha_cobro_pago ?? undefined,
     }));
   },
 
@@ -552,7 +564,7 @@ export const finanzasService = {
       throw new Error('Tipo de movimiento inválido.');
     }
     const tipoContable = payload.tipo === 'COBRANZA' ? 'INGRESO' : payload.tipo === 'PAGO' ? 'EGRESO' : payload.tipo;
-    const origenOperativo = payload.origen_operativo?.trim() || (payload.tipo === 'COBRANZA' || payload.tipo === 'INGRESO' ? 'COSTOS_INGRESO' : payload.tipo === 'PAGO' || payload.tipo === 'EGRESO' ? 'COSTOS_EGRESO' : 'COSTOS_AJUSTE');
+    const origenOperativo = payload.origen_operativo?.trim() || (payload.tipo === 'COBRANZA' ? 'COBRANZA_MANUAL' : payload.tipo === 'PAGO' ? 'PAGO_MANUAL' : payload.tipo === 'INGRESO' ? 'COSTOS_INGRESO' : payload.tipo === 'EGRESO' ? 'COSTOS_EGRESO' : 'COSTOS_AJUSTE');
     const uniqueId = hashText([
       fechaDia(new Date().toISOString()),
       tipoContable,
@@ -565,6 +577,25 @@ export const finanzasService = {
 
     const tipoCosto = tipoContable === 'TRANSFERENCIA' ? 'EGRESO' : tipoContable;
 
+    let dbEstado: 'PENDIENTE' | 'CONFIRMADO' | 'ANULADO' = 'CONFIRMADO';
+    let fechaCobroPago: string | null = null;
+
+    if (payload.estado_financiero) {
+      if (['PENDIENTE_COBRO', 'PENDIENTE_PAGO', 'VENCIDO'].includes(payload.estado_financiero)) {
+        dbEstado = 'PENDIENTE';
+        fechaCobroPago = null;
+      } else if (payload.estado_financiero === 'CANCELADO') {
+        dbEstado = 'ANULADO';
+        fechaCobroPago = null;
+      } else if (['COBRADO', 'PAGADO'].includes(payload.estado_financiero)) {
+        dbEstado = 'CONFIRMADO';
+        fechaCobroPago = payload.fecha_cobro_pago || new Date().toISOString().split('T')[0];
+      }
+    } else {
+      dbEstado = (payload.estado as any) ?? 'CONFIRMADO';
+      fechaCobroPago = dbEstado === 'CONFIRMADO' ? (payload.fecha_cobro_pago || new Date().toISOString().split('T')[0]) : null;
+    }
+
     await contabilidadOperativaService.sincronizarMovimientoCostos({
       origen_id: uniqueId,
       fecha: new Date().toISOString(),
@@ -574,10 +605,14 @@ export const finanzasService = {
       origen_operativo: origenOperativo,
       categoria_id: payload.categoria_id ?? undefined,
       centro_costo_id: payload.centro_costo_id ?? undefined,
-      estado: payload.estado ?? 'CONFIRMADO',
+      estado: dbEstado,
       metadata: {
         origen: 'manual',
       },
+      fecha_operacion: payload.fecha_operacion ?? new Date().toISOString().split('T')[0],
+      fecha_vencimiento: payload.fecha_vencimiento ?? new Date().toISOString().split('T')[0],
+      estado_financiero: payload.estado_financiero,
+      fecha_cobro_pago: fechaCobroPago,
     });
     await auditAction({
       modulo: 'finanzas',
@@ -857,5 +892,26 @@ export const finanzasService = {
         valor_inventario_total: valorizacionInventario,
       },
     };
+  },
+
+  async confirmarMovimiento(uid: string): Promise<void> {
+    await contabilidadOperativaService.confirmarMovimiento(uid);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('finanzas-updated'));
+    }
+  },
+
+  async updateMovimiento(uid: string, payload: {
+    descripcion: string;
+    monto: number;
+    fecha_operacion: string;
+    fecha_vencimiento: string;
+    estado_financiero: string;
+    categoria_id?: string | null;
+  }): Promise<void> {
+    await contabilidadOperativaService.updateMovimiento(uid, payload);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('finanzas-updated'));
+    }
   },
 };

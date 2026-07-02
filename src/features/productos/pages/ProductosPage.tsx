@@ -1,26 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { Card } from '../../../shared/components/card';
-import { ROUTES } from '../../../app/config/routes';
 import { ApiService } from '../../../infrastructure/api';
 import { getSessionUser } from '../../auth/session';
 import { useOrdenes } from '../../ordenes/hooks/useOrdenes';
 import { useOrdenService } from '../../ordenes/services';
-import { EstadoOrden, type DetalleInsumoLote } from '../../ordenes/types';
+import { EstadoOrden, type DetalleInsumoLote, type OrdenProduccion } from '../../ordenes/types';
+import { getTodayDateInputValue } from '../../../shared/utils/formatters';
 import { ControlEstado, type MovimientoStockPT, type StockProductoTerminado, type StockProductoTerminadoResumen } from '../types';
 import type { Formula } from '../../formulas/types';
 import type { Cliente } from '../../clientes/types/cliente';
 import { buildStockPTResumen } from '../utils/stockPtResumen';
 import type { Silo } from '../../silos/types';
-import { getProductoEmpaquesKeys } from '../utils/empaquesProducto';
 
 type EstadoProductoUi = 'OK' | 'Bajo' | 'Crítico';
 
 interface ProductoUi {
   dbId: string;
   uid: string;
+  ordenId: string | null;
   nombre: string;
   stockKg: number;
   valorEstimado: number;
@@ -30,6 +29,7 @@ interface ProductoUi {
   estadoUi: EstadoProductoUi;
   fechaIngreso: string;
   orden: string;
+  fechaProgramada: string | null;
   idFormula?: string | null;
   versionFormula?: number | null;
   costoArsTon?: number;
@@ -88,15 +88,19 @@ const toArrayDetalle = (detalle: StockProductoTerminado['detalle_insumos']) => {
 const toUi = (item: StockProductoTerminado): ProductoUi => ({
   dbId: item.id,
   uid: item.uid,
+  ordenId: item.id_orden || null,
   nombre: item.nombre_producto || 'Sin dato',
   stockKg: Number(item.cantidad_total ?? 0),
-  valorEstimado: Number(item.cantidad_total ?? 0) * Number(item.costo_unitario_estimado ?? 0),
+  valorEstimado: Number(item.costo_total ?? 0) > 0
+    ? Number(item.costo_total ?? 0)
+    : Number(item.cantidad_total ?? 0) * Number(item.costo_unitario_estimado ?? 0),
   silo: item.nombre_silo || 'Sin dato',
   siloLegacyUid: item.id_silo || null,
   lote: item.lote || 'Sin dato',
   estadoUi: mapEstado(item.estado),
   fechaIngreso: item.fecha_ingreso,
   orden: item.numero_orden || item.id_orden || 'Sin dato',
+  fechaProgramada: null,
   idFormula: item.id_formula ?? null,
   versionFormula: item.version_formula ?? null,
   costoArsTon: undefined,
@@ -114,165 +118,115 @@ const resolveStockPtId = (lotes: ProductoUi[], loteId: string) => {
   };
 };
 
+const normalizeKey = (value?: string | null) => (value ?? '').trim().toLowerCase();
+
+const findOrdenExacta = (ordenes: OrdenProduccion[], producto: ProductoUi) => {
+  if (producto.ordenId) {
+    const byOrderId = ordenes.find((orden) => orden.id === producto.ordenId);
+    if (byOrderId) return byOrderId;
+  }
+
+  const ordenRef = normalizeKey(producto.orden);
+  if (ordenRef) {
+    const byLote = ordenes.find((orden) => normalizeKey(orden.lote) === ordenRef);
+    if (byLote) return byLote;
+
+    const byId = ordenes.find((orden) => normalizeKey(orden.id) === ordenRef);
+    if (byId) return byId;
+  }
+
+  return null;
+};
+
+const findOrdenEditable = (ordenes: OrdenProduccion[], producto: ProductoUi) => {
+  const orden = findOrdenExacta(ordenes, producto);
+  if (!orden) return null;
+  return orden.estado === EstadoOrden.PENDIENTE || orden.estado === EstadoOrden.EN_PROCESO ? orden : null;
+};
+
 const formatProteina = (value?: number) => (
   typeof value === 'number' ? `${value.toFixed(2)}%` : 'Sin dato'
 );
 
-const formatEmpaqueLabel = (item: { tipo_empaque: string; capacidad_kg: number }) => (
-  `${item.tipo_empaque === 'BOLSA' ? 'Bolsa' : 'Big Bag'} · ${Number(item.capacidad_kg)} kg`
-);
+const openOrdenProgramadaDetail = (orden: OrdenProduccion, formula?: Formula | null) => {
+  const formulaLabel = orden.id_formula || orden.version_formula
+    ? `${orden.id_formula ?? 'Sin fórmula'} ${orden.version_formula ? `v${orden.version_formula}` : ''}`
+    : formula
+      ? `${formula.uid} v${formula.version}`
+      : 'Sin dato';
 
-const loadEmpaquesByProducto = async (producto: ProductoUi) => {
-  const keys = getProductoEmpaquesKeys(producto);
-  const rows = (await Promise.all(keys.map((key) => ApiService.empaquesProducto.listByProducto(key)))).flat();
-  return Array.from(new Map(rows.map((item) => [item.id, item])).values());
-};
+  const insumos = orden.detalle_insumos
+    ?.slice(0, 8)
+    .map((item) => `${item.nombre_insumo || 'Sin dato'} · ${Number(item.cantidad_usada ?? 0).toLocaleString('es-AR')} ${item.tipo_unidad || 'KG'}`)
+    .join('<br/>') || 'Sin dato';
 
-const openEmpaquesProductoModal = async (producto: ProductoUi, onRefresh: () => Promise<void>) => {
-  const refreshAndReopen = async () => {
-    await onRefresh();
-    await openEmpaquesProductoModal(producto, onRefresh);
-  };
-
-  const loadRows = async () => {
-    const rows = await loadEmpaquesByProducto(producto);
-    const activos = rows.filter((item) => item.activo);
-    const inactivos = rows.filter((item) => !item.activo);
-    return { rows, activos, inactivos };
-  };
-
-  const { rows } = await loadRows();
-
-  const htmlList = rows.length > 0
-    ? rows
-        .map((item) => `
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:12px; margin-bottom:8px; background:${item.activo ? '#f8fafc' : '#fff7ed'};">
-            <div>
-              <div style="font-weight:700; color:#0f172a;">${formatEmpaqueLabel(item)}</div>
-              <div style="font-size:12px; color:${item.activo ? '#64748b' : '#c2410c'};">${item.activo ? 'Activo' : 'Inactivo'}</div>
-            </div>
-            <button
-              type="button"
-              class="toggle-empaque-btn"
-              data-id="${item.id}"
-              data-active="${item.activo ? '1' : '0'}"
-              style="border:1px solid #cbd5e1; background:#fff; color:#0f172a; border-radius:10px; padding:8px 12px; font-size:12px; font-weight:700;"
-            >${item.activo ? 'Desactivar' : 'Activar'}</button>
-          </div>
-        `)
-        .join('')
-    : '<div style="padding:12px; border:1px dashed #f59e0b; border-radius:12px; background:#fffbeb; color:#b45309;">Este producto todavía no tiene empaques configurados.</div>';
-
-  const result = await Swal.fire({
-    title: `Empaques de ${producto.nombre}`,
-    html: `
-      <div style="text-align:left; color:#0f172a; font-size:14px;">
-        <p style="margin:0 0 12px;"><strong>Clave de producto:</strong> ${getProductoEmpaquesKeys(producto).join(' · ')}</p>
-        <div style="margin-bottom:12px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-          <button type="button" id="add-bolsa" style="border:none; border-radius:12px; padding:10px 12px; font-weight:700; background:#dbeafe; color:#1d4ed8;">Agregar Bolsa</button>
-          <button type="button" id="add-bigbag" style="border:none; border-radius:12px; padding:10px 12px; font-weight:700; background:#e0f2fe; color:#0369a1;">Agregar Big Bag</button>
-        </div>
-        <div id="empaques-list">
-          ${htmlList}
-        </div>
-        <p style="margin:10px 0 0; color:#475569; font-size:12px;">Bolsa: 15, 20, 25, 40 kg. Big Bag: 500, 1000 kg.</p>
-      </div>
-    `,
-    background: '#ffffff',
-    color: '#0f172a',
-    showCancelButton: true,
-    confirmButtonText: 'Cerrar',
-    cancelButtonText: 'Salir',
-    confirmButtonColor: '#2563eb',
-    width: 720,
-    didOpen: () => {
-      const add = async (tipo: 'BOLSA' | 'BIG_BAG') => {
-        const capacidades = tipo === 'BOLSA' ? [15, 20, 25, 40] : [500, 1000];
-        const { value: capacidad } = await Swal.fire({
-          title: `Agregar ${tipo === 'BOLSA' ? 'Bolsa' : 'Big Bag'}`,
-          input: 'select',
-          inputOptions: capacidades.reduce<Record<string, string>>((acc, cap) => {
-            acc[String(cap)] = `${cap} kg`;
-            return acc;
-          }, {}),
-          inputPlaceholder: 'Seleccionar capacidad',
-          showCancelButton: true,
-          confirmButtonText: 'Guardar',
-          cancelButtonText: 'Cancelar',
-          background: '#ffffff',
-          color: '#0f172a',
-          confirmButtonColor: '#2563eb',
-        });
-
-        if (!capacidad) return;
-        await ApiService.empaquesProducto.create({
-          producto_id: getProductoEmpaquesKeys(producto)[0],
-          tipo_empaque: tipo,
-          capacidad_kg: Number(capacidad) as 15 | 20 | 25 | 40 | 500 | 1000,
-        });
-        Swal.close();
-        await refreshAndReopen();
-      };
-
-      const addBolsa = document.getElementById('add-bolsa');
-      const addBigBag = document.getElementById('add-bigbag');
-      addBolsa?.addEventListener('click', () => { void add('BOLSA'); });
-      addBigBag?.addEventListener('click', () => { void add('BIG_BAG'); });
-
-      document.querySelectorAll<HTMLButtonElement>('.toggle-empaque-btn').forEach((button) => {
-        button.addEventListener('click', async () => {
-          const id = button.dataset.id ?? '';
-          const activo = button.dataset.active === '1';
-          await ApiService.empaquesProducto.toggleActive(id, !activo);
-          Swal.close();
-          await refreshAndReopen();
-        });
-      });
-    },
-  });
-
-  if (result.isConfirmed) return;
-};
-
-const openFormulaDetail = (producto: ProductoUi) => {
   void Swal.fire({
-    title: `Fórmula de ${producto.nombre}`,
+    title: `Detalle de OP · ${orden.lote}`,
     html: `
       <div style="text-align:left; color:#0f172a; font-size:14px;">
-        <p style="margin:0 0 8px;"><strong>Lote PT:</strong> ${producto.lote}</p>
-        <p style="margin:0 0 8px;"><strong>Orden asociada:</strong> ${producto.orden}</p>
-        <p style="margin:0 0 8px;"><strong>Fórmula:</strong> ${producto.idFormula ?? 'Sin dato'}</p>
-        <p style="margin:0 0 8px;"><strong>Versión:</strong> ${producto.versionFormula ?? 'Sin dato'}</p>
-        <p style="margin:0 0 8px;"><strong>Proteína objetivo:</strong> ${formatProteina(producto.proteinaObjetivoPct)}</p>
-        <p style="margin:0;"><strong>Fórmula:</strong> Información de fórmula disponible en módulo Fórmulas</p>
+        <p style="margin:0 0 8px;"><strong>Producto:</strong> ${orden.nombre_producto || 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>OP / lote:</strong> ${orden.lote || 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Estado:</strong> ${orden.estado}</p>
+        <p style="margin:0 0 8px;"><strong>Cantidad objetivo:</strong> ${formatKg(Number(orden.cantidad_objetivo ?? 0))}</p>
+        <p style="margin:0 0 8px;"><strong>Fecha programada:</strong> ${orden.fecha_programada || 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Silo destino:</strong> ${orden.destino_silo || 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Fórmula / versión:</strong> ${formulaLabel}</p>
+        <p style="margin:0 0 8px;"><strong>Cantidad real:</strong> ${orden.cantidad_real ? formatKg(Number(orden.cantidad_real)) : 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Merma:</strong> ${orden.merma_manual !== undefined && orden.merma_manual !== null ? `${Number(orden.merma_manual).toLocaleString('es-AR')} kg` : 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Costo total insumos:</strong> ${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Number(orden.costo_total_insumos ?? 0))}</p>
+        <p style="margin:0 0 8px;"><strong>Detalle insumos:</strong><br/>${insumos}</p>
+        <p style="margin:0 0 8px;"><strong>ID técnico:</strong> ${orden.id}</p>
       </div>
     `,
     background: '#ffffff',
     color: '#0f172a',
     confirmButtonColor: '#2563eb',
     confirmButtonText: 'Cerrar',
-    width: 620,
+    width: 700,
   });
 };
 
-const openStockDetail = (producto: ProductoUi) => {
+const openStockDetail = (producto: ProductoUi, movimientosPT: MovimientoStockPT[], orden?: OrdenProduccion | null) => {
   const ingredientes = producto.detalleInsumos
     .slice(0, 5)
     .map((i) => `${i.nombre_insumo || 'Sin dato'} (${Number(i.cantidad ?? 0).toLocaleString('es-AR')} ${i.unidad_medida || 'KG'})`)
     .join(', ');
+  const movimientos = movimientosPT
+    .filter((mov) => mov.stock_pt_id === producto.dbId || mov.lote === producto.lote || mov.numero_orden === producto.orden)
+    .slice(0, 8);
+  const trazabilidad = movimientos.length > 0
+    ? movimientos.map((mov) => `${mov.created_at.slice(0, 10)} · ${mov.tipo} · ${Number(mov.cantidad ?? 0).toLocaleString('es-AR')} ${mov.unidad}`).join('<br/>')
+    : 'Sin movimientos registrados';
+  const fechaProgramada = orden?.fecha_programada ?? producto.fechaProgramada ?? 'Sin dato';
+  const cantidadObjetivo = orden?.cantidad_objetivo ?? null;
+  const cantidadReal = orden?.cantidad_real ?? null;
+  const merma = orden?.merma_manual ?? null;
+  const costoUnitario = orden?.costo_total_insumos && Number(orden.cantidad_real ?? 0) > 0
+    ? Number(orden.costo_total_insumos) / Number(orden.cantidad_real ?? 0)
+    : null;
+  const valorTotal = orden?.costo_total_insumos ?? producto.valorEstimado;
 
   void Swal.fire({
-    title: `Ficha técnica · ${producto.nombre}`,
+    title: `Detalle de lote · ${producto.nombre}`,
     html: `
       <div style="text-align:left; color:#0f172a; font-size:14px;">
         <p style="margin:0 0 8px;"><strong>Lote PT:</strong> ${producto.lote || 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Orden asociada:</strong> ${producto.orden || 'Sin dato'}</p>
         <p style="margin:0 0 8px;"><strong>Silo asociado:</strong> ${producto.silo || 'Sin dato'}</p>
         <p style="margin:0 0 8px;"><strong>Stock disponible:</strong> ${formatKg(producto.stockKg)}</p>
         <p style="margin:0 0 8px;"><strong>Estado operativo:</strong> ${producto.estadoUi}</p>
         <p style="margin:0 0 8px;"><strong>Último ingreso:</strong> ${formatDate(producto.fechaIngreso)}</p>
+        <p style="margin:0 0 8px;"><strong>Fecha programada:</strong> ${fechaProgramada || 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Cantidad objetivo:</strong> ${typeof cantidadObjetivo === 'number' ? formatKg(cantidadObjetivo) : 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Cantidad real:</strong> ${typeof cantidadReal === 'number' ? formatKg(cantidadReal) : 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Merma:</strong> ${typeof merma === 'number' ? `${merma.toLocaleString('es-AR')} kg` : 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Costo unitario:</strong> ${costoUnitario !== null ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(costoUnitario) : 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Valor total:</strong> ${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(valorTotal)}</p>
         <p style="margin:0 0 8px;"><strong>Proteína objetivo:</strong> ${formatProteina(producto.proteinaObjetivoPct)}</p>
-        <p style="margin:0 0 8px;"><strong>Valor estimado:</strong> ${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(producto.valorEstimado)}</p>
         <p style="margin:0 0 8px;"><strong>Detalle insumos:</strong> ${ingredientes || 'Sin dato'}</p>
+        <p style="margin:0 0 8px;"><strong>Trazabilidad:</strong><br/>${trazabilidad}</p>
+        <p style="margin:0 0 8px;"><strong>ID técnico stock PT:</strong> ${producto.dbId}</p>
+        <p style="margin:0;"><strong>Legacy UID:</strong> ${producto.uid}</p>
       </div>
     `,
     background: '#ffffff',
@@ -408,15 +362,51 @@ const openSalidaModal = async (
 const openProgramacionModal = (
   productos: ProductoUi[],
   formulaByNombre: Map<string, Formula>,
-  productoPreseleccionado?: ProductoUi
+  productoPreseleccionado?: ProductoUi,
+  ordenProgramable?: OrdenProduccion | null,
+  onSaved?: () => Promise<void> | void
 ) => {
+  const editMode = Boolean(ordenProgramable);
+  const currentProducto = productoPreseleccionado ?? productos[0];
+  const fechaProgramadaInicial = ordenProgramable?.fecha_programada ?? getTodayDateInputValue();
+  const cantidadInicial = editMode ? String(Number(ordenProgramable?.cantidad_objetivo ?? 0)) : '';
+  const productoNombre = editMode
+    ? ordenProgramable?.nombre_producto ?? currentProducto?.nombre ?? 'Sin dato'
+    : currentProducto?.nombre ?? 'Sin dato';
+  const formulaLabel = editMode
+    ? `${ordenProgramable?.id_formula ?? 'Sin fórmula'} ${ordenProgramable?.version_formula ? `v${ordenProgramable.version_formula}` : ''}`.trim()
+    : 'Información de fórmula disponible en módulo Fórmulas';
+  const siloLabel = editMode
+    ? ordenProgramable?.destino_silo ?? 'Sin dato'
+    : currentProducto?.silo || 'Sin dato';
+  const mermaLabel = editMode
+    ? String(ordenProgramable?.merma_manual ?? 0)
+    : 'Se calculará al finalizar';
+  const loteLabel = editMode
+    ? ordenProgramable?.lote ?? 'Sin dato'
+    : 'Se asignará automáticamente';
+
   const options = productos
-    .map((producto) => `<option value="${producto.uid}" ${productoPreseleccionado?.uid === producto.uid ? 'selected' : ''}>${producto.nombre} · ${producto.lote}</option>`)
+    .map((producto) => `<option value="${producto.uid}" ${!editMode && productoPreseleccionado?.uid === producto.uid ? 'selected' : ''}>${producto.nombre} · ${producto.lote}</option>`)
     .join('');
 
-  void Swal.fire({
-    title: 'Programar producción',
-    html: `
+  const html = editMode
+    ? `
+      <div style="text-align:left; color:#0f172a; font-size:14px;">
+        <div style="margin: 0 0 12px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc;">
+          <p style="margin:0 0 6px;"><strong>OP actual:</strong> ${loteLabel}</p>
+          <p style="margin:0 0 6px;"><strong>Producto:</strong> ${productoNombre}</p>
+          <p style="margin:0 0 6px;"><strong>Fórmula:</strong> ${formulaLabel}</p>
+          <p style="margin:0 0 6px;"><strong>Cantidad:</strong> ${cantidadInicial || 'Sin dato'} kg</p>
+          <p style="margin:0 0 6px;"><strong>Merma:</strong> ${mermaLabel}</p>
+          <p style="margin:0;"><strong>Silo destino:</strong> ${siloLabel}</p>
+        </div>
+        <label style="display:block; margin: 0 0 6px;">Fecha programada</label>
+        <input id="prod-fecha" type="date" value="${fechaProgramadaInicial}" style="width:100%; margin-bottom:12px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+        <p style="margin:0; color:#475569;">Solo la fecha programada se puede editar en esta reprogramación.</p>
+      </div>
+    `
+    : `
       <div style="text-align:left; color:#0f172a; font-size:14px;">
         <label style="display:block; margin: 0 0 6px;">Producto</label>
         <select id="prod-select" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;">
@@ -427,11 +417,11 @@ const openProgramacionModal = (
         <input id="prod-cantidad" type="number" min="1" step="100" placeholder="Ej: 10000" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
         <label style="display:block; margin: 0 0 6px;">Unidad</label>
         <select id="prod-unidad" style="width:100%; margin-bottom:10px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;">
-          <option value="kg">kg</option>
+          <option value="kg" selected>kg</option>
           <option value="ton">ton</option>
         </select>
-        <label style="display:block; margin: 0 0 6px;">Fecha estimada</label>
-        <input id="prod-fecha" type="date" style="width:100%; margin-bottom:12px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
+        <label style="display:block; margin: 0 0 6px;">Fecha programada</label>
+        <input id="prod-fecha" type="date" value="${fechaProgramadaInicial}" style="width:100%; margin-bottom:12px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:8px; padding:8px;" />
         <div style="margin:0 0 10px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc; color:#334155;">
           <strong>Número de OP:</strong> se asignará automáticamente al guardar.
         </div>
@@ -439,13 +429,19 @@ const openProgramacionModal = (
         <p id="prod-silo" style="margin:0 0 6px; color:#334155;"><strong>Silo destino:</strong> Sin dato</p>
         <p id="prod-mp" style="margin:0; color:#64748b;"><strong>Stock materia prima estimado:</strong> Se validará al guardar la OP pendiente</p>
       </div>
+    `;
+
+  void Swal.fire({
+    title: editMode ? 'Reprogramar producción' : 'Programar producción',
+    html: `
+      ${html}
     `,
     background: '#ffffff',
     color: '#0f172a',
     showCancelButton: true,
     confirmButtonColor: '#2563eb',
     cancelButtonColor: '#334155',
-    confirmButtonText: 'Programar',
+    confirmButtonText: editMode ? 'Actualizar fecha' : 'Programar',
     cancelButtonText: 'Cerrar',
     width: 680,
     showLoaderOnConfirm: true,
@@ -456,22 +452,37 @@ const openProgramacionModal = (
       const fechaInput = document.getElementById('prod-fecha') as HTMLInputElement | null;
 
       if (fechaInput) {
-        const today = new Date();
-        const isoDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-        fechaInput.value = isoDate;
+        fechaInput.value = fechaProgramadaInicial;
       }
 
       const refreshPreview = () => {
         const selected = productos.find((item) => item.uid === select?.value);
-        if (siloLine) {
+        if (siloLine && !editMode) {
           siloLine.innerHTML = `<strong>Silo destino:</strong> ${selected?.silo || 'Sin dato'}`;
         }
       };
 
-      select?.addEventListener('change', refreshPreview);
-      refreshPreview();
+      if (select && !editMode) {
+        select.addEventListener('change', refreshPreview);
+        refreshPreview();
+      }
     },
-    preConfirm: () => {
+    preConfirm: async () => {
+      if (editMode) {
+        if (!ordenProgramable) {
+          Swal.showValidationMessage('No se encontró la orden a reprogramar.');
+          return false;
+        }
+        const fecha = (document.getElementById('prod-fecha') as HTMLInputElement | null)?.value;
+        const fechaProgramada = fecha || ordenProgramable.fecha_programada || getTodayDateInputValue();
+        return useOrdenService.update(ordenProgramable.id, {
+          fecha_programada: fechaProgramada,
+        }).catch((error: unknown) => {
+          Swal.showValidationMessage(error instanceof Error ? error.message : 'No se pudo actualizar la orden de producción.');
+          return false as unknown as Awaited<ReturnType<typeof useOrdenService.update>>;
+        });
+      }
+
       const selectedUid = (document.getElementById('prod-select') as HTMLSelectElement | null)?.value;
       const cantidadRaw = (document.getElementById('prod-cantidad') as HTMLInputElement | null)?.value;
       const unidad = (document.getElementById('prod-unidad') as HTMLSelectElement | null)?.value || 'kg';
@@ -496,7 +507,7 @@ const openProgramacionModal = (
         return;
       }
 
-      const fechaProgramada = fecha || new Date().toISOString().slice(0, 10);
+      const fechaProgramada = fecha || getTodayDateInputValue();
       const cantidadKg = unidad === 'ton' ? cantidad * 1000 : cantidad;
       const fechaCreacion = new Date(`${fechaProgramada}T00:00:00`).toISOString();
       const sessionUserName = getSessionUser().name;
@@ -514,6 +525,7 @@ const openProgramacionModal = (
         merma_manual: undefined,
         estado: EstadoOrden.PENDIENTE,
         fecha_creacion: fechaCreacion,
+        fecha_programada: fechaProgramada,
         usuario_responsable: usuarioResponsable,
         id_silo: selected.siloLegacyUid,
         destino_silo: selected.siloLegacyUid ? selected.silo : null,
@@ -524,8 +536,29 @@ const openProgramacionModal = (
         return false as unknown as Awaited<ReturnType<typeof useOrdenService.create>>;
       });
     },
-  }).then((result) => {
+  }).then(async (result) => {
     if (!result.isConfirmed || !result.value) return;
+
+    await onSaved?.();
+
+    if (editMode) {
+      const actualizada = result.value as Awaited<ReturnType<typeof useOrdenService.update>>;
+      void Swal.fire({
+        icon: 'success',
+        title: 'OP reprogramada',
+        html: `
+          <div style="text-align:left; color:#0f172a; font-size:14px;">
+            <p style="margin:0 0 8px;">La orden <strong>${actualizada.lote}</strong> actualizó su fecha programada.</p>
+            <p style="margin:0;"><strong>Fecha programada:</strong> ${actualizada.fecha_programada || fechaProgramadaInicial}</p>
+          </div>
+        `,
+        background: '#ffffff',
+        color: '#0f172a',
+        confirmButtonColor: '#2563eb',
+        confirmButtonText: 'Aceptar',
+      });
+      return;
+    }
 
     const creada = result.value as Awaited<ReturnType<typeof useOrdenService.create>>;
 
@@ -679,8 +712,7 @@ const ProductosPage = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState<'TODOS' | EstadoProductoUi>('TODOS');
-  const navigate = useNavigate();
-  const { ordenes, handleFinishProduction } = useOrdenes();
+  const { ordenes, handleFinishProduction, fetchOrdenes } = useOrdenes();
 
   const refreshData = useCallback(async () => {
     setIsLoading(true);
@@ -749,6 +781,16 @@ const ProductosPage = () => {
     })
   ), [items, formulaByNombre]);
 
+  const itemsConOrden = useMemo(() => (
+    itemsWithProteina.map((item) => {
+      const ordenProgramable = findOrdenExacta(ordenes, item);
+      return {
+        ...item,
+        fechaProgramada: ordenProgramable?.fecha_programada ?? null,
+      };
+    })
+  ), [itemsWithProteina, ordenes]);
+
   const resumenRows = useMemo(() => resumenPT.map((item) => ({
     ...item,
     estadoUi: mapEstado(item.estado),
@@ -762,7 +804,7 @@ const ProductosPage = () => {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return itemsWithProteina.filter((item) => {
+    return itemsConOrden.filter((item) => {
       if (estadoFiltro !== 'TODOS' && item.estadoUi !== estadoFiltro) return false;
       if (!q) return true;
       return (
@@ -771,7 +813,7 @@ const ProductosPage = () => {
         item.silo.toLowerCase().includes(q)
       );
     });
-  }, [itemsWithProteina, query, estadoFiltro]);
+  }, [itemsConOrden, query, estadoFiltro]);
 
   const totalStock = useResumen ? totalStockResumen : filtered.reduce((acc, item) => acc + item.stockKg, 0);
   const productosConRiesgo = useResumen ? productosConRiesgoResumen : filtered.filter((item) => item.estadoUi !== 'OK').length;
@@ -784,7 +826,18 @@ const ProductosPage = () => {
     : null;
 
   const ordenesEnProceso = ordenes.filter((orden) => orden.estado === EstadoOrden.EN_PROCESO);
+  const ordenesProgramadas = ordenes.filter((orden) => orden.estado === EstadoOrden.PENDIENTE || orden.estado === EstadoOrden.EN_PROCESO);
   const silosProductoTerminado = silos.filter((silo) => silo.tipo_uso === 'PRODUCTO_TERMINADO');
+  const handleProgramarProduccion = useCallback(
+    (producto: ProductoUi) => {
+      const ordenProgramable = findOrdenEditable(ordenes, producto);
+      void openProgramacionModal(itemsConOrden, formulaByNombre, producto, ordenProgramable, async () => {
+        await fetchOrdenes();
+        await refreshData();
+      });
+    },
+    [itemsConOrden, formulaByNombre, ordenes, fetchOrdenes, refreshData]
+  );
 
   return (
     <div className="space-y-6">
@@ -816,6 +869,75 @@ const ProductosPage = () => {
           <h2 className="text-2xl font-black mt-2 text-indigo-300">{proteinaPromedio !== null ? `${proteinaPromedio.toFixed(2)}%` : 'Sin dato'}</h2>
         </Card>
       </section>
+
+      <Card>
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 className="text-xl font-semibold">Producción programada</h2>
+            <p className="text-sm text-slate-500">Órdenes de producción pendientes o en proceso con fecha programada.</p>
+          </div>
+          <p className="text-xs text-slate-500">{ordenesProgramadas.length} órdenes</p>
+        </div>
+
+        {ordenesProgramadas.length === 0 ? (
+          <div className="py-10 text-center text-slate-500">No hay órdenes de producción programadas para mostrar.</div>
+        ) : (
+          <div className="overflow-auto rounded-2xl border border-slate-200 bg-white">
+            <table className="w-full min-w-[1080px] text-left">
+              <thead>
+                <tr className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
+                  <th className="px-4 py-3">OP / lote</th>
+                  <th className="px-4 py-3">Producto</th>
+                  <th className="px-4 py-3">Cantidad objetivo</th>
+                  <th className="px-4 py-3">Fecha programada</th>
+                  <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3">Silo destino</th>
+                  <th className="px-4 py-3">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ordenesProgramadas.map((orden) => (
+                  <tr key={orden.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-3 font-medium">{orden.lote}</td>
+                    <td className="px-4 py-3">{orden.nombre_producto}</td>
+                    <td className="px-4 py-3">{formatKg(Number(orden.cantidad_objetivo ?? 0))}</td>
+                    <td className="px-4 py-3">{orden.fecha_programada ? formatDate(orden.fecha_programada) : 'Sin dato'}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${getStatusStyles(orden.estado === EstadoOrden.EN_PROCESO ? 'Bajo' : 'OK')}`}>
+                        {orden.estado}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">{orden.destino_silo || 'Sin dato'}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openOrdenProgramadaDetail(orden, formulaByNombre.get(orden.nombre_producto.trim().toLowerCase()) ?? null)}
+                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          Ver detalle
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void openProgramacionModal(itemsConOrden, formulaByNombre, undefined, orden, async () => {
+                              await fetchOrdenes();
+                              await refreshData();
+                            });
+                          }}
+                          className="h-8 px-3 rounded-lg border border-blue-200 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        >
+                          Reprogramar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       <Card>
         <div className="flex items-center justify-between gap-4 mb-5">
@@ -885,6 +1007,8 @@ const ProductosPage = () => {
                               estadoUi: row.estadoUi,
                               fechaIngreso: row.ultima_actualizacion,
                               orden: row.numero_orden || 'Sin dato',
+                              ordenId: null,
+                              fechaProgramada: null,
                               idFormula: row.id_formula,
                               versionFormula: row.version_formula,
                               detalleInsumos: [],
@@ -988,18 +1112,16 @@ const ProductosPage = () => {
 
         {!isLoading && filtered.length > 0 ? (
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-auto">
-            <table className="w-full min-w-[1300px] text-left">
+            <table className="w-full min-w-[1080px] text-left">
               <thead>
                 <tr className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
                   <th className="pb-3">Producto</th>
-                  <th className="pb-3">Fórmula / versión</th>
-                  <th className="pb-3">Proteína objetivo</th>
                   <th className="pb-3">Lote PT</th>
                   <th className="pb-3">Orden</th>
                   <th className="pb-3">Silo</th>
                   <th className="pb-3">Stock disponible</th>
                   <th className="pb-3">Valor estimado ARS</th>
-                  <th className="pb-3">Último ingreso</th>
+                  <th className="pb-3">Fecha programada</th>
                   <th className="pb-3">Estado</th>
                   <th className="pb-3">Acción</th>
                 </tr>
@@ -1008,18 +1130,12 @@ const ProductosPage = () => {
                 {filtered.map((producto) => (
                   <tr key={producto.uid} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 font-medium">{producto.nombre}</td>
-                    <td className="py-3">
-                      {producto.idFormula || producto.versionFormula
-                        ? `${producto.idFormula ?? 'Sin fórmula'} ${producto.versionFormula ? `v${producto.versionFormula}` : ''}`
-                        : 'Derivada desde OP'}
-                    </td>
-                    <td className="py-3">{formatProteina(producto.proteinaObjetivoPct)}</td>
                     <td className="py-3">{producto.lote || 'Sin dato'}</td>
                     <td className="py-3">{producto.orden || 'Sin dato'}</td>
                     <td className="py-3">{producto.silo || 'Sin dato'}</td>
                     <td className="py-3">{formatKg(producto.stockKg)}</td>
                     <td className="py-3">{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(producto.valorEstimado)}</td>
-                    <td className="py-3">{formatDate(producto.fechaIngreso)}</td>
+                    <td className="py-3">{producto.fechaProgramada ? formatDate(producto.fechaProgramada) : 'Sin dato'}</td>
                     <td className="py-3">
                       <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${getStatusStyles(producto.estadoUi)}`}>
                         {producto.estadoUi}
@@ -1029,17 +1145,10 @@ const ProductosPage = () => {
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => openFormulaDetail(producto)}
+                          onClick={() => openStockDetail(producto, movimientosPT, findOrdenExacta(ordenes, producto))}
                           className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                         >
-                          Ver fórmula
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openStockDetail(producto)}
-                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                        >
-                          Ver stock
+                          Ver detalle
                         </button>
                         <button
                           type="button"
@@ -1050,24 +1159,10 @@ const ProductosPage = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => { void openEmpaquesProductoModal(producto, refreshData); }}
-                          className="h-8 px-3 rounded-lg border border-cyan-200 text-xs font-semibold text-cyan-700 hover:bg-cyan-50"
-                        >
-                          Empaques
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openProgramacionModal(filtered, formulaByNombre, producto)}
+                          onClick={() => handleProgramarProduccion(producto)}
                           className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                         >
                           Programar producción
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => navigate(ROUTES.TRAZABILIDAD)}
-                          className="h-8 px-3 rounded-lg border border-blue-200 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                        >
-                          Trazabilidad
                         </button>
                       </div>
                     </td>

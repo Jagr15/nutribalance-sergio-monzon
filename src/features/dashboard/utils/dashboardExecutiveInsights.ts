@@ -1,7 +1,7 @@
 import type { Cliente } from '../../clientes/types/cliente';
 import type { MovimientoStockPT } from '../../productos/types';
 
-export type DashboardPeriodo = 'HOY' | 'SEMANA' | 'MES';
+export type DashboardPeriodo = 'HOY' | 'SEMANA' | 'MES' | 'NEXT_7' | 'NEXT_30';
 
 export interface DashboardExecutiveProductoRow {
   producto_id: string | null;
@@ -46,6 +46,9 @@ const resolveClienteNombre = (clienteId: string | null | undefined, clientes: Cl
 export const getDashboardPeriodoLabel = (periodo: DashboardPeriodo) => {
   if (periodo === 'HOY') return 'Hoy';
   if (periodo === 'SEMANA') return 'Semana';
+  if (periodo === 'MES') return 'Mes';
+  if (periodo === 'NEXT_7') return 'Próximos 7 días';
+  if (periodo === 'NEXT_30') return 'Próximos 30 días';
   return 'Mes';
 };
 
@@ -58,9 +61,15 @@ export const getDashboardPeriodoRange = (periodo: DashboardPeriodo, now = new Da
     const day = start.getDay() || 7;
     start.setDate(start.getDate() - (day - 1));
     start.setHours(0, 0, 0, 0);
-  } else {
+  } else if (periodo === 'MES') {
     start.setDate(1);
     start.setHours(0, 0, 0, 0);
+  } else if (periodo === 'NEXT_7') {
+    start.setHours(0, 0, 0, 0);
+    end.setDate(end.getDate() + 7);
+  } else if (periodo === 'NEXT_30') {
+    start.setHours(0, 0, 0, 0);
+    end.setDate(end.getDate() + 30);
   }
   end.setHours(23, 59, 59, 999);
   return { start, end };

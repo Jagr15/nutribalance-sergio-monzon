@@ -298,12 +298,20 @@ const FinanzasPage = () => {
 
   const movimientosQuick = useMemo(() => {
     const query = movimientosQuery.trim().toLowerCase();
-    return [...movimientos]
-      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
-      .filter((row) => {
-        const haystack = `${row.descripcion} ${row.categoria ?? ''} ${row.tipo} ${row.estado}`.toLowerCase();
-        if (!query) return true;
-        return haystack.includes(query);
+    const filtered = [...movimientos].filter((row) => {
+      const haystack = `${row.descripcion} ${row.categoria ?? ''} ${row.tipo} ${row.estado}`.toLowerCase();
+      if (!query) return true;
+      return haystack.includes(query);
+    });
+
+    return filtered
+      .sort((a, b) => {
+        const aPending = a.estado === 'PENDIENTE' ? 1 : 0;
+        const bPending = b.estado === 'PENDIENTE' ? 1 : 0;
+        if (aPending !== bPending) {
+          return bPending - aPending;
+        }
+        return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
       })
       .slice(0, 10);
   }, [movimientos, movimientosQuery]);
@@ -312,6 +320,25 @@ const FinanzasPage = () => {
       .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
       .filter((row) => movimientosHistoryFilter === 'ALL' ? true : row.estado === movimientosHistoryFilter);
   }, [movimientos, movimientosHistoryFilter]);
+
+  const cuentasPorCobrar = useMemo(() => {
+    return movimientos.filter((m) => {
+      const isIngreso = m.tipo === 'INGRESO';
+      const isPending = m.estado === 'PENDIENTE' || ['PENDIENTE_COBRO', 'VENCIDO'].includes(m.estado_financiero || '');
+      const isNotCobrado = m.estado_financiero !== 'COBRADO';
+      return isIngreso && isPending && isNotCobrado;
+    });
+  }, [movimientos]);
+
+  const cuentasPorPagar = useMemo(() => {
+    return movimientos.filter((m) => {
+      const isEgreso = m.tipo === 'EGRESO';
+      const isPending = m.estado === 'PENDIENTE' || ['PENDIENTE_PAGO', 'VENCIDO'].includes(m.estado_financiero || '');
+      const isNotPagado = m.estado_financiero !== 'PAGADO';
+      return isEgreso && isPending && isNotPagado;
+    });
+  }, [movimientos]);
+
   const hasMoreThanTenMovimientos = movimientos.length > 10;
   const handleRubroSubmit = async () => {
     setRubroError(null);
@@ -860,7 +887,7 @@ const FinanzasPage = () => {
               </div>
             ) : null}
             <div className="mt-4">
-              <MovimientosTable movimientos={movimientosQuick} limit={10} />
+              <MovimientosTable movimientos={movimientosQuick} limit={10} onRefresh={refresh} />
             </div>
             {budgetExceeded ? (
               <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -868,6 +895,25 @@ const FinanzasPage = () => {
               </div>
             ) : null}
           </Card>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+            <MovimientosTable
+              movimientos={cuentasPorCobrar}
+              limit={cuentasPorCobrar.length}
+              showDiasVencimiento={true}
+              title="Cuentas por Cobrar"
+              subtitle="Ingresos pendientes de cobro y vencidos."
+              onRefresh={refresh}
+            />
+            <MovimientosTable
+              movimientos={cuentasPorPagar}
+              limit={cuentasPorPagar.length}
+              showDiasVencimiento={true}
+              title="Cuentas por Pagar"
+              subtitle="Egresos pendientes de pago y vencidos."
+              onRefresh={refresh}
+            />
+          </div>
         </div>
       ) : null}
 
@@ -897,7 +943,7 @@ const FinanzasPage = () => {
               </div>
             </div>
             <div className="mt-5">
-              <MovimientosTable movimientos={movimientosHistory} limit={movimientosHistory.length} />
+              <MovimientosTable movimientos={movimientosHistory} limit={movimientosHistory.length} onRefresh={refresh} />
             </div>
           </div>
         </div>

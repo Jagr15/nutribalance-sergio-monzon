@@ -13,6 +13,7 @@ import {
 } from './mockMateriaPrimaService';
 import { registerMockIngresoPT } from './mockStockPTService';
 import { mockMateriaPrimaService } from './mockMateriaPrimaService';
+import { getTodayDateInputValue } from '../../../../shared/utils/formatters';
 
 interface FinishProductionPayload {
   merma: number;
@@ -115,6 +116,7 @@ export const mockOrdenService = {
       getDetalleParaReserva({ ...data, lote }).then((detalle) => {
         const newOrder: OrdenProduccion = {
           ...data,
+          fecha_programada: data.fecha_programada ?? getTodayDateInputValue(),
           lote,
           detalle_insumos: detalle,
           id: lote,

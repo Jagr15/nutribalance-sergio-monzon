@@ -11,6 +11,7 @@ import { buildAlertCategoryHtml, isFinancialAlert, isProductAlert } from '../../
 import { BrandLogo } from '../../../shared/components/BrandLogo';
 import { useDashboardOperativo } from '../hooks/useDashboardOperativo';
 import { ApiService } from '../../../infrastructure/api';
+import { usePermissions } from '../../auth/usePermissions';
 import type { Cliente } from '../../clientes/types/cliente';
 import type { MovimientoStockPT } from '../../productos/types';
 import type { OrdenProduccion } from '../../ordenes/types';
@@ -26,6 +27,8 @@ import { buildDashboardTemporalInsights, filterAlertasByPeriodo } from '../utils
 import { fmtARS, fmtDateTime, fmtRelativeMinutes, getTrendTone } from '../components/dashboardFormat';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { KPIBox } from '../components/dashboardShared';
+import { supabaseClient } from '../../../infrastructure/api/supabase/client';
+import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 
 type BusinessHealthLevel = 'excelente' | 'estable' | 'atencion' | 'critico';
 
@@ -70,7 +73,7 @@ const buildAlertRanking = (alertas: AlertaOperativa[], periodo: DashboardPeriodo
     .slice(0, limit);
 };
 
-const PERIODOS: DashboardPeriodo[] = ['HOY', 'SEMANA', 'MES'];
+const PERIODOS: DashboardPeriodo[] = ['HOY', 'SEMANA', 'MES', 'NEXT_7', 'NEXT_30'];
 
 export const DashboardPage = () => {
   const { summary, alertas, loadError: alertasLoadError } = useAlertas();
@@ -80,6 +83,8 @@ export const DashboardPage = () => {
   const [movimientosPT, setMovimientosPT] = useState<MovimientoStockPT[]>([]);
   const [periodo, setPeriodo] = useState<DashboardPeriodo>('MES');
   const [isExpedicionOpen, setIsExpedicionOpen] = useState(false);
+  const { canAccess } = usePermissions();
+  const canCreateExpedition = canAccess('ordenes', 'create');
   const navigate = useNavigate();
   const dashboardNow = useMemo(() => new Date(), []);
   const updatedAtLabel = useMemo(() => fmtDateTime(lastUpdatedAt), [lastUpdatedAt]);
@@ -89,18 +94,50 @@ export const DashboardPage = () => {
   const productCriticalAlerts = useMemo(() => criticalAlerts.filter(isProductAlert), [criticalAlerts]);
   const financialCriticalAlerts = useMemo(() => criticalAlerts.filter(isFinancialAlert), [criticalAlerts]);
 
+  const [movimientosFlujo, setMovimientosFlujo] = useState<any[]>([]);
+  const [comprobantes, setComprobantes] = useState<any[]>([]);
+  const [stockLotesMP, setStockLotesMP] = useState<any[]>([]);
+  const [stockPT, setStockPT] = useState<any[]>([]);
+
   useEffect(() => {
-    void Promise.allSettled([
-      ApiService.ordenes.getAll(),
-      ApiService.clientes.getAll(),
-      ApiService.stockPT.getMovimientos(),
-    ])
-      .then(([ordenesResult, clientesResult, movimientosResult]) => {
-        if (ordenesResult.status === 'fulfilled') setOrdenes(ordenesResult.value);
-        if (clientesResult.status === 'fulfilled') setClientes(clientesResult.value);
-        if (movimientosResult.status === 'fulfilled') setMovimientosPT(movimientosResult.value);
-      })
-      .catch((e) => console.error('Error cargando datos ejecutivos:', e));
+    const loadAllData = async () => {
+      try {
+        const [ordenesResult, clientesResult, movimientosResult] = await Promise.all([
+          ApiService.ordenes.getAll(),
+          ApiService.clientes.getAll(),
+          ApiService.stockPT.getMovimientos(),
+        ]);
+        setOrdenes(ordenesResult);
+        setClientes(clientesResult);
+        setMovimientosPT(movimientosResult);
+
+        const mode = runtimeConfig.mode;
+        if (mode === 'supabase') {
+          const [flujoRes, compRes, stockLotesRes, stockPtRes] = await Promise.all([
+            supabaseClient.from('flujo_caja_movimientos').select('fecha,created_at,tipo,monto,origen_operativo,estado').is('deleted_at', null).eq('estado', 'CONFIRMADO'),
+            supabaseClient.from('comprobantes').select('fecha_emision,created_at,tipo,total,saldo').is('deleted_at', null),
+            supabaseClient.from('stock_lotes_mp').select('cantidad_actual,costo_unitario').is('deleted_at', null),
+            supabaseClient.from('stock_pt').select('costo_total').is('deleted_at', null),
+          ]);
+          if (flujoRes.data) setMovimientosFlujo(flujoRes.data);
+          if (compRes.data) setComprobantes(compRes.data);
+          if (stockLotesRes.data) setStockLotesMP(stockLotesRes.data);
+          if (stockPtRes.data) setStockPT(stockPtRes.data);
+        } else {
+          // Fallback mock data
+          setMovimientosFlujo([
+            { fecha: new Date().toISOString(), tipo: 'INGRESO', monto: 1200000, origen_operativo: 'VENTA_PT', estado: 'CONFIRMADO' },
+            { fecha: new Date().toISOString(), tipo: 'EGRESO', monto: 800000, origen_operativo: 'PAGO', estado: 'CONFIRMADO' },
+          ]);
+          setComprobantes([
+            { fecha_emision: new Date().toISOString(), tipo: 'FACTURA_VENTA', total: 1200000, saldo: 400000 }
+          ]);
+        }
+      } catch (e) {
+        console.error('Error loading dashboard page data:', e);
+      }
+    };
+    void loadAllData();
   }, []);
 
   useEffect(() => {
@@ -218,9 +255,72 @@ export const DashboardPage = () => {
   );
 
   const temporalInsights = useMemo(
-    () => buildDashboardTemporalInsights(ordenes, movimientosPT, alertas, periodo, dashboardNow),
-    [alertas, dashboardNow, movimientosPT, ordenes, periodo],
+    () => buildDashboardTemporalInsights(ordenes, movimientosPT, alertas, periodo, dashboardNow, movimientosFlujo, comprobantes, stockLotesMP, stockPT),
+    [alertas, dashboardNow, movimientosPT, ordenes, periodo, movimientosFlujo, comprobantes, stockLotesMP, stockPT],
   );
+
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  const proximasCobranzas = useMemo(() => {
+    const list: any[] = [];
+    comprobantes.forEach((c) => {
+      if (c.tipo === 'FACTURA_VENTA' && ['PENDIENTE', 'PENDIENTE_COBRO'].includes(c.estado_financiero || c.estado)) {
+        const dateStr = c.fecha_vencimiento || c.created_at;
+        if (dateStr && dateStr.split('T')[0] >= todayStr) {
+          list.push({
+            id: c.id,
+            tercero: c.tercero || 'Venta PT',
+            fecha: dateStr.split('T')[0],
+            monto: Number(c.saldo),
+            tipo: 'COBRO',
+            comprobante: c.numero || 'Factura',
+          });
+        }
+      }
+    });
+    return list.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  }, [comprobantes, todayStr]);
+
+  const proximosPagos = useMemo(() => {
+    const list: any[] = [];
+    comprobantes.forEach((c) => {
+      if (c.tipo === 'FACTURA_COMPRA' && ['PENDIENTE', 'PENDIENTE_PAGO'].includes(c.estado_financiero || c.estado)) {
+        const dateStr = c.fecha_vencimiento || c.created_at;
+        if (dateStr && dateStr.split('T')[0] >= todayStr) {
+          list.push({
+            id: c.id,
+            tercero: c.tercero || 'Compra MP',
+            fecha: dateStr.split('T')[0],
+            monto: Number(c.saldo),
+            tipo: 'PAGO',
+            comprobante: c.numero || 'Factura',
+          });
+        }
+      }
+    });
+    return list.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  }, [comprobantes, todayStr]);
+
+  const vencidosList = useMemo(() => {
+    const list: any[] = [];
+    comprobantes.forEach((c) => {
+      const isPending = ['PENDIENTE', 'PENDIENTE_COBRO', 'PENDIENTE_PAGO', 'VENCIDO'].includes(c.estado_financiero || c.estado);
+      if (isPending) {
+        const dateStr = c.fecha_vencimiento || c.created_at;
+        if (dateStr && dateStr.split('T')[0] < todayStr) {
+          list.push({
+            id: c.id,
+            tercero: c.tercero || (c.tipo === 'FACTURA_VENTA' ? 'Venta PT' : 'Compra MP'),
+            fecha: dateStr.split('T')[0],
+            monto: Number(c.saldo),
+            tipo: c.tipo === 'FACTURA_VENTA' ? 'COBRO' : 'PAGO',
+            comprobante: c.numero || 'Factura',
+          });
+        }
+      }
+    });
+    return list.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  }, [comprobantes, todayStr]);
 
   const ordenesRecientes = useMemo(
     () => ordenes.filter((orden) => isWithinDashboardPeriodo(orden.fecha_creacion, periodo, dashboardNow)),
@@ -290,7 +390,7 @@ export const DashboardPage = () => {
       cursorY = advance(cursorY + 2);
       addPageIfNeeded(30);
       writeSectionTitle('Finanzas');
-      writeLine('Costos', fmtARS(temporalInsights.costos));
+      writeLine('Egresos', fmtARS(temporalInsights.costos));
       writeLine('Ingresos', fmtARS(temporalInsights.ingresos));
       writeLine('Flujo de caja', fmtARS(temporalInsights.flujoCaja));
       writeLine('Proteína promedio fórmula', `${kpis.proteina_promedio_formula.toFixed(2)}%`);
@@ -756,21 +856,21 @@ export const DashboardPage = () => {
         </section>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card>
-            <p className="text-xs uppercase tracking-widest text-slate-500">Costos</p>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Egresos</p>
             <p className="mt-2 text-3xl font-black text-orange-500">{fmtARS(temporalInsights.costos)}</p>
-            <p className="mt-2 text-xs text-slate-500">Costos de órdenes finalizadas en {periodoLabel.toLowerCase()}.</p>
+            <p className="mt-2 text-xs text-slate-500">Egresos de caja en {periodoLabel.toLowerCase()}.</p>
           </Card>
           <Card>
             <p className="text-xs uppercase tracking-widest text-slate-500">Ingresos</p>
             <p className="mt-2 text-3xl font-black text-emerald-500">{fmtARS(temporalInsights.ingresos)}</p>
-            <p className="mt-2 text-xs text-slate-500">Ventas PT con cliente en {periodoLabel.toLowerCase()}.</p>
+            <p className="mt-2 text-xs text-slate-500">Ingresos de caja en {periodoLabel.toLowerCase()}.</p>
           </Card>
           <Card>
             <p className="text-xs uppercase tracking-widest text-slate-500">Flujo de caja</p>
             <p className={`mt-2 text-3xl font-black ${temporalInsights.flujoCaja >= 0 ? 'text-cyan-600' : 'text-red-600'}`}>
               {fmtARS(temporalInsights.flujoCaja)}
             </p>
-            <p className="mt-2 text-xs text-slate-500">Ingresos menos costos operativos del período.</p>
+            <p className="mt-2 text-xs text-slate-500">Ingresos menos egresos del período.</p>
           </Card>
           <Card>
             <p className="text-xs uppercase tracking-widest text-slate-500">Alertas</p>
@@ -791,9 +891,10 @@ export const DashboardPage = () => {
           <KPIBox label="Stock disponible MP" value={`${kpis.stock_disponible_mp.toLocaleString('es-AR')} kg`} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="emerald" />
           <KPIBox label="Lotes críticos" value={`${kpis.stock_critico}`} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="red" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KPIBox label="Stock PT total" value={`${kpis.stock_total_pt.toLocaleString('es-AR')} kg`} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="fuchsia" />
-          <KPIBox label="Valor inventario PT" value={valorInventarioPtLabel} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="violet" helper="Base estimada desde órdenes finalizadas con costo real disponible." />
+          <KPIBox label="Valor inventario PT" value={valorInventarioPtLabel} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="violet" helper="Suma de costo_total de stock_pt." />
+          <KPIBox label="Valor inventario MP" value={fmtARS(kpis.valor_inventario_mp)} trend={inventoryTrend} updatedAt={updatedAtLabel} tone="emerald" helper="Suma de cantidad_actual * costo_unitario de stock_lotes_mp." />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card>
@@ -917,13 +1018,15 @@ export const DashboardPage = () => {
               <h2 className="text-xl font-semibold">Órdenes de Expedición</h2>
               <p className="text-sm text-slate-500">Salida y despacho de producto terminado hacia clientes.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsExpedicionOpen(true)}
-              className="rounded-xl bg-cyan-600 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-cyan-500"
-            >
-              Nueva orden de expedición
-            </button>
+            {canCreateExpedition ? (
+              <button
+                type="button"
+                onClick={() => setIsExpedicionOpen(true)}
+                className="rounded-xl bg-cyan-600 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-cyan-500"
+              >
+                Nueva orden de expedición
+              </button>
+            ) : null}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -967,13 +1070,99 @@ export const DashboardPage = () => {
       <section className="space-y-4">
         <div>
           <h2 className="text-lg font-bold text-slate-900 mb-1">Finanzas</h2>
-          <p className="text-sm text-slate-500">Ingresos, costos y flujo estimado del período seleccionado.</p>
+          <p className="text-sm text-slate-500">Caja Real (Movimientos confirmados) y Caja Proyectada (A vencimiento) de {periodoLabel.toLowerCase()}.</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <KPIBox label="Costos" value={fmtARS(temporalInsights.costos)} trend={financeTrend} updatedAt={updatedAtLabel} tone="orange" />
-          <KPIBox label="Ingresos" value={fmtARS(temporalInsights.ingresos)} trend={financeTrend} updatedAt={updatedAtLabel} tone="emerald" />
-          <KPIBox label="Flujo de caja" value={fmtARS(temporalInsights.flujoCaja)} trend={financeTrend} updatedAt={updatedAtLabel} tone={temporalInsights.flujoCaja >= 0 ? 'cyan' : 'red'} />
-          <KPIBox label="Proteína promedio fórmula" value={`${kpis.proteina_promedio_formula.toFixed(2)}%`} trend={financeTrend} updatedAt={updatedAtLabel} tone="violet" />
+        
+        <div>
+          <h3 className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-2">Flujo de Caja Real</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <KPIBox label="Ingresos del periodo" value={fmtARS(temporalInsights.ingresosReales)} trend={financeTrend} updatedAt={updatedAtLabel} tone="emerald" helper="Ingresos cobrados y confirmados en caja." />
+            <KPIBox label="Egresos del periodo" value={fmtARS(temporalInsights.egresosReales)} trend={financeTrend} updatedAt={updatedAtLabel} tone="orange" helper="Egresos pagados y confirmados en caja." />
+            <KPIBox label="Flujo neto" value={fmtARS(temporalInsights.flujoReal)} trend={financeTrend} updatedAt={updatedAtLabel} tone={temporalInsights.flujoReal >= 0 ? 'cyan' : 'red'} helper="Ingresos reales - egresos reales." />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <h3 className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-2">Flujo de Caja Proyectado</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <KPIBox label="Cuentas por cobrar" value={fmtARS(temporalInsights.ingresosProyectados)} trend={financeTrend} updatedAt={updatedAtLabel} tone="emerald" helper="Ingresos pendientes a cobrar con vencimiento en el período." />
+            <KPIBox label="Cuentas por pagar" value={fmtARS(temporalInsights.egresosProyectados)} trend={financeTrend} updatedAt={updatedAtLabel} tone="orange" helper="Egresos pendientes a pagar con vencimiento en el período." />
+            <KPIBox label="Flujo proyectado" value={fmtARS(temporalInsights.flujoProyectado)} trend={financeTrend} updatedAt={updatedAtLabel} tone={temporalInsights.flujoProyectado >= 0 ? 'cyan' : 'red'} helper="Cuentas por cobrar - cuentas por pagar del periodo futuro." />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <h3 className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-2">Saldos Vencidos (Fuera de término)</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <KPIBox label="Vencidos por Cobrar" value={fmtARS(temporalInsights.vencidosCobrar)} trend={financeTrend} updatedAt={updatedAtLabel} tone="emerald" helper="Cuentas por cobrar cuyo vencimiento ya pasó." />
+            <KPIBox label="Vencidos por Pagar" value={fmtARS(temporalInsights.vencidosPagar)} trend={financeTrend} updatedAt={updatedAtLabel} tone="red" helper="Cuentas por pagar cuyo vencimiento ya pasó." />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <KPIBox label="Costos producción ejecutados" value={fmtARS(temporalInsights.costosProduccionEjecutados)} trend={financeTrend} updatedAt={updatedAtLabel} tone="orange" helper="Insumos consumidos en órdenes finalizadas o en proceso." />
+          <KPIBox label="Costos producción comprometidos" value={fmtARS(temporalInsights.costosComprometidos)} trend={financeTrend} updatedAt={updatedAtLabel} tone="slate" helper="Insumos estimados para órdenes pendientes." />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+          <Card>
+            <h3 className="font-bold text-slate-800 text-sm mb-3">Próximas Cobranzas</h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {proximasCobranzas.length === 0 ? (
+                <p className="text-xs text-slate-500">No hay cobranzas programadas.</p>
+              ) : (
+                proximasCobranzas.map((item) => (
+                  <div key={item.id} className="flex justify-between items-center text-xs p-2 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800 truncate">{item.tercero}</p>
+                      <p className="text-slate-400 text-[10px]">{item.comprobante} · Vence: {formatDateDDMMYYYY(item.fecha)}</p>
+                    </div>
+                    <span className="font-bold text-emerald-600 shrink-0 ml-2">{fmtARS(item.monto)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-bold text-slate-800 text-sm mb-3">Próximos Pagos</h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {proximosPagos.length === 0 ? (
+                <p className="text-xs text-slate-500">No hay pagos programados.</p>
+              ) : (
+                proximosPagos.map((item) => (
+                  <div key={item.id} className="flex justify-between items-center text-xs p-2 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800 truncate">{item.tercero}</p>
+                      <p className="text-slate-400 text-[10px]">{item.comprobante} · Vence: {formatDateDDMMYYYY(item.fecha)}</p>
+                    </div>
+                    <span className="font-bold text-orange-600 shrink-0 ml-2">{fmtARS(item.monto)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-bold text-slate-800 text-sm mb-3">Saldos Vencidos</h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {vencidosList.length === 0 ? (
+                <p className="text-xs text-slate-500">No hay saldos vencidos.</p>
+              ) : (
+                vencidosList.map((item) => (
+                  <div key={item.id} className="flex justify-between items-center text-xs p-2 rounded-xl bg-red-50 border border-red-100">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-800 truncate">{item.tercero}</p>
+                      <p className="text-red-400 text-[10px]">{item.comprobante} · Venció: {formatDateDDMMYYYY(item.fecha)}</p>
+                    </div>
+                    <span className={`font-bold shrink-0 ml-2 ${item.tipo === 'COBRO' ? 'text-emerald-700' : 'text-red-600'}`}>
+                      {fmtARS(item.monto)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
         </div>
       </section>
 

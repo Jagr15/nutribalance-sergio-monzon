@@ -6,7 +6,7 @@ export interface Ingrediente {
   aporte_proteina_g_kg?: number;
   costo_unitario_usado?: number;
   costo_contribucion_kg?: number;
-  fuente_costo?: 'ULTIMO_LOTE' | 'REFERENCIA' | 'SIN_COSTO';
+  fuente_costo?: 'PROMEDIO_STOCK' | 'REFERENCIA' | 'SIN_COSTO';
 }
 
 export interface Formula {

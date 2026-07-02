@@ -23,6 +23,10 @@ interface OrdenExpedicionRow {
   cantidad_original: number | null;
   unidad_original: string | null;
   cantidad_kg: number | null;
+  precio_unitario_venta: number | null;
+  total_venta: number | null;
+  moneda: string | null;
+  fecha_programada: string | null;
   modo_calculo: string | null;
   empaque_id: string | null;
   tipo_empaque: string | null;
@@ -54,6 +58,10 @@ const mapRow = (row: OrdenExpedicionRow): OrdenExpedicion => ({
   unidad_original: (row.unidad_original ?? row.unidad_cantidad ?? 'kg') as string,
   unidad_cantidad: (row.unidad_cantidad as OrdenExpedicion['unidad_cantidad']) ?? 'kg',
   cantidad_kg: Number(row.cantidad_kg ?? row.cantidad),
+  precio_unitario_venta: row.precio_unitario_venta == null ? null : Number(row.precio_unitario_venta),
+  total_venta: row.total_venta == null ? null : Number(row.total_venta),
+  moneda: row.moneda ?? 'ARS',
+  fecha_programada: row.fecha_programada,
   modo_calculo: row.modo_calculo ?? 'kg_requeridos',
   empaque_id: row.empaque_id,
   tipo_empaque: row.tipo_empaque,
@@ -112,7 +120,7 @@ const ensureState = async (id: string, allowed: string[], nextState: string) => 
     .from('ordenes_expedicion')
     .update({ estado: nextState })
     .eq('id', id)
-    .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_cantidad,cantidad_kg,estado,motivo,referencia,created_at,updated_at')
+      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_cantidad,cantidad_kg,precio_unitario_venta,total_venta,moneda,fecha_programada,estado,motivo,referencia,created_at,updated_at')
     .maybeSingle<OrdenExpedicionRow>();
   if (updateError) throw updateError;
   if (!updatedData) throw new Error('No se pudo actualizar el estado de la orden.');
@@ -123,7 +131,7 @@ export const supabaseOrdenesExpedicionService = {
   async getAll(): Promise<OrdenExpedicion[]> {
     const { data, error } = await supabaseClient
       .from('ordenes_expedicion')
-      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_original,cantidad_kg,modo_calculo,empaque_id,tipo_empaque,capacidad_empaque_kg,cantidad_empaques,sobrante_kg,unidad_cantidad,estado,motivo,referencia,created_at,updated_at')
+      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_original,cantidad_kg,precio_unitario_venta,total_venta,moneda,modo_calculo,empaque_id,tipo_empaque,capacidad_empaque_kg,cantidad_empaques,sobrante_kg,unidad_cantidad,estado,motivo,referencia,created_at,updated_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -134,6 +142,11 @@ export const supabaseOrdenesExpedicionService = {
     const cantidad = normalizeCantidadOrden(payload.cantidad, payload.unidad_cantidad);
     const presentacionKey = isPresentacionExpedicionKey(payload.presentacion_key) ? payload.presentacion_key : 'GRANEL_KG';
     const persistencia = buildPresentacionPersistencia(presentacionKey, payload.cantidad_empaques ?? 0);
+    const precioUnitarioVenta = Number(payload.precio_unitario_venta ?? 0);
+    if (!Number.isFinite(precioUnitarioVenta) || precioUnitarioVenta <= 0) {
+      throw new Error('El precio unitario de venta debe ser mayor a cero.');
+    }
+    const totalVenta = payload.total_venta ?? Number((cantidad.cantidadKg * precioUnitarioVenta).toFixed(2));
     const [stockPtDbId, clienteDbId] = await Promise.all([
       resolveStockPtDbId(payload.stock_pt_id),
       resolveClienteDbId(payload.cliente_id),
@@ -155,6 +168,10 @@ export const supabaseOrdenesExpedicionService = {
         p_cantidad: cantidad.cantidadKg,
         p_cantidad_original: payload.cantidad_original ?? cantidad.cantidadOriginal,
         p_unidad_cantidad: 'kg',
+        p_precio_unitario_venta: precioUnitarioVenta,
+        p_total_venta: totalVenta,
+        p_moneda: payload.moneda ?? 'ARS',
+        p_fecha_programada: payload.fecha_programada ?? null,
         p_modo_calculo: persistencia.modo_calculo,
         p_tipo_empaque: persistencia.tipo_empaque,
         p_capacidad_empaque_kg: persistencia.capacidad_empaque_kg,
@@ -190,6 +207,15 @@ export const supabaseOrdenesExpedicionService = {
       : null;
     const presentacionKey = isPresentacionExpedicionKey(payload.presentacion_key) ? payload.presentacion_key : 'GRANEL_KG';
     const persistencia = buildPresentacionPersistencia(presentacionKey, payload.cantidad_empaques ?? 0);
+    const precioUnitarioVenta = payload.precio_unitario_venta;
+    if (precioUnitarioVenta !== undefined && (!Number.isFinite(Number(precioUnitarioVenta)) || Number(precioUnitarioVenta) <= 0)) {
+      throw new Error('El precio unitario de venta debe ser mayor a cero.');
+    }
+    const totalVenta = payload.total_venta ?? (
+      precioUnitarioVenta !== undefined && precioUnitarioVenta !== null
+        ? Number(((cantidad?.cantidadKg ?? 0) * Number(precioUnitarioVenta)).toFixed(2))
+        : null
+    );
 
     const rpcPayload = {
       p_orden_id: id,
@@ -198,6 +224,10 @@ export const supabaseOrdenesExpedicionService = {
       p_cantidad: cantidad?.cantidadKg ?? null,
       p_cantidad_original: payload.cantidad_original ?? cantidad?.cantidadOriginal ?? null,
       p_unidad_cantidad: 'kg',
+      p_precio_unitario_venta: precioUnitarioVenta ?? null,
+      p_total_venta: totalVenta ?? null,
+      p_moneda: payload.moneda ?? 'ARS',
+      p_fecha_programada: payload.fecha_programada ?? null,
       p_modo_calculo: persistencia.modo_calculo,
       p_tipo_empaque: persistencia.tipo_empaque,
       p_capacidad_empaque_kg: persistencia.capacidad_empaque_kg,

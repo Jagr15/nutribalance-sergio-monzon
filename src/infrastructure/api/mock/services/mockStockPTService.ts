@@ -21,6 +21,7 @@ const seedStockPT: StockProductoTerminado[] = [
     cantidad_total: 1800,
     cantidad_inicial: 1800,
     costo_unitario_estimado: 240.5,
+    costo_total: 432900,
     lote: 'PT-LE13-2605-A',
     unidad_medida: 'KG',
     estado: ControlEstado.OK,
@@ -49,6 +50,7 @@ const seedStockPT: StockProductoTerminado[] = [
     cantidad_total: 1200,
     cantidad_inicial: 1200,
     costo_unitario_estimado: 278.2,
+    costo_total: 333840,
     lote: 'PT-LE18-2605-B',
     unidad_medida: 'KG',
     estado: ControlEstado.BAJO,
@@ -77,6 +79,7 @@ const seedStockPT: StockProductoTerminado[] = [
     cantidad_total: 480,
     cantidad_inicial: 480,
     costo_unitario_estimado: 315.75,
+    costo_total: 151560,
     lote: 'PT-ENGS-2605-C',
     unidad_medida: 'KG',
     estado: ControlEstado.CRITICO,
@@ -123,26 +126,27 @@ const pushMovimiento = (movimiento: Omit<MovimientoStockPT, 'id' | 'created_at'>
   return row;
 };
 
-const buildCuentaCorrienteRow = (movimiento: MovimientoStockPT): MockCuentaCorrienteRow => ({
+const buildCuentaCorrienteRow = (movimiento: MovimientoStockPT, valorTotalOverride?: number | null): MockCuentaCorrienteRow => ({
   cliente_id: movimiento.cliente_id ?? null,
   id: `cxc-${movimiento.id}`,
   fecha: movimiento.created_at,
   producto: movimiento.nombre_producto || '—',
   cantidad: Number(movimiento.cantidad ?? 0),
   unidad: movimiento.unidad ?? null,
-  importe: Number(movimiento.valor_total ?? 0),
-  saldo: Number(movimiento.valor_total ?? 0),
+  importe: Number(valorTotalOverride ?? movimiento.valor_total ?? 0),
+  saldo: Number(valorTotalOverride ?? movimiento.valor_total ?? 0),
   referencia: movimiento.referencia ?? null,
   estado: 'PENDIENTE',
   comprobanteNumero: movimiento.referencia ?? null,
 });
 
-const pushCuentaCorrienteFromMovimiento = (movimiento: MovimientoStockPT) => {
-  if (!movimiento.cliente_id || Number(movimiento.valor_total ?? 0) <= 0) {
+const pushCuentaCorrienteFromMovimiento = (movimiento: MovimientoStockPT, valorTotalOverride?: number | null) => {
+  const valorTotal = Number(valorTotalOverride ?? movimiento.valor_total ?? 0);
+  if (!movimiento.cliente_id || valorTotal <= 0) {
     return null;
   }
 
-  const row = buildCuentaCorrienteRow(movimiento);
+  const row = buildCuentaCorrienteRow(movimiento, valorTotal);
   cuentaCorrienteMock = [row, ...cuentaCorrienteMock];
   return row;
 };
@@ -248,6 +252,7 @@ export const registerMockIngresoPT = (data: {
     cantidad_total: data.cantidad_total,
     cantidad_inicial: data.cantidad_total,
     costo_unitario_estimado: data.costo_unitario_estimado ?? null,
+    costo_total: data.cantidad_total * Number(data.costo_unitario_estimado ?? 0),
     lote: data.lote,
     unidad_medida: data.unidad_medida ?? 'KG',
     estado: ControlEstado.OK,
@@ -295,9 +300,11 @@ export const mockStockPTService = {
     }
 
     const nextSaldo = Number((Number(current.cantidad_total) - payload.cantidad).toFixed(3));
+    const costoUnitario = Number(current.costo_unitario_estimado ?? 0);
     const nextStock: StockProductoTerminado = {
       ...current,
       cantidad_total: nextSaldo,
+      costo_total: Number((nextSaldo * costoUnitario).toFixed(6)),
       estado: recomputeEstado({ ...current, cantidad_total: nextSaldo }),
       updateAt: nowIso(),
     };
@@ -320,7 +327,7 @@ export const mockStockPTService = {
       cliente_id: payload.cliente_id ?? null,
       cliente_nombre: payload.cliente_nombre ?? null,
     });
-    pushCuentaCorrienteFromMovimiento(movimiento);
+    pushCuentaCorrienteFromMovimiento(movimiento, payload.valor_total_venta ?? movimiento.valor_total);
 
     return mockApiCall(nextStock, 300);
   },
@@ -344,10 +351,12 @@ export const applyMockSalidaAjuste = (payload: {
   if (nextSaldo < 0) {
     throw new Error('No hay saldo suficiente en el lote de PT.');
   }
+  const costoUnitario = Number(current.costo_unitario_estimado ?? 0);
 
   const nextStock: StockProductoTerminado = {
     ...current,
     cantidad_total: nextSaldo,
+    costo_total: Number((nextSaldo * costoUnitario).toFixed(6)),
     estado: recomputeEstado({ ...current, cantidad_total: nextSaldo }),
     updateAt: nowIso(),
   };

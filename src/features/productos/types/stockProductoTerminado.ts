@@ -12,6 +12,7 @@ export interface StockProductoTerminado {
     cantidad_total: number;
     cantidad_inicial?: number | null;
     costo_unitario_estimado?: number | null;
+    costo_total?: number | null;
     lote: string;
     unidad_medida: TipoUnidad;
     estado: ControlEstado; // Para las alertas en rojo que pidió Sergio
@@ -55,6 +56,7 @@ export interface RegistrarSalidaStockPTData {
   referencia?: string;
   cliente_id?: string | null;
   cliente_nombre?: string | null;
+  valor_total_venta?: number | null;
 }
 
 export interface StockProductoTerminadoResumen {

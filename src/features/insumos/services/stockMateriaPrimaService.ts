@@ -4,6 +4,7 @@ import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
 import type { Silo } from '../../silos/types';
 import { resolverCostoIngresoMP } from '../utils/costoIngreso';
+import { contabilidadOperativaService } from '../../finanzas/services/contabilidadOperativaService';
 
 const parseLocalDateForBusinessDay = (value: string) => {
   const normalized = value.trim();
@@ -95,6 +96,20 @@ export const stockMateriaPrimaService = {
       fecha_ingreso: parseLocalDateForBusinessDay(data.fecha_ingreso),
       ubicacion: data.ubicacion,
     });
+
+    try {
+      await contabilidadOperativaService.registrarCompraMateriaPrima({
+        stock_lote_legacy_uid: created.uid,
+        fecha: data.fecha_ingreso,
+        lote: lote,
+        insumo: data.nombre_insumo,
+        proveedor: data.nombre_prov,
+        monto: costoResuelto.costo_total,
+        remito: remito || undefined,
+      });
+    } catch (contabilidadError) {
+      console.warn('No se pudo registrar la compra en contabilidad operativa.', contabilidadError);
+    }
 
     await auditAction({
       modulo: 'stock_mp',

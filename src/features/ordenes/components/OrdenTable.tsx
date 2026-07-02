@@ -5,6 +5,7 @@ import { ROUTES } from '../../../app/config/routes';
 import { EstadoOrden, type OrdenProduccion } from '../types/orden';
 import type { Formula } from '../../formulas/types';
 import { ApiService } from '../../../infrastructure/api';
+import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import {
   DataTable,
   EmptyState,
@@ -57,13 +58,14 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
 
   return (
     <div className="space-y-3">
-      <DataTable minWidthClassName="min-w-[980px]">
+      <DataTable minWidthClassName="min-w-[1080px]">
         <TableHeader>
           <tr>
             <TableCell header>Identificación / Producto</TableCell>
             <TableCell header className="text-center">Responsable</TableCell>
             <TableCell header className="text-center">Planificado</TableCell>
             <TableCell header className="text-center">Salida Real</TableCell>
+            <TableCell header className="text-center">Programada</TableCell>
             <TableCell header className="text-center">Estado</TableCell>
             <TableCell header className="text-right">Acciones</TableCell>
           </tr>
@@ -93,6 +95,9 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
                   <TableCell className="text-center font-semibold text-emerald-700">
                     {orden.cantidad_real ? `${orden.cantidad_real.toLocaleString()} kg` : '--'}
                   </TableCell>
+                  <TableCell className="text-center text-slate-700">
+                    {orden.fecha_programada ? formatDateDDMMYYYY(orden.fecha_programada) : '—'}
+                  </TableCell>
                   <TableCell className="text-center"><StatusBadge value={orden.estado} /></TableCell>
                   <TableCell className="text-right">
                     <TableActions>
@@ -113,12 +118,14 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
 
                 {isExpanded ? (
                   <tr className="bg-slate-50">
-                    <td colSpan={6} className="px-6 py-5 border-l-2 border-blue-200">
+                    <td colSpan={7} className="px-6 py-5 border-l-2 border-blue-200">
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 text-blue-700 text-xs font-semibold uppercase"><FiZap size={12} /> Trazabilidad de Lotes</div>
                           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2 text-sm text-slate-700">
                             <p>Estado operativo: <strong>{orden.estado}</strong></p>
+                            <p>Fecha programada: <strong>{orden.fecha_programada ? formatDateDDMMYYYY(orden.fecha_programada) : 'Sin fecha'}</strong></p>
+                            <p>Fecha de creación: <strong>{formatDateDDMMYYYY(orden.fecha_creacion)}</strong></p>
                             <p>Responsable: <strong>{orden.usuario_responsable}</strong></p>
                             <p>Silo destino: <strong>{orden.destino_silo || 'Sin dato'}</strong></p>
                             <p>Proteína objetivo: <strong>{getProteinaObjetivo(orden)}</strong></p>
@@ -151,7 +158,7 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
 
           {currentData.length === 0 ? (
             <EmptyState
-              colSpan={6}
+              colSpan={7}
               title="No hay órdenes para mostrar"
               message={data.length === 0
                 ? (hasActiveFilter ? "No se encontraron órdenes para la búsqueda aplicada." : "Todavía no hay órdenes cargadas.")

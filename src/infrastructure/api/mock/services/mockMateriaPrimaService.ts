@@ -226,6 +226,7 @@ export const mockMateriaPrimaService = {
         cantidad: data.cantidad,
         unidad_entrada: data.unidad_entrada,
         costo_unitario: data.costo_unitario ?? data.precio_unitario ?? null,
+        unidad_precio: data.unidad_precio,
         costo_por_kg: insumo?.costo_por_kg ?? null,
         ref_costo_unitario: insumo?.ref_costo_unitario ?? null,
         costo: insumo?.costo ?? null,

@@ -28,7 +28,9 @@ export const buildStockPTResumen = (
     const key = item.uid ?? `${item.id_orden}-${item.lote}`;
     const movimientosDelProducto = movimientosByProducto.get(key) ?? [];
     const saldoActual = num(item.cantidad_total);
-    const valorMonetario = saldoActual * num(item.costo_unitario_estimado);
+    const valorMonetario = num(item.costo_total) > 0
+      ? num(item.costo_total)
+      : saldoActual * num(item.costo_unitario_estimado);
     const estado = movimientosDelProducto.length > 0
       ? getStateFromBalance(saldoActual, item.cantidad_inicial, item.estado)
       : getStateFromBalance(saldoActual, item.cantidad_inicial, item.estado);

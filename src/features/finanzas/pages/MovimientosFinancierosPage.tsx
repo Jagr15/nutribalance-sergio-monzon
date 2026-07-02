@@ -2,13 +2,12 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiDownload, FiArrowLeft } from 'react-icons/fi';
 import { Card } from '../../../shared/components/card';
-import { DataTable, EmptyState, StatusBadge, TableBody, TableCell, TableHeader, TableRow } from '../../../shared/components/table';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { useFinanzas } from '../hooks/useFinanzas';
 import { ROUTES } from '../../../app/config/routes';
 import type { MovimientoFinanciero, TipoMovimientoFinanciero } from '../types';
+import { MovimientosTable } from '../components/MovimientosTable';
 
-const money = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
 const dateLabel = (value: string) => formatDateDDMMYYYY(value);
 const dateInputToKey = (value: string) => (value ? new Date(`${value}T00:00:00`).getTime() : null);
 
@@ -22,7 +21,7 @@ const sortDesc = (a: MovimientoFinanciero, b: MovimientoFinanciero) => new Date(
 
 const MovimientosFinancierosPage = () => {
   const navigate = useNavigate();
-  const { movimientos, loading } = useFinanzas();
+  const { movimientos, loading, refresh } = useFinanzas();
   const [query, setQuery] = useState('');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
@@ -142,39 +141,12 @@ const MovimientosFinancierosPage = () => {
         </div>
       </Card>
 
-      <DataTable className="rounded-3xl shadow-sm" minWidthClassName="min-w-[1100px]">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left">
-            <TableHeader>
-              <tr className="bg-slate-50/80">
-                <TableCell header className="text-slate-600">Fecha</TableCell>
-                <TableCell header className="text-slate-600">Tipo</TableCell>
-                <TableCell header className="text-slate-600">Descripción</TableCell>
-                <TableCell header className="text-slate-600">Categoría</TableCell>
-                <TableCell header className="text-right text-slate-600">Monto</TableCell>
-                <TableCell header className="text-slate-600">Estado</TableCell>
-              </tr>
-            </TableHeader>
-            <TableBody>
-              {pageRows.map((row) => (
-                <TableRow key={row.uid}>
-                  <TableCell className="whitespace-nowrap text-slate-600">{dateLabel(row.fecha)}</TableCell>
-                  <TableCell><StatusBadge value={row.tipo} /></TableCell>
-                  <TableCell className="max-w-[360px] truncate text-slate-900">{row.descripcion}</TableCell>
-                  <TableCell className="text-slate-500">{row.categoria ?? '-'}</TableCell>
-                  <TableCell className="whitespace-nowrap text-right font-semibold text-slate-900">{money(row.monto)}</TableCell>
-                  <TableCell><StatusBadge value={row.estado} /></TableCell>
-                  <TableCell className="text-slate-500">{row.origen_operativo ?? '-'}</TableCell>
-                  <TableCell className="text-slate-500">{row.centro_costo ?? '-'}</TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 ? (
-                <EmptyState colSpan={8} title="No existen movimientos financieros registrados." message="Ajusta los filtros o crea un nuevo movimiento desde Costos." />
-              ) : null}
-            </TableBody>
-          </table>
-        </div>
-      </DataTable>
+      <MovimientosTable
+        movimientos={pageRows}
+        limit={pageRows.length}
+        showOrigenAndCentroCosto={true}
+        onRefresh={refresh}
+      />
 
       {filtered.length > 0 ? (
         <div className="flex items-center justify-between gap-3">

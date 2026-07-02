@@ -17,6 +17,7 @@ interface StockPTRow {
   cantidad_total: number;
   cantidad_inicial: number | null;
   costo_unitario_estimado: number | null;
+  costo_total: number | null;
   lote: string;
   unidad_medida: string;
   estado: string;
@@ -79,6 +80,7 @@ const toStockPT = (row: StockPTRow): StockProductoTerminado => ({
   cantidad_total: Number(row.cantidad_total),
   cantidad_inicial: row.cantidad_inicial ?? null,
   costo_unitario_estimado: row.costo_unitario_estimado ?? null,
+  costo_total: row.costo_total ?? null,
   lote: row.lote,
   unidad_medida: row.unidad_medida as StockProductoTerminado['unidad_medida'],
   estado: row.estado as StockProductoTerminado['estado'],
@@ -94,7 +96,7 @@ export const supabaseStockPTService = {
   async getAll(): Promise<StockProductoTerminado[]> {
     const { data, error } = await supabaseClient
       .from('stock_pt')
-      .select('id,legacy_uid,id_orden_legacy,numero_orden,nombre_producto,cantidad_total,cantidad_inicial,costo_unitario_estimado,lote,unidad_medida,estado,id_silo_legacy,nombre_silo,detalle_insumos,fecha_ingreso,usuario,updated_at,ordenes_produccion(legacy_uid,id_formula_legacy,version_formula,nombre_producto)')
+      .select('id,legacy_uid,id_orden_legacy,numero_orden,nombre_producto,cantidad_total,cantidad_inicial,costo_unitario_estimado,costo_total,lote,unidad_medida,estado,id_silo_legacy,nombre_silo,detalle_insumos,fecha_ingreso,usuario,updated_at,ordenes_produccion(legacy_uid,id_formula_legacy,version_formula,nombre_producto)')
       .is('deleted_at', null)
       .order('fecha_ingreso', { ascending: false });
 

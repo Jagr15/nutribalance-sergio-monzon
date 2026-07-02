@@ -19,6 +19,7 @@ interface OrdenRow {
   destino_silo: string | null;
   estado: string;
   fecha_creacion: string;
+  fecha_programada: string | null;
   usuario_responsable: string;
   usuario_id: string | null;
   costo_total_insumos: number;
@@ -83,6 +84,7 @@ const toOrden = (row: OrdenRow, detalle: DetalleInsumoLote[]): OrdenProduccion =
   merma_manual: row.merma_manual === null ? undefined : Number(row.merma_manual),
   estado: row.estado as OrdenProduccion['estado'],
   fecha_creacion: row.fecha_creacion,
+  fecha_programada: row.fecha_programada,
   usuario_responsable: row.usuario_responsable,
   id_silo: row.id_silo_legacy,
   destino_silo: row.destino_silo,
@@ -314,8 +316,8 @@ const normalizeRpcError = (error: unknown, fallback: string) => {
 export const supabaseOrdenService = {
   async getAll(): Promise<OrdenProduccion[]> {
     const { data, error } = await supabaseClient
-      .from('ordenes_produccion')
-      .select('id,legacy_uid,lote,id_formula_legacy,nombre_producto,version_formula,cantidad_objetivo,cantidad_real,merma_manual,id_silo_legacy,destino_silo,estado,fecha_creacion,usuario_responsable,costo_total_insumos')
+    .from('ordenes_produccion')
+    .select('id,legacy_uid,lote,id_formula_legacy,nombre_producto,version_formula,cantidad_objetivo,cantidad_real,merma_manual,id_silo_legacy,destino_silo,estado,fecha_creacion,fecha_programada,usuario_responsable,costo_total_insumos')
       .is('deleted_at', null)
       .order('fecha_creacion', { ascending: false });
 
@@ -366,6 +368,7 @@ export const supabaseOrdenService = {
       p_cantidad_objetivo: payload.cantidad_objetivo,
       p_cantidad_real: payload.cantidad_real ?? null,
       p_merma_manual: payload.merma_manual ?? null,
+      p_fecha_programada: payload.fecha_programada ?? null,
       p_silo_id: siloId,
       p_id_silo_legacy: payload.id_silo,
       p_destino_silo: payload.destino_silo,
@@ -401,7 +404,7 @@ export const supabaseOrdenService = {
         .from('ordenes_produccion')
         .update({ estado: 'EN PROCESO' })
         .eq('legacy_uid', id)
-        .select('id,legacy_uid,lote,id_formula_legacy,nombre_producto,version_formula,cantidad_objetivo,cantidad_real,merma_manual,id_silo_legacy,destino_silo,estado,fecha_creacion,usuario_responsable,costo_total_insumos')
+        .select('id,legacy_uid,lote,id_formula_legacy,nombre_producto,version_formula,cantidad_objetivo,cantidad_real,merma_manual,id_silo_legacy,destino_silo,estado,fecha_creacion,fecha_programada,usuario_responsable,costo_total_insumos')
         .single();
 
       if (error) throw error;
@@ -512,6 +515,7 @@ export const supabaseOrdenService = {
         p_cantidad_objetivo: targetCantidad,
         p_cantidad_real: payload.cantidad_real ?? current.cantidad_real ?? null,
         p_merma_manual: payload.merma_manual ?? current.merma_manual ?? null,
+        p_fecha_programada: payload.fecha_programada ?? current.fecha_programada ?? null,
         p_silo_id: typeof payload.id_silo !== 'undefined'
           ? await getSiloIdByLegacy(payload.id_silo)
           : current.silo_id,
@@ -554,6 +558,7 @@ export const supabaseOrdenService = {
       destino_silo: payload.destino_silo,
       estado: payload.estado,
       fecha_creacion: payload.fecha_creacion,
+      fecha_programada: payload.fecha_programada,
       usuario_responsable: payload.usuario_responsable,
       usuario_id: usuarioId,
       costo_total_insumos: payload.costo_total_insumos,
@@ -566,7 +571,7 @@ export const supabaseOrdenService = {
       .from('ordenes_produccion')
       .update(cleanPayload)
       .eq('legacy_uid', id)
-      .select('id,legacy_uid,lote,id_formula_legacy,nombre_producto,version_formula,cantidad_objetivo,cantidad_real,merma_manual,id_silo_legacy,destino_silo,estado,fecha_creacion,usuario_responsable,costo_total_insumos')
+      .select('id,legacy_uid,lote,id_formula_legacy,nombre_producto,version_formula,cantidad_objetivo,cantidad_real,merma_manual,id_silo_legacy,destino_silo,estado,fecha_creacion,fecha_programada,usuario_responsable,costo_total_insumos')
       .single();
 
     if (error) throw error;

@@ -230,9 +230,42 @@ describe('supabaseOrdenService - reserva y edición segura', () => {
     expect(mockRpc).toHaveBeenCalledWith('crear_orden_produccion_con_reserva', expect.objectContaining({
       p_legacy_uid: '',
       p_lote: '',
+      p_fecha_programada: null,
       p_detalle: expect.any(Array),
     }));
     expect(result.estado).toBe('PENDIENTE');
+  });
+
+  it('crea una OP con fecha programada y la envía a la RPC', async () => {
+    scenario = {
+      ...scenario,
+      stockRows: scenario.stockRows.map((row) => ({ ...row, cantidad_comprometida: 0 })),
+    };
+
+    mockRpc.mockResolvedValueOnce({
+      data: [scenario.ordenRow],
+      error: null,
+    });
+
+    await supabaseOrdenService.create({
+      lote: 'OP-2026-999',
+      id_formula: 'F-001',
+      nombre_producto: 'Alimento Test',
+      version_formula: 1,
+      cantidad_objetivo: 1000,
+      detalle_insumos: [],
+      costo_total_insumos: 1000,
+      usuario_responsable: 'Sergio',
+      id_silo: null,
+      destino_silo: null,
+      estado: 'PENDIENTE',
+      fecha_creacion: '2026-05-26T00:00:00Z',
+      fecha_programada: '2026-07-10',
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith('crear_orden_produccion_con_reserva', expect.objectContaining({
+      p_fecha_programada: '2026-07-10',
+    }));
   });
 
   it('edita una OP aumentando cantidad y recalcula la reserva', async () => {
@@ -247,6 +280,7 @@ describe('supabaseOrdenService - reserva y edición segura', () => {
     const total = detalle.reduce((acc, item) => acc + Number(item.cantidad_usada), 0);
 
     expect(payload.p_cantidad_objetivo).toBe(1200);
+    expect(payload.p_fecha_programada).toBeNull();
     expect(total).toBeCloseTo(1200, 6);
     expect(result.estado).toBe('PENDIENTE');
   });

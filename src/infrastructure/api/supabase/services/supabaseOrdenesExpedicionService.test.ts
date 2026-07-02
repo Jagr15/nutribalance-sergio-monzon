@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   mockFrom,
@@ -18,6 +18,11 @@ vi.mock('../client', () => ({
 import { supabaseOrdenesExpedicionService } from './supabaseOrdenesExpedicionService';
 
 describe('supabaseOrdenesExpedicionService', () => {
+  beforeEach(() => {
+    mockFrom.mockReset();
+    mockRpc.mockReset();
+  });
+
   it('mapea expediciones desde la tabla', async () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === 'ordenes_expedicion') {
@@ -40,6 +45,9 @@ describe('supabaseOrdenesExpedicionService', () => {
                 cantidad_original: 25,
                 unidad_cantidad: 'kg',
                 cantidad_kg: 25,
+                precio_unitario_venta: 150,
+                total_venta: 3750,
+                moneda: 'ARS',
                 estado: 'pendiente',
                 motivo: 'Venta',
                 referencia: 'R-1',
@@ -123,11 +131,12 @@ describe('supabaseOrdenesExpedicionService', () => {
       presentacion: 'GRANEL',
       cantidad: 25,
       unidad_cantidad: 'kg',
+      precio_unitario_venta: 150,
       motivo: 'Venta',
       referencia: 'R-1',
     });
 
-    expect(mockRpc).toHaveBeenCalledWith('registrar_orden_expedicion', {
+    expect(mockRpc).toHaveBeenCalledWith('registrar_orden_expedicion', expect.objectContaining({
       p_stock_pt_id: 'pt-db-1',
       p_cliente_id: 'cli-db-1',
       p_presentacion_key: 'GRANEL_KG',
@@ -135,9 +144,12 @@ describe('supabaseOrdenesExpedicionService', () => {
       p_cantidad: 25,
       p_cantidad_original: 25,
       p_unidad_cantidad: 'kg',
+      p_precio_unitario_venta: 150,
+      p_total_venta: 3750,
+      p_moneda: 'ARS',
       p_motivo: 'Venta',
       p_referencia: 'R-1',
-    });
+    }));
     expect(row.legacy_uid).toBe('exp-1');
   });
 
@@ -184,6 +196,7 @@ describe('supabaseOrdenesExpedicionService', () => {
       presentacion: 'GRANEL',
       cantidad: 25,
       unidad_cantidad: 'kg',
+      precio_unitario_venta: 150,
       motivo: 'Venta',
       referencia: 'R-1',
     })).rejects.toThrow('No hay saldo suficiente en el lote de PT.');
@@ -222,6 +235,9 @@ describe('supabaseOrdenesExpedicionService', () => {
         cantidad_original: 1.25,
         unidad_cantidad: 'tonelada',
         cantidad_kg: 1250,
+        precio_unitario_venta: 180,
+        total_venta: 225000,
+        moneda: 'ARS',
         estado: 'despachada',
         motivo: 'Venta',
         referencia: 'R-1',
@@ -235,6 +251,7 @@ describe('supabaseOrdenesExpedicionService', () => {
       cantidad: 1.25,
       unidad_cantidad: 'tonelada',
       presentacion_key: 'TONELADA',
+      precio_unitario_venta: 180,
       motivo: 'Venta',
     });
 
@@ -242,7 +259,9 @@ describe('supabaseOrdenesExpedicionService', () => {
       p_orden_id: 'id-1',
       p_presentacion_key: 'TONELADA',
       p_cantidad_original: 1.25,
-      p_unidad_cantidad: 'tonelada',
+      p_unidad_cantidad: 'kg',
+      p_precio_unitario_venta: 180,
+      p_total_venta: 225000,
     }));
     expect(row.cantidad_kg).toBe(1250);
   });
@@ -264,6 +283,9 @@ describe('supabaseOrdenesExpedicionService', () => {
       cantidad_original: 25,
       unidad_cantidad: 'kg',
       cantidad_kg: 25,
+      precio_unitario_venta: 150,
+      total_venta: 3750,
+      moneda: 'ARS',
       estado: 'despachada',
       motivo: 'Venta',
       referencia: 'R-1',
@@ -371,6 +393,9 @@ describe('supabaseOrdenesExpedicionService', () => {
       cantidad_original: 25,
       unidad_cantidad: 'kg',
       cantidad_kg: 25,
+      precio_unitario_venta: 150,
+      total_venta: 3750,
+      moneda: 'ARS',
       estado: 'pendiente',
       motivo: 'Venta',
       referencia: 'R-1',
@@ -434,6 +459,7 @@ describe('supabaseOrdenesExpedicionService', () => {
       presentacion: 'GRANEL',
       cantidad: 25,
       unidad_cantidad: 'kg',
+      precio_unitario_venta: 150,
       motivo: 'Venta',
       referencia: 'R-1',
     });

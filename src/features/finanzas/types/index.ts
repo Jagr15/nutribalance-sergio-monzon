@@ -12,6 +12,10 @@ export interface MovimientoFinanciero {
   categoria?: string;
   centro_costo?: string;
   estado: 'PENDIENTE' | 'CONFIRMADO' | 'ANULADO';
+  fecha_operacion?: string;
+  fecha_vencimiento?: string;
+  estado_financiero?: string;
+  fecha_cobro_pago?: string;
 }
 
 export interface FinanzasKPIs {

@@ -1,0 +1,809 @@
+alter table public.ordenes_produccion
+  add column if not exists fecha_programada date null;
+
+alter table public.ordenes_expedicion
+  add column if not exists fecha_programada date null;
+
+create or replace function public.crear_orden_produccion_con_reserva(
+  p_legacy_uid text,
+  p_lote text,
+  p_formula_id uuid,
+  p_id_formula_legacy text,
+  p_nombre_producto text,
+  p_version_formula integer,
+  p_cantidad_objetivo numeric,
+  p_cantidad_real numeric,
+  p_merma_manual numeric,
+  p_silo_id uuid,
+  p_id_silo_legacy text,
+  p_destino_silo text,
+  p_estado text,
+  p_fecha_creacion timestamptz,
+  p_usuario_responsable text,
+  p_usuario_id uuid,
+  p_costo_total_insumos numeric,
+  p_detalle jsonb,
+  p_fecha_programada date default null
+)
+returns table (
+  id uuid,
+  legacy_uid text,
+  lote text,
+  id_formula_legacy text,
+  nombre_producto text,
+  version_formula integer,
+  cantidad_objetivo numeric,
+  cantidad_real numeric,
+  merma_manual numeric,
+  id_silo_legacy text,
+  destino_silo text,
+  estado text,
+  fecha_creacion timestamptz,
+  fecha_programada date,
+  usuario_responsable text,
+  costo_total_insumos numeric
+)
+language plpgsql
+as $$
+declare
+  v_orden public.ordenes_produccion%rowtype;
+  v_item record;
+  v_lote_id uuid;
+  v_disponible numeric;
+  v_consumo_count integer;
+begin
+  if p_estado is distinct from 'PENDIENTE' then
+    raise exception 'La orden debe crearse en estado PENDIENTE.';
+  end if;
+
+  if p_lote is null or btrim(p_lote) = '' then
+    raise exception 'El lote de la orden es obligatorio.';
+  end if;
+
+  if p_cantidad_objetivo is null or p_cantidad_objetivo <= 0 then
+    raise exception 'La cantidad objetivo debe ser mayor a cero.';
+  end if;
+
+  if p_detalle is null or jsonb_array_length(p_detalle) = 0 then
+    raise exception 'La orden no tiene consumo planificado.';
+  end if;
+
+  insert into public.ordenes_produccion (
+    legacy_uid,
+    lote,
+    formula_id,
+    id_formula_legacy,
+    nombre_producto,
+    version_formula,
+    cantidad_objetivo,
+    cantidad_real,
+    merma_manual,
+    silo_id,
+    id_silo_legacy,
+    destino_silo,
+    estado,
+    fecha_creacion,
+    fecha_programada,
+    usuario_responsable,
+    usuario_id,
+    costo_total_insumos
+  ) values (
+    p_legacy_uid,
+    p_lote,
+    p_formula_id,
+    p_id_formula_legacy,
+    p_nombre_producto,
+    p_version_formula,
+    p_cantidad_objetivo,
+    p_cantidad_real,
+    p_merma_manual,
+    p_silo_id,
+    p_id_silo_legacy,
+    p_destino_silo,
+    p_estado,
+    p_fecha_creacion,
+    coalesce(p_fecha_programada, current_date),
+    p_usuario_responsable,
+    p_usuario_id,
+    p_costo_total_insumos
+  )
+  returning * into v_orden;
+
+  insert into public.orden_consumo_lotes (
+    orden_id,
+    lote_id,
+    id_lote_legacy,
+    insumo_id,
+    id_insumo_legacy,
+    nombre_insumo,
+    cantidad_usada,
+    tipo_unidad,
+    costo_unitario,
+    costo_total
+  )
+  select
+    v_orden.id,
+    d.lote_id,
+    d.id_lote,
+    d.insumo_id,
+    d.id_insumo,
+    d.nombre_insumo,
+    d.cantidad_usada,
+    d.tipo_unidad,
+    d.costo_unitario,
+    d.costo_total
+  from jsonb_to_recordset(p_detalle) as d(
+    id_lote text,
+    id_insumo text,
+    nombre_insumo text,
+    cantidad_usada numeric,
+    tipo_unidad text,
+    costo_unitario numeric,
+    costo_total numeric,
+    lote_id uuid,
+    insumo_id uuid
+  );
+
+  select count(*) into v_consumo_count
+  from public.orden_consumo_lotes
+  where orden_id = v_orden.id;
+
+  if v_consumo_count = 0 then
+    raise exception 'La orden no tiene consumo planificado.';
+  end if;
+
+  for v_item in
+    select
+      ocl.id_lote_legacy,
+      ocl.nombre_insumo,
+      ocl.cantidad_usada,
+      coalesce(
+        ocl.lote_id,
+        sl_legacy.id,
+        sl_nombre.id
+      ) as lote_id_resuelto
+    from public.orden_consumo_lotes ocl
+    left join public.stock_lotes_mp sl_legacy
+      on sl_legacy.legacy_uid = ocl.id_lote_legacy
+      and sl_legacy.deleted_at is null
+    left join public.stock_lotes_mp sl_nombre
+      on sl_nombre.lote = ocl.id_lote_legacy
+      and sl_nombre.deleted_at is null
+    where ocl.orden_id = v_orden.id
+  loop
+    if v_item.cantidad_usada <= 0 then
+      raise exception 'Cantidad inválida para %.', v_item.nombre_insumo;
+    end if;
+
+    if v_item.lote_id_resuelto is null then
+      raise exception 'No se encontró lote %.', v_item.id_lote_legacy;
+    end if;
+
+    v_lote_id := v_item.lote_id_resuelto;
+
+    select (sl.cantidad_actual - sl.cantidad_comprometida)
+    into v_disponible
+    from public.stock_lotes_mp sl
+    where sl.id = v_lote_id
+      and sl.deleted_at is null
+    for update;
+
+    if v_disponible is null or v_disponible + 0.0001 < v_item.cantidad_usada then
+      raise exception 'Stock insuficiente para % en lote %.', v_item.nombre_insumo, v_item.id_lote_legacy;
+    end if;
+
+    update public.stock_lotes_mp sl
+    set cantidad_comprometida = sl.cantidad_comprometida + v_item.cantidad_usada
+    where sl.id = v_lote_id;
+  end loop;
+
+  insert into public.trazabilidad_eventos (
+    legacy_uid,
+    orden_id,
+    tipo,
+    referencia,
+    payload,
+    usuario_id
+  ) values (
+    'trz-' || replace(gen_random_uuid()::text, '-', ''),
+    v_orden.id,
+    'RESERVA_MP',
+    format('Reserva MP OP %s', coalesce(v_orden.legacy_uid, v_orden.lote)),
+    jsonb_build_object(
+      'orden_id', v_orden.id,
+      'orden_legacy_uid', v_orden.legacy_uid,
+      'detalle', p_detalle
+    ),
+    v_orden.usuario_id
+  );
+
+  return query
+  select
+    op.id,
+    op.legacy_uid,
+    op.lote,
+    op.id_formula_legacy,
+    op.nombre_producto,
+    op.version_formula,
+    op.cantidad_objetivo,
+    op.cantidad_real,
+    op.merma_manual,
+    op.id_silo_legacy,
+    op.destino_silo,
+    op.estado,
+    op.fecha_creacion,
+    op.fecha_programada,
+    op.usuario_responsable,
+    op.costo_total_insumos
+  from public.ordenes_produccion op
+  where op.id = v_orden.id;
+end;
+$$;
+
+create or replace function public.actualizar_orden_produccion_con_reserva(
+  p_orden_id uuid,
+  p_legacy_uid text,
+  p_lote text,
+  p_formula_id uuid,
+  p_id_formula_legacy text,
+  p_nombre_producto text,
+  p_version_formula integer,
+  p_cantidad_objetivo numeric,
+  p_cantidad_real numeric,
+  p_merma_manual numeric,
+  p_silo_id uuid,
+  p_id_silo_legacy text,
+  p_destino_silo text,
+  p_fecha_creacion timestamptz,
+  p_usuario_responsable text,
+  p_usuario_id uuid,
+  p_costo_total_insumos numeric,
+  p_detalle jsonb,
+  p_fecha_programada date default null
+)
+returns table (
+  id uuid,
+  legacy_uid text,
+  lote text,
+  id_formula_legacy text,
+  nombre_producto text,
+  version_formula integer,
+  cantidad_objetivo numeric,
+  cantidad_real numeric,
+  merma_manual numeric,
+  id_silo_legacy text,
+  destino_silo text,
+  estado text,
+  fecha_creacion timestamptz,
+  fecha_programada date,
+  usuario_responsable text,
+  costo_total_insumos numeric
+)
+language plpgsql
+as $$
+declare
+  v_orden public.ordenes_produccion%rowtype;
+  v_item record;
+  v_lote_id uuid;
+  v_disponible numeric;
+  v_consumo_count integer;
+begin
+  select *
+  into v_orden
+  from public.ordenes_produccion op
+  where op.id = p_orden_id
+    and op.deleted_at is null
+  for update;
+
+  if not found then
+    raise exception 'Orden no encontrada.';
+  end if;
+
+  if v_orden.estado = 'FINALIZADO' then
+    raise exception 'No se puede editar una orden finalizada.';
+  end if;
+
+  if v_orden.estado = 'ANULADO' then
+    raise exception 'No se puede editar una orden anulada.';
+  end if;
+
+  if p_detalle is null or jsonb_array_length(p_detalle) = 0 then
+    raise exception 'La orden no tiene consumo planificado.';
+  end if;
+
+  -- Liberar reserva anterior antes de recalcular la nueva versión.
+  for v_item in
+    select
+      ocl.id_lote_legacy,
+      ocl.nombre_insumo,
+      ocl.cantidad_usada,
+      coalesce(
+        ocl.lote_id,
+        sl_legacy.id,
+        sl_nombre.id
+      ) as lote_id_resuelto
+    from public.orden_consumo_lotes ocl
+    left join public.stock_lotes_mp sl_legacy
+      on sl_legacy.legacy_uid = ocl.id_lote_legacy
+      and sl_legacy.deleted_at is null
+    left join public.stock_lotes_mp sl_nombre
+      on sl_nombre.lote = ocl.id_lote_legacy
+      and sl_nombre.deleted_at is null
+    where ocl.orden_id = v_orden.id
+  loop
+    if v_item.lote_id_resuelto is null then
+      raise exception 'No se encontró lote %.', v_item.id_lote_legacy;
+    end if;
+
+    v_lote_id := v_item.lote_id_resuelto;
+
+    update public.stock_lotes_mp sl
+    set cantidad_comprometida = greatest(0, sl.cantidad_comprometida - v_item.cantidad_usada)
+    where sl.id = v_lote_id;
+  end loop;
+
+  delete from public.orden_consumo_lotes
+  where orden_id = v_orden.id;
+
+  insert into public.orden_consumo_lotes (
+    orden_id,
+    lote_id,
+    id_lote_legacy,
+    insumo_id,
+    id_insumo_legacy,
+    nombre_insumo,
+    cantidad_usada,
+    tipo_unidad,
+    costo_unitario,
+    costo_total
+  )
+  select
+    v_orden.id,
+    d.lote_id,
+    d.id_lote,
+    d.insumo_id,
+    d.id_insumo,
+    d.nombre_insumo,
+    d.cantidad_usada,
+    d.tipo_unidad,
+    d.costo_unitario,
+    d.costo_total
+  from jsonb_to_recordset(p_detalle) as d(
+    id_lote text,
+    id_insumo text,
+    nombre_insumo text,
+    cantidad_usada numeric,
+    tipo_unidad text,
+    costo_unitario numeric,
+    costo_total numeric,
+    lote_id uuid,
+    insumo_id uuid
+  );
+
+  select count(*) into v_consumo_count
+  from public.orden_consumo_lotes
+  where orden_id = v_orden.id;
+
+  if v_consumo_count = 0 then
+    raise exception 'La orden no tiene consumo planificado.';
+  end if;
+
+  for v_item in
+    select
+      ocl.id_lote_legacy,
+      ocl.nombre_insumo,
+      ocl.cantidad_usada,
+      coalesce(
+        ocl.lote_id,
+        sl_legacy.id,
+        sl_nombre.id
+      ) as lote_id_resuelto
+    from public.orden_consumo_lotes ocl
+    left join public.stock_lotes_mp sl_legacy
+      on sl_legacy.legacy_uid = ocl.id_lote_legacy
+      and sl_legacy.deleted_at is null
+    left join public.stock_lotes_mp sl_nombre
+      on sl_nombre.lote = ocl.id_lote_legacy
+      and sl_nombre.deleted_at is null
+    where ocl.orden_id = v_orden.id
+  loop
+    if v_item.cantidad_usada <= 0 then
+      raise exception 'Cantidad inválida para %.', v_item.nombre_insumo;
+    end if;
+
+    if v_item.lote_id_resuelto is null then
+      raise exception 'No se encontró lote %.', v_item.id_lote_legacy;
+    end if;
+
+    v_lote_id := v_item.lote_id_resuelto;
+
+    select (sl.cantidad_actual - sl.cantidad_comprometida)
+    into v_disponible
+    from public.stock_lotes_mp sl
+    where sl.id = v_lote_id
+      and sl.deleted_at is null
+    for update;
+
+    if v_disponible is null or v_disponible + 0.0001 < v_item.cantidad_usada then
+      raise exception 'Stock insuficiente para % en lote %.', v_item.nombre_insumo, v_item.id_lote_legacy;
+    end if;
+
+    update public.stock_lotes_mp sl
+    set cantidad_comprometida = sl.cantidad_comprometida + v_item.cantidad_usada
+    where sl.id = v_lote_id;
+  end loop;
+
+  update public.ordenes_produccion op
+  set
+    legacy_uid = p_legacy_uid,
+    lote = p_lote,
+    formula_id = p_formula_id,
+    id_formula_legacy = p_id_formula_legacy,
+    nombre_producto = p_nombre_producto,
+    version_formula = p_version_formula,
+    cantidad_objetivo = p_cantidad_objetivo,
+    cantidad_real = p_cantidad_real,
+    merma_manual = p_merma_manual,
+    silo_id = p_silo_id,
+    id_silo_legacy = p_id_silo_legacy,
+    destino_silo = p_destino_silo,
+    fecha_creacion = p_fecha_creacion,
+    fecha_programada = coalesce(p_fecha_programada, op.fecha_programada),
+    usuario_responsable = p_usuario_responsable,
+    usuario_id = p_usuario_id,
+    costo_total_insumos = p_costo_total_insumos
+  where op.id = v_orden.id;
+
+  insert into public.trazabilidad_eventos (
+    legacy_uid,
+    orden_id,
+    tipo,
+    referencia,
+    payload,
+    usuario_id
+  ) values (
+    'trz-' || replace(gen_random_uuid()::text, '-', ''),
+    v_orden.id,
+    'RESERVA_MP',
+    format('Edición de reserva OP %s', coalesce(v_orden.legacy_uid, v_orden.lote)),
+    jsonb_build_object(
+      'accion', 'EDICION_RESERVA',
+      'orden_id', v_orden.id,
+      'orden_legacy_uid', v_orden.legacy_uid,
+      'detalle', p_detalle
+    ),
+    v_orden.usuario_id
+  );
+
+  return query
+  select
+    op.id,
+    op.legacy_uid,
+    op.lote,
+    op.id_formula_legacy,
+    op.nombre_producto,
+    op.version_formula,
+    op.cantidad_objetivo,
+    op.cantidad_real,
+    op.merma_manual,
+    op.id_silo_legacy,
+    op.destino_silo,
+    op.estado,
+    op.fecha_creacion,
+    op.fecha_programada,
+    op.usuario_responsable,
+    op.costo_total_insumos
+  from public.ordenes_produccion op
+  where op.id = v_orden.id;
+end;
+$$;
+
+create or replace function public.registrar_orden_expedicion(
+  p_stock_pt_id uuid,
+  p_cliente_id uuid,
+  p_cantidad numeric,
+  p_presentacion_key text default 'GRANEL_KG',
+  p_presentacion text default null,
+  p_cantidad_original numeric default null,
+  p_unidad_cantidad text default null,
+  p_modo_calculo text default null,
+  p_empaque_id uuid default null,
+  p_tipo_empaque text default null,
+  p_capacidad_empaque_kg numeric default null,
+  p_cantidad_empaques numeric default null,
+  p_sobrante_kg numeric default null,
+  p_motivo text default null,
+  p_referencia text default null,
+  p_precio_unitario_venta numeric default null,
+  p_total_venta numeric default null,
+  p_moneda text default 'ARS',
+  p_fecha_programada date default null
+)
+returns setof public.ordenes_expedicion
+language plpgsql
+as $$
+declare
+  v_stock_pt public.stock_pt%rowtype;
+  v_numero_expedicion text;
+  v_legacy_uid text;
+  v_presentacion_key text := upper(trim(coalesce(p_presentacion_key, 'GRANEL_KG')));
+  v_presentacion text;
+  v_unidad text := lower(trim(coalesce(p_unidad_cantidad, 'kg')));
+  v_cantidad_original numeric := coalesce(p_cantidad_original, p_cantidad);
+  v_cantidad_kg numeric;
+  v_modo_calculo text;
+  v_tipo_empaque text;
+  v_capacidad_empaque_kg numeric;
+  v_cantidad_empaques numeric;
+  v_precio_unitario_venta numeric := p_precio_unitario_venta;
+  v_total_venta numeric;
+  v_moneda text := coalesce(nullif(trim(coalesce(p_moneda, 'ARS')), ''), 'ARS');
+begin
+  if p_cantidad is null or p_cantidad <= 0 then
+    raise exception 'La cantidad a expedir debe ser mayor a cero.';
+  end if;
+  if v_cantidad_original is null or v_cantidad_original <= 0 then
+    raise exception 'La cantidad original debe ser mayor a cero.';
+  end if;
+  if v_unidad not in ('kg', 'tonelada') then
+    raise exception 'La unidad de medida no es válida.';
+  end if;
+  if p_cliente_id is null then
+    raise exception 'El cliente destino es obligatorio.';
+  end if;
+  if v_presentacion_key not in ('GRANEL_KG', 'TONELADA', 'BOLSA_15', 'BOLSA_20', 'BOLSA_25', 'BOLSA_40', 'BIG_BAG_500', 'BIG_BAG_1000') then
+    raise exception 'La presentación seleccionada no es válida.';
+  end if;
+  if v_precio_unitario_venta is null or v_precio_unitario_venta <= 0 then
+    raise exception 'El precio unitario de venta debe ser mayor a cero.';
+  end if;
+
+  v_cantidad_kg := round(v_cantidad_original * case when v_unidad = 'tonelada' then 1000 else 1 end, 3);
+  v_total_venta := coalesce(nullif(p_total_venta, 0), round(v_cantidad_kg * v_precio_unitario_venta, 2));
+
+  v_presentacion := case
+    when v_presentacion_key in ('GRANEL_KG', 'TONELADA') then 'GRANEL'
+    when v_presentacion_key like 'BOLSA_%' then 'BOLSA'
+    else 'BIG_BAG'
+  end;
+  v_modo_calculo := case
+    when v_presentacion_key in ('GRANEL_KG', 'TONELADA') then 'kg_requeridos'
+    else 'empaques'
+  end;
+  v_tipo_empaque := case
+    when v_presentacion_key like 'BOLSA_%' then 'BOLSA'
+    when v_presentacion_key like 'BIG_BAG_%' then 'BIG_BAG'
+    else null
+  end;
+  v_capacidad_empaque_kg := case
+    when v_presentacion_key = 'BOLSA_15' then 15
+    when v_presentacion_key = 'BOLSA_20' then 20
+    when v_presentacion_key = 'BOLSA_25' then 25
+    when v_presentacion_key = 'BOLSA_40' then 40
+    when v_presentacion_key = 'BIG_BAG_500' then 500
+    when v_presentacion_key = 'BIG_BAG_1000' then 1000
+    else null
+  end;
+  v_cantidad_empaques := case
+    when v_tipo_empaque is null then null
+    else coalesce(p_cantidad_empaques, round(v_cantidad_kg / nullif(v_capacidad_empaque_kg, 0), 3))
+  end;
+
+  select *
+  into v_stock_pt
+  from public.stock_pt pt
+  where pt.id = p_stock_pt_id
+    and pt.deleted_at is null
+  for update;
+
+  if not found then
+    raise exception 'El stock PT no existe.';
+  end if;
+
+  if (v_stock_pt.cantidad_total - coalesce(v_stock_pt.cantidad_comprometida, 0)) < v_cantidad_kg then
+    raise exception 'No hay saldo suficiente en el lote de PT.';
+  end if;
+
+  update public.stock_pt
+  set cantidad_comprometida = cantidad_comprometida + v_cantidad_kg,
+      updated_at = now()
+  where id = v_stock_pt.id;
+
+  v_numero_expedicion := format('EXP-%s-%06s', to_char(now(), 'YYYY'), nextval('public.ordenes_expedicion_numero_seq'));
+  v_legacy_uid := 'exp-' || replace(gen_random_uuid()::text, '-', '');
+
+  insert into public.ordenes_expedicion (
+    legacy_uid, numero_expedicion, stock_pt_id, producto_id, nombre_producto, lote_pt,
+    cliente_id, presentacion_key, presentacion, cantidad, cantidad_original, unidad_original, unidad_cantidad, cantidad_kg,
+    precio_unitario_venta, total_venta, moneda, fecha_programada,
+    modo_calculo, empaque_id, tipo_empaque, capacidad_empaque_kg, cantidad_empaques, sobrante_kg,
+    estado, motivo, referencia
+  ) values (
+    v_legacy_uid, v_numero_expedicion, v_stock_pt.id,
+    coalesce(v_stock_pt.id_formula_legacy, v_stock_pt.nombre_producto),
+    v_stock_pt.nombre_producto, v_stock_pt.lote, p_cliente_id, v_presentacion_key, coalesce(p_presentacion, v_presentacion),
+    p_cantidad, v_cantidad_original, v_unidad, v_unidad, v_cantidad_kg,
+    v_precio_unitario_venta, v_total_venta, v_moneda, coalesce(p_fecha_programada, current_date),
+    coalesce(p_modo_calculo, v_modo_calculo), p_empaque_id, coalesce(p_tipo_empaque, v_tipo_empaque),
+    coalesce(p_capacidad_empaque_kg, v_capacidad_empaque_kg), v_cantidad_empaques, coalesce(p_sobrante_kg, 0),
+    'pendiente',
+    coalesce(p_motivo, 'Despacho de producto terminado'),
+    coalesce(p_referencia, v_numero_expedicion)
+  );
+
+  insert into public.stock_pt_movimientos (
+    stock_pt_id, producto_id, nombre_producto, lote, numero_orden, silo, tipo, cantidad, unidad,
+    costo_unitario, valor_total, motivo, referencia, cliente_id
+  ) values (
+    v_stock_pt.id, coalesce(v_stock_pt.id_formula_legacy, v_stock_pt.nombre_producto),
+    v_stock_pt.nombre_producto, v_stock_pt.lote, v_stock_pt.numero_orden, v_stock_pt.nombre_silo,
+    'AJUSTE', v_cantidad_kg, v_stock_pt.unidad_medida, v_stock_pt.costo_unitario_estimado, 0,
+    'Reserva de stock para orden de expedición', v_numero_expedicion, p_cliente_id
+  );
+
+  insert into public.trazabilidad_eventos (
+    legacy_uid, orden_id, stock_pt_id, tipo, referencia, payload, usuario_id
+  ) values (
+    'trz-' || replace(gen_random_uuid()::text, '-', ''), v_stock_pt.orden_id, v_stock_pt.id,
+    'RESERVA_PT', v_numero_expedicion,
+    jsonb_build_object('cantidad_kg', v_cantidad_kg, 'cantidad_original', v_cantidad_original, 'unidad', v_unidad, 'estado', 'pendiente'),
+    null
+  );
+
+  return query select * from public.ordenes_expedicion where legacy_uid = v_legacy_uid;
+end;
+$$;
+
+create or replace function public.actualizar_orden_expedicion(
+  p_orden_id uuid,
+  p_presentacion_key text default null,
+  p_presentacion text default null,
+  p_cantidad numeric default null,
+  p_cantidad_original numeric default null,
+  p_unidad_cantidad text default null,
+  p_modo_calculo text default null,
+  p_empaque_id uuid default null,
+  p_tipo_empaque text default null,
+  p_capacidad_empaque_kg numeric default null,
+  p_cantidad_empaques numeric default null,
+  p_sobrante_kg numeric default null,
+  p_motivo text default null,
+  p_referencia text default null,
+  p_precio_unitario_venta numeric default null,
+  p_total_venta numeric default null,
+  p_moneda text default 'ARS',
+  p_fecha_programada date default null
+)
+returns setof public.ordenes_expedicion
+language plpgsql
+as $$
+declare
+  v_orden public.ordenes_expedicion%rowtype;
+  v_stock_pt public.stock_pt%rowtype;
+  v_presentacion_key text;
+  v_presentacion text;
+  v_unidad text;
+  v_cantidad_original numeric;
+  v_nueva_cantidad_kg numeric;
+  v_delta numeric;
+  v_modo_calculo text;
+  v_tipo_empaque text;
+  v_capacidad_empaque_kg numeric;
+  v_cantidad_empaques numeric;
+  v_precio_unitario_venta numeric;
+  v_total_venta numeric;
+  v_moneda text;
+begin
+  select * into v_orden from public.ordenes_expedicion where id = p_orden_id for update;
+  if not found then
+    raise exception 'La orden de expedición no existe.';
+  end if;
+  if v_orden.estado <> 'pendiente' then
+    raise exception 'Solo se puede editar una orden pendiente.';
+  end if;
+
+  v_presentacion_key := upper(trim(coalesce(p_presentacion_key, v_orden.presentacion_key, 'GRANEL_KG')));
+  if v_presentacion_key not in ('GRANEL_KG', 'TONELADA', 'BOLSA_15', 'BOLSA_20', 'BOLSA_25', 'BOLSA_40', 'BIG_BAG_500', 'BIG_BAG_1000') then
+    raise exception 'La presentación seleccionada no es válida.';
+  end if;
+
+  v_unidad := lower(trim(coalesce(p_unidad_cantidad, v_orden.unidad_cantidad)));
+  if v_unidad not in ('kg', 'tonelada') then
+    raise exception 'La unidad de medida no es válida.';
+  end if;
+
+  v_cantidad_original := coalesce(p_cantidad_original, v_orden.cantidad_original);
+  if coalesce(p_cantidad, v_orden.cantidad_original) <= 0 then
+    raise exception 'La cantidad debe ser mayor a cero.';
+  end if;
+
+  v_nueva_cantidad_kg := round(v_cantidad_original * case when v_unidad = 'tonelada' then 1000 else 1 end, 3);
+
+  v_presentacion := case
+    when v_presentacion_key in ('GRANEL_KG', 'TONELADA') then 'GRANEL'
+    when v_presentacion_key like 'BOLSA_%' then 'BOLSA'
+    else 'BIG_BAG'
+  end;
+  v_modo_calculo := case
+    when v_presentacion_key in ('GRANEL_KG', 'TONELADA') then 'kg_requeridos'
+    else 'empaques'
+  end;
+  v_tipo_empaque := case
+    when v_presentacion_key like 'BOLSA_%' then 'BOLSA'
+    when v_presentacion_key like 'BIG_BAG_%' then 'BIG_BAG'
+    else null
+  end;
+  v_capacidad_empaque_kg := case
+    when v_presentacion_key = 'BOLSA_15' then 15
+    when v_presentacion_key = 'BOLSA_20' then 20
+    when v_presentacion_key = 'BOLSA_25' then 25
+    when v_presentacion_key = 'BOLSA_40' then 40
+    when v_presentacion_key = 'BIG_BAG_500' then 500
+    when v_presentacion_key = 'BIG_BAG_1000' then 1000
+    else null
+  end;
+  v_cantidad_empaques := case
+    when v_tipo_empaque is null then null
+    else coalesce(p_cantidad_empaques, v_orden.cantidad_empaques, round(v_nueva_cantidad_kg / nullif(v_capacidad_empaque_kg, 0), 3))
+  end;
+  v_delta := v_nueva_cantidad_kg - v_orden.cantidad_kg;
+  v_precio_unitario_venta := coalesce(p_precio_unitario_venta, v_orden.precio_unitario_venta);
+  if v_precio_unitario_venta is null or v_precio_unitario_venta <= 0 then
+    raise exception 'El precio unitario de venta debe ser mayor a cero.';
+  end if;
+  v_total_venta := coalesce(nullif(p_total_venta, 0), round(v_nueva_cantidad_kg * v_precio_unitario_venta, 2));
+  v_moneda := coalesce(nullif(trim(coalesce(p_moneda, v_orden.moneda, 'ARS')), ''), 'ARS');
+
+  select * into v_stock_pt from public.stock_pt where id = v_orden.stock_pt_id for update;
+  if not found then
+    raise exception 'El stock PT no existe.';
+  end if;
+
+  if v_delta > 0 and (v_stock_pt.cantidad_total - coalesce(v_stock_pt.cantidad_comprometida, 0)) < v_delta then
+    raise exception 'No hay saldo suficiente en el lote de PT.';
+  end if;
+
+  update public.stock_pt
+  set cantidad_comprometida = greatest(0, coalesce(cantidad_comprometida, 0) + v_delta),
+      updated_at = now()
+  where id = v_stock_pt.id;
+
+  update public.ordenes_expedicion set
+    presentacion_key = v_presentacion_key,
+    presentacion = coalesce(p_presentacion, v_presentacion),
+    cantidad = coalesce(p_cantidad, cantidad),
+    cantidad_original = v_cantidad_original,
+    unidad_original = coalesce(p_unidad_cantidad, unidad_original),
+    unidad_cantidad = v_unidad,
+    cantidad_kg = v_nueva_cantidad_kg,
+    precio_unitario_venta = v_precio_unitario_venta,
+    total_venta = v_total_venta,
+    moneda = v_moneda,
+    fecha_programada = coalesce(p_fecha_programada, fecha_programada),
+    modo_calculo = coalesce(p_modo_calculo, v_modo_calculo),
+    empaque_id = coalesce(p_empaque_id, empaque_id),
+    tipo_empaque = coalesce(p_tipo_empaque, v_tipo_empaque),
+    capacidad_empaque_kg = coalesce(p_capacidad_empaque_kg, v_capacidad_empaque_kg),
+    cantidad_empaques = coalesce(p_cantidad_empaques, v_orden.cantidad_empaques, v_cantidad_empaques),
+    sobrante_kg = coalesce(p_sobrante_kg, sobrante_kg),
+    motivo = coalesce(p_motivo, motivo),
+    referencia = coalesce(p_referencia, referencia),
+    updated_at = now()
+  where id = p_orden_id;
+
+  if v_delta <> 0 then
+    insert into public.stock_pt_movimientos (
+      stock_pt_id, producto_id, nombre_producto, lote, numero_orden, silo, tipo, cantidad, unidad,
+      costo_unitario, valor_total, motivo, referencia, cliente_id
+    ) values (
+      v_stock_pt.id, coalesce(v_stock_pt.id_formula_legacy, v_stock_pt.nombre_producto),
+      v_stock_pt.nombre_producto, v_stock_pt.lote, v_stock_pt.numero_orden, v_stock_pt.nombre_silo,
+      'AJUSTE', abs(v_delta), v_stock_pt.unidad_medida, v_stock_pt.costo_unitario_estimado, 0,
+      case when v_delta >= 0 then 'Ajuste al alza de reserva' else 'Ajuste a la baja de reserva' end,
+      coalesce(p_referencia, v_orden.numero_expedicion), v_orden.cliente_id
+    );
+  end if;
+
+  return query select * from public.ordenes_expedicion where id = p_orden_id;
+end;
+$$;

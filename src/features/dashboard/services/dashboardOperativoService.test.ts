@@ -60,6 +60,7 @@ describe('dashboardOperativoService', () => {
       if (table === 'vw_dashboard_produccion_resumen') return { select: () => ({ single: async () => ({ data: { ordenes_pendientes: 1, ordenes_en_proceso: 2, ordenes_finalizadas: 3, produccion_total: 1000, costo_promedio_produccion: 1.5, merma_total: 30 }, error: null }) }) };
       if (table === 'vw_dashboard_costos_resumen') return { select: () => ({ single: async () => ({ data: { proteina_promedio_formula: 18.2 }, error: null }) }) };
       if (table === 'stock_lotes_mp') return { select: () => ({ is: async () => ({ data: [{ cantidad_actual: 70, cantidad_comprometida: 20 }], error: null }) }) };
+      if (table === 'stock_pt') return { select: () => ({ is: async () => ({ data: [{ cantidad_total: 50, costo_total: 500 }], error: null }) }) };
       throw new Error('tabla inesperada');
     });
 

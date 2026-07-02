@@ -8,7 +8,7 @@ import { EstadoOrden } from '../types/orden';
 import type { Formula } from '../../formulas/types';
 import { useCalculoOrden, type CalculoOrdenResultado } from '../hooks/useCalculoOrden';
 import Swal from 'sweetalert2';
-import { parseNumericInput } from '../../../shared/utils/formatters';
+import { getTodayDateInputValue, parseNumericInput } from '../../../shared/utils/formatters';
 
 interface Props {
   onClose: () => void;
@@ -18,6 +18,7 @@ interface Props {
 const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const [pesoObjetivo, setPesoObjetivo] = useState<number | "">("");
   const [unidad, setUnidad] = useState<'KG' | 'TON'>('KG');
+  const [fechaProgramada, setFechaProgramada] = useState<string>(getTodayDateInputValue());
   const [formulas, setFormulas] = useState<Formula[]>([]);
   const [selectedFormula, setSelectedFormula] = useState<Formula | null>(null);
   
@@ -81,6 +82,11 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       setSubmitError('Seleccioná una fórmula activa.');
       return;
     }
+    const today = getTodayDateInputValue();
+    if (fechaProgramada && fechaProgramada < today) {
+      setSubmitError('La fecha programada no puede ser anterior a hoy.');
+      return;
+    }
     if (pesoObjetivo === "" || Number(pesoObjetivo) <= 0 || Number.isNaN(Number(pesoObjetivo))) {
       setSubmitError('La cantidad objetivo debe ser mayor a 0.');
       return;
@@ -105,7 +111,8 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         id_silo: null,
         destino_silo: null,
         estado: EstadoOrden.PENDIENTE,
-        fecha_creacion: new Date().toISOString()
+        fecha_creacion: new Date().toISOString(),
+        fecha_programada: fechaProgramada || null,
       };
 
       await ApiService.ordenes.create(payload);
@@ -171,6 +178,18 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               Se asignará automáticamente al guardar.
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Fecha programada</label>
+            <input
+              type="date"
+              value={fechaProgramada}
+              min={getTodayDateInputValue()}
+              onChange={(e) => setFechaProgramada(e.target.value)}
+              className="ui-input w-full rounded-2xl py-3.5 px-4 text-sm text-slate-900 outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-100 transition-all duration-200 ease-out"
+            />
+            <p className="text-xs text-slate-500 ml-1">Opcional. Si la dejás vacía, se toma la fecha actual.</p>
           </div>
 
           <div className="space-y-2">

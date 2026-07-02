@@ -1,9 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { ensureMock, auditMock } = vi.hoisted(() => ({
-  ensureMock: vi.fn(),
-  auditMock: vi.fn(),
-}));
+const { ensureMock, auditMock, syncMock } = vi.hoisted(() => {
+  const ensure = vi.fn();
+  return {
+    ensureMock: ensure,
+    auditMock: vi.fn(),
+    syncMock: vi.fn(async (payload: any) => {
+      await ensure({
+        legacy_uid: payload.origen_id,
+        tipo: payload.tipo,
+        origen_operativo: payload.origen_operativo,
+        descripcion: payload.descripcion,
+        monto: payload.monto,
+      });
+    }),
+  };
+});
 
 vi.mock('../../../infrastructure/api/runtimeConfig', () => ({
   runtimeConfig: { mode: 'supabase' },
@@ -12,7 +24,10 @@ vi.mock('../../../infrastructure/api/supabase/client', () => ({
   supabaseClient: { from: vi.fn() },
 }));
 vi.mock('./contabilidadOperativaService', () => ({
-  contabilidadOperativaService: { ensureMovimiento: ensureMock },
+  contabilidadOperativaService: {
+    ensureMovimiento: ensureMock,
+    sincronizarMovimientoCostos: syncMock,
+  },
 }));
 vi.mock('../../auth/audit', () => ({ auditAction: auditMock }));
 

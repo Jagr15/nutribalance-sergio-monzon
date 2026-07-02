@@ -190,4 +190,44 @@ describe('dashboardTemporalInsights', () => {
     expect(filterAlertasByPeriodo(alertas, 'SEMANA', now)).toHaveLength(2);
     expect(filterAlertasByPeriodo(alertas, 'MES', now)).toHaveLength(3);
   });
+
+  it('diferencia entre flujo de caja real y proyectado', () => {
+    const movimientosFlujo = [
+      { fecha: '2026-06-18T10:00:00Z', tipo: 'INGRESO', monto: 1000, estado: 'CONFIRMADO', estado_financiero: 'COBRADO', deleted_at: null },
+      { fecha: '2026-06-18T11:00:00Z', tipo: 'EGRESO', monto: 300, estado: 'CONFIRMADO', estado_financiero: 'PAGADO', deleted_at: null },
+      { fecha: '2026-06-18T12:00:00Z', tipo: 'INGRESO', monto: 500, estado: 'PENDIENTE', estado_financiero: 'PENDIENTE_COBRO', fecha_vencimiento: '2026-06-18T15:00:00Z', deleted_at: null },
+      { fecha: '2026-06-18T12:00:00Z', tipo: 'EGRESO', monto: 200, estado: 'PENDIENTE', estado_financiero: 'PENDIENTE_PAGO', fecha_vencimiento: '2026-06-18T16:00:00Z', deleted_at: null },
+      { fecha: '2026-06-15T12:00:00Z', tipo: 'INGRESO', monto: 150, estado: 'PENDIENTE', estado_financiero: 'PENDIENTE_COBRO', fecha_vencimiento: '2026-06-15T15:00:00Z', deleted_at: null },
+      // Confirmed but financial status is pending - should NOT affect real flow!
+      { fecha: '2026-06-18T13:00:00Z', tipo: 'INGRESO', monto: 1500, estado: 'CONFIRMADO', estado_financiero: 'PENDIENTE_COBRO', fecha_vencimiento: '2026-06-18T20:00:00Z', deleted_at: null },
+      { fecha: '2026-06-18T14:00:00Z', tipo: 'EGRESO', monto: 15000, estado: 'CONFIRMADO', estado_financiero: 'PENDIENTE_PAGO', fecha_vencimiento: '2026-06-18T20:00:00Z', deleted_at: null },
+    ];
+
+    const comprobantes = [
+      { tipo: 'FACTURA_VENTA', total: 600, saldo: 600, estado_financiero: 'PENDIENTE_COBRO', fecha_vencimiento: '2026-06-18T17:00:00Z', deleted_at: null }
+    ];
+
+    const result = buildDashboardTemporalInsights(
+      [],
+      [],
+      [],
+      'HOY',
+      now,
+      movimientosFlujo,
+      comprobantes,
+      [],
+      []
+    );
+
+    expect(result.ingresosReales).toBe(1000);
+    expect(result.egresosReales).toBe(300);
+    expect(result.flujoReal).toBe(700);
+
+    expect(result.ingresosProyectados).toBe(2600); // 500 + 1500 + 600
+    expect(result.egresosProyectados).toBe(15200); // 200 + 15000
+    expect(result.flujoProyectado).toBe(-12600);
+
+    expect(result.vencidosCobrar).toBe(150);
+    expect(result.vencidosPagar).toBe(0);
+  });
 });

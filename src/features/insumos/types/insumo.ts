@@ -75,7 +75,9 @@ export interface StockMateriaPrimaResumen {
   stock_disponible: number;
   umbral_alerta: number;
   estado: StockMPEstadoResumen;
+  costo_promedio_ponderado: number;
   valor_inventario?: number;
+  lotes_sin_costo?: number;
 }
 
 export interface HistorialCompraMP {

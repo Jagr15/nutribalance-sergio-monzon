@@ -7,7 +7,16 @@ export const RegistrarMovimientoForm = ({
   onSuccess,
   rubros,
 }: {
-  onSubmit: (payload: { tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA'; descripcion: string; monto: number; origen_operativo: string; categoria_id?: string }) => Promise<void>;
+  onSubmit: (payload: {
+    tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA';
+    descripcion: string;
+    monto: number;
+    origen_operativo: string;
+    categoria_id?: string;
+    fecha_operacion?: string;
+    fecha_vencimiento?: string;
+    estado_financiero?: string;
+  }) => Promise<void>;
   onSuccess?: () => void;
   rubros: RubroFinancieroCatalogo[];
 }) => {
@@ -17,6 +26,9 @@ export const RegistrarMovimientoForm = ({
   const [descripcion, setDescripcion] = useState('');
   const [monto, setMonto] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
+  const [fechaOperacion, setFechaOperacion] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaVencimiento, setFechaVencimiento] = useState(new Date().toISOString().split('T')[0]);
+  const [estadoFinanciero, setEstadoFinanciero] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
@@ -24,16 +36,37 @@ export const RegistrarMovimientoForm = ({
     descripcion?: string;
     monto?: string;
     categoriaId?: string;
+    fechaOperacion?: string;
+    fechaVencimiento?: string;
+    estadoFinanciero?: string;
   }>({});
+
   const rubrosActivos = useMemo(() => rubros.filter((rubro) => rubro.activo), [rubros]);
+
+  const handleTipoChange = (value: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA' | '') => {
+    setTipo(value);
+    setFieldErrors((current) => ({ ...current, tipo: undefined }));
+    if (value === 'INGRESO') {
+      setEstadoFinanciero('COBRADO');
+    } else if (value === 'EGRESO') {
+      setEstadoFinanciero('PAGADO');
+    } else {
+      setEstadoFinanciero('');
+    }
+  };
+
   const resetForm = () => {
     setTipo('');
     setDescripcion('');
     setMonto('');
     setCategoriaId('');
+    setFechaOperacion(new Date().toISOString().split('T')[0]);
+    setFechaVencimiento(new Date().toISOString().split('T')[0]);
+    setEstadoFinanciero('');
     setFieldErrors({});
     setSubmitError(null);
   };
+
   const montoNum = parseNumericInput(monto);
   const hasMontoValue = monto.trim() !== '';
   const isFormValid =
@@ -64,6 +97,9 @@ export const RegistrarMovimientoForm = ({
         else if (montoValor === null || montoValor <= 0) nextFieldErrors.monto = 'El monto debe ser mayor a 0.';
         if (categoriaId === '') nextFieldErrors.categoriaId = 'Selecciona un rubro financiero.';
         if (rubrosActivos.length === 0) nextFieldErrors.categoriaId = 'No hay rubros activos disponibles.';
+        if (!fechaOperacion) nextFieldErrors.fechaOperacion = 'La fecha de operación es obligatoria.';
+        if (!fechaVencimiento) nextFieldErrors.fechaVencimiento = 'La fecha de vencimiento es obligatoria.';
+        if (!estadoFinanciero) nextFieldErrors.estadoFinanciero = 'El estado financiero es obligatorio.';
 
         setFieldErrors(nextFieldErrors);
         if (Object.keys(nextFieldErrors).length > 0) return;
@@ -71,7 +107,16 @@ export const RegistrarMovimientoForm = ({
         try {
           setIsSubmitting(true);
           if (!tipoValido) return;
-        await onSubmit({ tipo: tipoValido, descripcion: descripcionLimpia, monto: montoValor ?? 0, origen_operativo: 'Manual', categoria_id: categoriaId || undefined });
+          await onSubmit({
+            tipo: tipoValido,
+            descripcion: descripcionLimpia,
+            monto: montoValor ?? 0,
+            origen_operativo: 'Manual',
+            categoria_id: categoriaId || undefined,
+            fecha_operacion: fechaOperacion,
+            fecha_vencimiento: fechaVencimiento,
+            estado_financiero: estadoFinanciero,
+          });
           resetForm();
           onSuccess?.();
         } catch (error: unknown) {
@@ -93,8 +138,9 @@ export const RegistrarMovimientoForm = ({
             value={tipo}
             onChange={(e) => {
               const value = e.target.value;
-              if (value === '' || isTipo(value)) setTipo(value);
-              setFieldErrors((current) => ({ ...current, tipo: undefined }));
+              if (value === '' || isTipo(value)) {
+                handleTipoChange(value === '' ? '' : value);
+              }
             }}
             className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
             aria-invalid={Boolean(fieldErrors.tipo)}
@@ -141,6 +187,74 @@ export const RegistrarMovimientoForm = ({
             aria-invalid={Boolean(fieldErrors.descripcion)}
           />
           {fieldErrors.descripcion ? <p className="mt-1.5 text-xs text-red-600">{fieldErrors.descripcion}</p> : null}
+        </label>
+
+        <label className="block">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Fecha de Operación</span>
+          <input
+            type="date"
+            value={fechaOperacion}
+            onChange={(e) => {
+              setFechaOperacion(e.target.value);
+              setFieldErrors((current) => ({ ...current, fechaOperacion: undefined }));
+            }}
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+            aria-invalid={Boolean(fieldErrors.fechaOperacion)}
+          />
+          {fieldErrors.fechaOperacion ? <p className="mt-1.5 text-xs text-red-600">{fieldErrors.fechaOperacion}</p> : null}
+        </label>
+
+        <label className="block">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Fecha de Vencimiento</span>
+          <input
+            type="date"
+            value={fechaVencimiento}
+            onChange={(e) => {
+              setFechaVencimiento(e.target.value);
+              setFieldErrors((current) => ({ ...current, fechaVencimiento: undefined }));
+            }}
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+            aria-invalid={Boolean(fieldErrors.fechaVencimiento)}
+          />
+          {fieldErrors.fechaVencimiento ? <p className="mt-1.5 text-xs text-red-600">{fieldErrors.fechaVencimiento}</p> : null}
+        </label>
+
+        <label className="block">
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Estado Financiero</span>
+          <select
+            value={estadoFinanciero}
+            onChange={(e) => {
+              setEstadoFinanciero(e.target.value);
+              setFieldErrors((current) => ({ ...current, estadoFinanciero: undefined }));
+            }}
+            className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+            aria-invalid={Boolean(fieldErrors.estadoFinanciero)}
+          >
+            <option value="">Seleccionar estado</option>
+            {tipo === 'INGRESO' && (
+              <>
+                <option value="PENDIENTE_COBRO">Pendiente de Cobro</option>
+                <option value="COBRADO">Cobrado</option>
+                <option value="VENCIDO">Vencido</option>
+                <option value="CANCELADO">Cancelado</option>
+              </>
+            )}
+            {tipo === 'EGRESO' && (
+              <>
+                <option value="PENDIENTE_PAGO">Pendiente de Pago</option>
+                <option value="PAGADO">Pagado</option>
+                <option value="VENCIDO">Vencido</option>
+                <option value="CANCELADO">Cancelado</option>
+              </>
+            )}
+            {tipo === 'TRANSFERENCIA' && (
+              <>
+                <option value="COBRADO">Cobrado</option>
+                <option value="PAGADO">Pagado</option>
+              </>
+            )}
+          </select>
+          {fieldErrors.estadoFinanciero ? <p className="mt-1.5 text-xs text-red-600">{fieldErrors.estadoFinanciero}</p> : null}
         </label>
 
         <label className="block">

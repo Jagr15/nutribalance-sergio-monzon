@@ -8,7 +8,7 @@ export interface FormulaCostIngredientBreakdown {
   inclusion_kg_per_kg: number;
   inclusion_kg_per_ton: number;
   costo_unitario_usado: number;
-  fuente_costo: 'ULTIMO_LOTE' | 'REFERENCIA' | 'SIN_COSTO';
+  fuente_costo: 'PROMEDIO_STOCK' | 'REFERENCIA' | 'SIN_COSTO';
   costo_contribucion_kg: number;
   costo_contribucion_ton: number;
   warnings: string[];
@@ -31,20 +31,27 @@ const resolveIngredientCost = (
   const warnings: string[] = [];
 
   const lotesInsumo = maestroStock
-    .filter((lote) => lote.id_insumo === ingrediente.id_insumo)
-    .sort((a, b) => new Date(b.fecha_ingreso).getTime() - new Date(a.fecha_ingreso).getTime());
+    .filter((lote) => (
+      lote.id_insumo === ingrediente.id_insumo
+      || lote.insumo_id === ingrediente.id_insumo
+    ) && Number(lote.cantidad_actual ?? 0) > 0);
 
-  if (lotesInsumo.length > 0 && typeof lotesInsumo[0].costo_unitario === 'number' && lotesInsumo[0].costo_unitario > 0) {
+  const stockActual = lotesInsumo.reduce((acc, lote) => acc + Number(lote.cantidad_actual ?? 0), 0);
+  const valorInventario = lotesInsumo.reduce((acc, lote) => (
+    acc + (Number(lote.cantidad_actual ?? 0) * Number(lote.costo_unitario ?? 0))
+  ), 0);
+
+  if (stockActual > 0 && valorInventario > 0) {
     return {
-      costo_unitario_usado: lotesInsumo[0].costo_unitario,
-      fuente_costo: 'ULTIMO_LOTE',
+      costo_unitario_usado: valorInventario / stockActual,
+      fuente_costo: 'PROMEDIO_STOCK',
       warnings,
     };
   }
 
   const insumo = maestroInsumos.find((item) => item.uid === ingrediente.id_insumo);
   if (typeof insumo?.ref_costo_unitario === 'number' && insumo.ref_costo_unitario > 0) {
-    warnings.push(`Sin lote reciente para ${ingrediente.nombre_insumo}; se usa costo de referencia.`);
+    warnings.push(`Sin costo ponderado en stock para ${ingrediente.nombre_insumo}; se usa costo de referencia.`);
     return {
       costo_unitario_usado: insumo.ref_costo_unitario,
       fuente_costo: 'REFERENCIA',

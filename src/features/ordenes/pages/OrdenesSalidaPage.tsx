@@ -8,8 +8,11 @@ import OrdenExpedicionModal from '../components/OrdenExpedicionModal';
 import { cancelarOrdenExpedicionEnLista, puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
 import { openConfiguracionEmpaquesModal } from '../../productos/utils/openConfiguracionEmpaquesModal';
 import { formatCantidadVisualOrden, getPresentacionExpedicionKeyFromOrder, getPresentacionExpedicionOption } from '../utils/presentacionExpedicion';
+import { usePermissions } from '../../auth/usePermissions';
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
+const formatMoney = (value: number) =>
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(value);
 
 const estadoBadge: Record<string, string> = {
   pendiente: 'bg-amber-50 text-amber-700',
@@ -36,6 +39,10 @@ const OrdenesSalidaPage: React.FC = () => {
   const [ordenEnEdicion, setOrdenEnEdicion] = useState<OrdenExpedicion | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const { canAccess } = usePermissions();
+  const canCreateOrder = canAccess('ordenes', 'create');
+  const canEditOrder = canAccess('ordenes', 'edit');
+  const canSeeSalePrice = canCreateOrder || canEditOrder;
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -131,17 +138,19 @@ const OrdenesSalidaPage: React.FC = () => {
             Control formal de salidas de stock de producto terminado por cliente, comprobante y fecha.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setOrdenEnEdicion(null);
-            setIsModalOpen(true);
-          }}
-          className="inline-flex items-center gap-2 rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-600/20 transition hover:bg-cyan-500"
-        >
-          <FiPlus />
-          Nueva orden de salida
-        </button>
+        {canCreateOrder ? (
+          <button
+            type="button"
+            onClick={() => {
+              setOrdenEnEdicion(null);
+              setIsModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-600/20 transition hover:bg-cyan-500"
+          >
+            <FiPlus />
+            Nueva orden de salida
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => { void handleConfigurarEmpaques(); }}
@@ -190,7 +199,7 @@ const OrdenesSalidaPage: React.FC = () => {
       ) : (
         <Card className="p-0">
           <div className="overflow-auto">
-            <table className="w-full min-w-[980px] text-left">
+            <table className={`w-full text-left ${canSeeSalePrice ? 'min-w-[1280px]' : 'min-w-[1120px]'}`}>
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-[0.24em] text-slate-500">
                   <th className="px-6 py-4">Comprobante</th>
@@ -198,8 +207,10 @@ const OrdenesSalidaPage: React.FC = () => {
                   <th className="px-6 py-4">Producto</th>
                   <th className="px-6 py-4">Lote PT</th>
                   <th className="px-6 py-4">Cantidad</th>
+                  {canSeeSalePrice ? <th className="px-6 py-4">Venta</th> : null}
+                  <th className="px-6 py-4">Programada</th>
                   <th className="px-6 py-4">Estado</th>
-                  <th className="px-6 py-4">Fecha</th>
+                  <th className="px-6 py-4">Creada</th>
                   <th className="px-6 py-4" />
                 </tr>
               </thead>
@@ -220,6 +231,21 @@ const OrdenesSalidaPage: React.FC = () => {
                         {getPresentacionExpedicionOption(getPresentacionExpedicionKeyFromOrder(orden)).label}
                       </div>
                     </td>
+                    {canSeeSalePrice ? (
+                      <td className="px-6 py-4 text-slate-700">
+                        <div className="font-semibold text-slate-900">
+                          {orden.precio_unitario_venta && orden.precio_unitario_venta > 0
+                            ? `${formatMoney(Number(orden.precio_unitario_venta))} / kg`
+                            : 'Sin precio'}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {orden.total_venta && orden.total_venta > 0 ? `Total: ${formatMoney(Number(orden.total_venta))}` : 'Total sin definir'}
+                        </div>
+                      </td>
+                    ) : null}
+                    <td className="px-6 py-4 text-slate-600">
+                      {orden.fecha_programada ? formatDateDDMMYYYY(orden.fecha_programada) : '—'}
+                    </td>
                     <td className="px-6 py-4">
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${estadoBadge[orden.estado] ?? 'bg-slate-100 text-slate-600'}`}>
                         {estadoLabel[orden.estado] ?? orden.estado}
@@ -228,16 +254,18 @@ const OrdenesSalidaPage: React.FC = () => {
                     <td className="px-6 py-4 text-slate-600">{formatDateDDMMYYYY(orden.created_at)}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex flex-wrap justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOrdenEnEdicion(orden);
-                            setIsModalOpen(true);
-                          }}
-                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                        >
-                          Editar
-                        </button>
+                        {canEditOrder ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOrdenEnEdicion(orden);
+                              setIsModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                          >
+                            Editar
+                          </button>
+                        ) : null}
                         {puedeMostrarAccionesOrdenSalida(orden.estado) ? (
                           <>
                             {orden.estado === 'pendiente' ? (

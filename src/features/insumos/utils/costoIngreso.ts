@@ -91,7 +91,12 @@ const resolveReferenceCost = (input: Pick<ResolverCostoIngresoMPInput, 'costo_po
 
 export const resolverCostoIngresoMP = (input: ResolverCostoIngresoMPInput): CostoIngresoMPResolucion => {
   const cantidad_kg = calcularCantidadKgIngresoMP(input.cantidad, input.unidad_entrada);
-  const costoManual = normalizeCost(input.costo_unitario);
+  let costoManual = normalizeCost(input.costo_unitario);
+  
+  if (costoManual !== null && input.unidad_precio === 'TON') {
+    costoManual = costoManual / 1000;
+  }
+
   const costoReferencia = costoManual === null ? resolveReferenceCost(input) : 0;
   const fuente_costo: CostoIngresoMPResolucion['fuente_costo'] =
     costoManual !== null ? 'manual' : costoReferencia > 0 ? 'referencia' : 'sin_costo';

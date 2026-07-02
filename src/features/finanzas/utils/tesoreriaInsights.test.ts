@@ -1,3 +1,10 @@
+import { vi } from 'vitest';
+
+vi.hoisted(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-06-18T12:00:00Z'));
+});
+
 import { describe, expect, it } from 'vitest';
 import type { Cliente } from '../../clientes/types/cliente';
 import type { MovimientoStockPT } from '../../productos/types';
@@ -96,7 +103,7 @@ describe('buildTesoreriaInsights', () => {
       10000,
     );
 
-    const alerta = result.alertasTesoreria.find((item) => item.tipo === 'Cheque emitido que vence hoy' || item.tipo === 'Riesgo de descubierto por cheque');
+    const alerta = result.alertasTesoreria.find((item) => item.tipo === 'Cheque emitido vence hoy / cubrir fondos' || item.tipo === 'Riesgo de descubierto por cheque');
     expect(alerta).toBeDefined();
     expect(alerta?.prioridad).toBe('critica');
     expect(alerta?.titulo).toContain('000123');
@@ -108,5 +115,142 @@ describe('buildTesoreriaInsights', () => {
     });
     expect(typeof alerta?.dato_asociado.saldo_proyectado).toBe('number');
     expect((alerta?.dato_asociado.saldo_proyectado as number)).toBeLessThan(0);
+  });
+
+  it('calcula flujo proyectado neto de cheques y alerta de flujo negativo basándose en neto', () => {
+    const resultRecibidos = buildTesoreriaInsights(
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [
+        { id: 'ch-1', numero: '0001', tipo: 'RECIBIDO', tercero: 'Cliente A', importe: 50000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-20', estado: 'PENDIENTE', cliente_id: null, cliente_nombre: null },
+      ] as never,
+      10000,
+    );
+    const pf7_recibidos = resultRecibidos.proyeccionFlujo.find((p) => p.horizonte === '7 días');
+    expect(pf7_recibidos?.ingresos_estimados).toBe(50000);
+    expect(pf7_recibidos?.egresos_estimados).toBe(0);
+    expect(pf7_recibidos?.saldo_estimado).toBe(60000);
+
+    const resultEmitidos = buildTesoreriaInsights(
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [
+        { id: 'ch-2', numero: '0002', tipo: 'EMITIDO', tercero: 'Proveedor X', importe: 30000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-20', estado: 'PENDIENTE', cliente_id: null, cliente_nombre: null },
+      ] as never,
+      10000,
+    );
+    const pf7_emitidos = resultEmitidos.proyeccionFlujo.find((p) => p.horizonte === '7 días');
+    expect(pf7_emitidos?.ingresos_estimados).toBe(0);
+    expect(pf7_emitidos?.egresos_estimados).toBe(30000);
+    expect(pf7_emitidos?.saldo_estimado).toBe(-20000);
+
+    const resultNeto = buildTesoreriaInsights(
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [
+        { id: 'ch-1', numero: '0001', tipo: 'RECIBIDO', tercero: 'Cliente A', importe: 100000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-20', estado: 'PENDIENTE', cliente_id: null, cliente_nombre: null },
+        { id: 'ch-2', numero: '0002', tipo: 'EMITIDO', tercero: 'Proveedor X', importe: 40000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-20', estado: 'PENDIENTE', cliente_id: null, cliente_nombre: null },
+      ] as never,
+      0,
+    );
+    const pf7_neto = resultNeto.proyeccionFlujo.find((p) => p.horizonte === '7 días');
+    expect(pf7_neto?.ingresos_estimados).toBe(100000);
+    expect(pf7_neto?.egresos_estimados).toBe(40000);
+    expect(pf7_neto?.saldo_estimado).toBe(60000);
+
+    const resultAlerta = buildTesoreriaInsights(
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [
+        { id: 'ch-1', numero: '0001', tipo: 'RECIBIDO', tercero: 'Cliente A', importe: 100000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-20', estado: 'PENDIENTE', cliente_id: null, cliente_nombre: null },
+        { id: 'ch-2', numero: '0002', tipo: 'EMITIDO', tercero: 'Proveedor X', importe: 140000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-20', estado: 'PENDIENTE', cliente_id: null, cliente_nombre: null },
+      ] as never,
+      10000,
+    );
+    const alertaFlujo = resultAlerta.alertasTesoreria.find((a) => a.tipo === 'Flujo de caja proyectado negativo');
+    expect(alertaFlujo).toBeDefined();
+    expect(alertaFlujo?.titulo).toContain('7 días');
+  });
+
+  it('valida las reglas de alertas para cheques recibidos y emitidos de forma individual', () => {
+    // 1. Cheque recibido futuro: no alerta
+    // 2. Cheque recibido hoy: sí alerta
+    // 3. Dos recibidos el mismo día: generan dos alertas independientes
+    // 4. Cheque recibido vencido: genera alerta
+    // 5. Cheque recibido depositado/cobrado/endosado/pagado: no alerta
+    // 6. Cheque emitido hoy: alerta
+    // 7. Cheque emitido vencido: alerta
+    // 8. Cheque emitido cerrado (pagado/cobrado/etc.): no alerta
+    // 9. created_at no influye en las alertas
+    const mockCheques = [
+      { id: 'ch-recibido-futuro', numero: 'RC-01', tipo: 'RECIBIDO', tercero: 'Cli A', importe: 1000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-19', estado: 'PENDIENTE', created_at: '2026-06-01' },
+      { id: 'ch-recibido-hoy-1', numero: 'RC-02', tipo: 'RECIBIDO', tercero: 'Cli B', importe: 2000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-18', estado: 'PENDIENTE', created_at: '2026-06-01' },
+      { id: 'ch-recibido-hoy-2', numero: 'RC-03', tipo: 'RECIBIDO', tercero: 'Cli C', importe: 3000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-18', estado: 'PENDIENTE', created_at: '2026-06-01' },
+      { id: 'ch-recibido-vencido', numero: 'RC-04', tipo: 'RECIBIDO', tercero: 'Cli D', importe: 4000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-17', estado: 'PENDIENTE', created_at: '2026-06-01' },
+      { id: 'ch-recibido-cobrado', numero: 'RC-05', tipo: 'RECIBIDO', tercero: 'Cli E', importe: 5000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-18', estado: 'COBRADO', created_at: '2026-06-01' },
+      { id: 'ch-emitido-hoy', numero: 'EM-01', tipo: 'EMITIDO', tercero: 'Prov A', importe: 6000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-18', estado: 'PENDIENTE', created_at: '2026-06-01' },
+      { id: 'ch-emitido-vencido', numero: 'EM-02', tipo: 'EMITIDO', tercero: 'Prov B', importe: 7000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-17', estado: 'PENDIENTE', created_at: '2026-06-01' },
+      { id: 'ch-emitido-pagado', numero: 'EM-03', tipo: 'EMITIDO', tercero: 'Prov C', importe: 8000, fecha_emision: '2026-06-10', fecha_vencimiento: '2026-06-18', estado: 'PAGADO', created_at: '2026-06-01' },
+    ];
+
+    const result = buildTesoreriaInsights(
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      [] as never,
+      mockCheques as never,
+      100000,
+    );
+
+    const alertas = result.alertasTesoreria;
+
+    // 1. Cheque recibido futuro: no alerta
+    const depFuturo = alertas.find((a) => a.alerta_id === 'tes-cheque-recibido-hoy-ch-recibido-futuro');
+    expect(depFuturo).toBeUndefined();
+
+    // 2. Cheque recibido hoy: sí alerta
+    const depHoy1 = alertas.find((a) => a.alerta_id === 'tes-cheque-recibido-hoy-ch-recibido-hoy-1');
+    expect(depHoy1).toBeDefined();
+    expect(depHoy1?.tipo).toBe('Cheque recibido listo para depositar');
+
+    // 3. Dos recibidos el mismo día: generan dos alertas independientes
+    const depHoy2 = alertas.find((a) => a.alerta_id === 'tes-cheque-recibido-hoy-ch-recibido-hoy-2');
+    expect(depHoy2).toBeDefined();
+
+    // 4. Cheque recibido vencido: genera alerta
+    const vencido = alertas.find((a) => a.alerta_id === 'tes-cheque-recibido-vencido-ch-recibido-vencido');
+    expect(vencido).toBeDefined();
+    expect(vencido?.tipo).toBe('Cheque recibido vencido');
+
+    // 5. Cheque recibido depositado/cobrado/endosado/pagado: no alerta
+    const cobrado = alertas.find((a) => a.alerta_id.includes('ch-recibido-cobrado'));
+    expect(cobrado).toBeUndefined();
+
+    // 6. Cheque emitido hoy: alerta
+    const emHoy = alertas.find((a) => a.alerta_id === 'tes-cheque-emitido-hoy-ch-emitido-hoy');
+    expect(emHoy).toBeDefined();
+    expect(emHoy?.tipo).toBe('Cheque emitido vence hoy / cubrir fondos');
+
+    // 7. Cheque emitido vencido: alerta
+    const emVencido = alertas.find((a) => a.alerta_id === 'tes-cheque-emitido-vencido-ch-emitido-vencido');
+    expect(emVencido).toBeDefined();
+    expect(emVencido?.tipo).toBe('Cheque emitido vencido');
+
+    // 8. Cheque emitido cerrado (pagado/cobrado/etc.): no alerta
+    const emPagado = alertas.find((a) => a.alerta_id.includes('ch-emitido-pagado'));
+    expect(emPagado).toBeUndefined();
   });
 });

@@ -15,8 +15,8 @@ const formulaA: Formula = {
   costo_por_kg: 120,
   costo_por_tonelada: 120000,
   ingredientes: [
-    { id_insumo: 'i-1', nombre_insumo: 'Maíz', porcentaje: 60, aporte_proteina_pct: 4.8, costo_contribucion_kg: 72, fuente_costo: 'ULTIMO_LOTE' },
-    { id_insumo: 'i-2', nombre_insumo: 'Soja', porcentaje: 40, aporte_proteina_pct: 13.2, costo_contribucion_kg: 48, fuente_costo: 'ULTIMO_LOTE' },
+    { id_insumo: 'i-1', nombre_insumo: 'Maíz', porcentaje: 60, aporte_proteina_pct: 4.8, costo_contribucion_kg: 72, fuente_costo: 'PROMEDIO_STOCK' },
+    { id_insumo: 'i-2', nombre_insumo: 'Soja', porcentaje: 40, aporte_proteina_pct: 13.2, costo_contribucion_kg: 48, fuente_costo: 'PROMEDIO_STOCK' },
   ],
 };
 
@@ -33,7 +33,7 @@ const formulaB: Formula = {
   costo_por_kg: 150,
   costo_por_tonelada: 150000,
   ingredientes: [
-    { id_insumo: 'i-1', nombre_insumo: 'Maíz', porcentaje: 50, aporte_proteina_pct: 4, costo_contribucion_kg: 60, fuente_costo: 'ULTIMO_LOTE' },
+    { id_insumo: 'i-1', nombre_insumo: 'Maíz', porcentaje: 50, aporte_proteina_pct: 4, costo_contribucion_kg: 60, fuente_costo: 'PROMEDIO_STOCK' },
     { id_insumo: 'i-3', nombre_insumo: 'Núcleo', porcentaje: 50, aporte_proteina_pct: 17, fuente_costo: 'SIN_COSTO' },
   ],
 };

@@ -30,7 +30,7 @@ type DashboardStockResumenRow = {
 type DashboardStockLotesRow = {
   cantidad_actual: unknown;
   cantidad_comprometida: unknown;
-  id_insumo?: unknown;
+  costo_unitario?: unknown;
 };
 type DashboardProduccionResumenRow = {
   ordenes_pendientes: unknown;
@@ -200,25 +200,30 @@ export const dashboardOperativoService = {
 
   async getKPIs(_periodo?: DashboardPeriodo): Promise<DashboardOperativoKPIs> {
     try {
-      const [stockR, prodR, costR, insumosResult] = await Promise.all([
+      const [stockR, prodR, costR] = await Promise.all([
         supabaseClient.from('vw_dashboard_stock_resumen').select('*').single<DashboardStockResumenRow>(),
         supabaseClient.from('vw_dashboard_produccion_resumen').select('*').single<DashboardProduccionResumenRow>(),
         supabaseClient.from('vw_dashboard_costos_resumen').select('proteina_promedio_formula').single<DashboardCostosProteinaRow>(),
-        ApiService.insumos.getAllInsumos(),
       ]);
 
-      const stockLotsQuery = await supabaseClient
-        .from('stock_lotes_mp')
-        .select('cantidad_actual,cantidad_comprometida')
-        .is('deleted_at', null);
+      const [stockLotsQuery, stockPtQuery] = await Promise.all([
+        supabaseClient
+          .from('stock_lotes_mp')
+          .select('cantidad_actual,cantidad_comprometida,costo_unitario')
+          .is('deleted_at', null),
+        supabaseClient
+          .from('stock_pt')
+          .select('cantidad_total,costo_total')
+          .is('deleted_at', null),
+      ]);
 
       if (stockR.error) throw stockR.error;
       if (prodR.error) throw prodR.error;
       if (costR.error) throw costR.error;
       if (stockLotsQuery.error) throw stockLotsQuery.error;
+      if (stockPtQuery.error) throw stockPtQuery.error;
 
       const stockLots = (stockLotsQuery.data ?? []) as DashboardStockLotesRow[];
-      const insumoById = new Map(insumosResult.map((insumo) => [insumo.uid, insumo]));
       const stockComprometidoMp = stockLots.length > 0
         ? stockLots.reduce((acc, lote) => acc + num(lote.cantidad_comprometida), 0)
         : num(stockR.data.stock_comprometido_mp);
@@ -228,7 +233,11 @@ export const dashboardOperativoService = {
       const stockDisponibleMp = stockLots.length > 0
         ? Math.max(0, stockTotalMp - stockComprometidoMp)
         : num(stockR.data.stock_disponible_mp);
-      const valorInventarioMp = stockLots.reduce((acc, lote) => acc + num(lote.cantidad_actual) * num(insumoById.get((lote as { id_insumo?: unknown }).id_insumo as string)?.costo_por_kg ?? insumoById.get((lote as { id_insumo?: unknown }).id_insumo as string)?.ref_costo_unitario), 0);
+      const valorInventarioMp = stockLots.reduce((acc, lote) => acc + (num(lote.cantidad_actual) * num((lote as { costo_unitario?: unknown }).costo_unitario)), 0);
+
+      const stockPtData = stockPtQuery.data ?? [];
+      const stockTotalPt = stockPtData.reduce((acc, row) => acc + num(row.cantidad_total), 0);
+      const valorInventarioPt = stockPtData.reduce((acc, row) => acc + num(row.costo_total), 0);
 
       return {
         stock_total_mp: stockTotalMp,
@@ -236,8 +245,8 @@ export const dashboardOperativoService = {
         stock_disponible_mp: stockDisponibleMp,
         stock_critico: num(stockR.data.stock_critico),
         valor_inventario_mp: valorInventarioMp || num(stockR.data.valor_inventario_mp),
-        stock_total_pt: num(stockR.data.stock_total_pt),
-        valor_inventario_pt: num(stockR.data.valor_inventario_pt),
+        stock_total_pt: stockTotalPt,
+        valor_inventario_pt: valorInventarioPt,
         ordenes_pendientes: num(prodR.data.ordenes_pendientes),
         ordenes_en_proceso: num(prodR.data.ordenes_en_proceso),
         ordenes_finalizadas: num(prodR.data.ordenes_finalizadas),

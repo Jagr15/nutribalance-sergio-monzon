@@ -27,12 +27,12 @@ const stock: StockMateriaPrima[] = [
 ];
 
 describe('calculateFormulaCost', () => {
-  it('usa costo del último lote cuando está disponible', () => {
+  it('usa costo promedio ponderado del stock cuando está disponible', () => {
     const result = calculateFormulaCost(ingredientes, stock, insumos);
     const maiz = result.byIngredient.find((x) => x.id_insumo === 'i-1');
 
-    expect(maiz?.fuente_costo).toBe('ULTIMO_LOTE');
-    expect(maiz?.costo_unitario_usado).toBeCloseTo(0.3, 6);
+    expect(maiz?.fuente_costo).toBe('PROMEDIO_STOCK');
+    expect(maiz?.costo_unitario_usado).toBeCloseTo(0.275, 6);
   });
 
   it('usa costo de referencia cuando no hay lote', () => {
@@ -59,12 +59,12 @@ describe('calculateFormulaCost', () => {
     const maiz = result.byIngredient.find((x) => x.id_insumo === 'i-1');
     const soja = result.byIngredient.find((x) => x.id_insumo === 'i-2');
 
-    expect(maiz?.costo_contribucion_kg).toBeCloseTo(0.18, 6);
+    expect(maiz?.costo_contribucion_kg).toBeCloseTo(0.165, 6);
     expect(soja?.costo_contribucion_kg).toBeCloseTo(0.16, 6);
 
-    expect(result.costo_por_kg).toBeCloseTo(0.34, 6);
-    expect(result.costo_por_tonelada).toBeCloseTo(340, 6);
-    expect(result.costo_total_formula).toBeCloseTo(340, 6);
+    expect(result.costo_por_kg).toBeCloseTo(0.325, 6);
+    expect(result.costo_por_tonelada).toBeCloseTo(325, 6);
+    expect(result.costo_total_formula).toBeCloseTo(325, 6);
   });
 
   it('genera advertencias de costo faltante', () => {

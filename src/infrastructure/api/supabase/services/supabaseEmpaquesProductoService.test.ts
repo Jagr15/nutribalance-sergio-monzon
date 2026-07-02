@@ -18,18 +18,18 @@ describe('supabaseEmpaquesProductoService', () => {
             order: async () => ({ data: [], error: null }),
             maybeSingle: async () => ({ data: null, error: null }),
           }),
-          insert: () => ({
-            select: () => ({
-              maybeSingle: async () => ({
-                data: { id: '1', producto_id: 'p-1', tipo_empaque: 'BOLSA', capacidad_kg: 25, activo: true, created_at: '2026-06-25T00:00:00Z', updated_at: '2026-06-25T00:00:00Z' },
-                error: null,
-              }),
+        }),
+        insert: () => ({
+          select: () => ({
+            maybeSingle: async () => ({
+              data: { id: '1', producto_id: 'p-1', tipo_empaque: 'BOLSA', capacidad_kg: 25, activo: true, created_at: '2026-06-25T00:00:00Z', updated_at: '2026-06-25T00:00:00Z' },
+              error: null,
             }),
           }),
-          update: () => ({
-            select: () => ({
-              maybeSingle: async () => ({ data: null, error: null }),
-            }),
+        }),
+        update: () => ({
+          select: () => ({
+            maybeSingle: async () => ({ data: null, error: null }),
           }),
         }),
       };

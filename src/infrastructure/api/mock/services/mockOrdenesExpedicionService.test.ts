@@ -24,6 +24,7 @@ describe('mockOrdenesExpedicionService', () => {
       presentacion: 'GRANEL',
       cantidad: 10,
       unidad_cantidad: 'kg',
+      precio_unitario_venta: 150,
       motivo: 'Venta',
       referencia: 'EXP-TEST',
     });
@@ -46,6 +47,7 @@ describe('mockOrdenesExpedicionService', () => {
       presentacion: 'BOLSA',
       cantidad: 1,
       unidad_cantidad: 'kg',
+      precio_unitario_venta: 150,
     })).rejects.toThrow('El cliente destino es obligatorio.');
   });
 
@@ -58,6 +60,7 @@ describe('mockOrdenesExpedicionService', () => {
       presentacion: 'GRANEL',
       cantidad: 1.25,
       unidad_cantidad: 'tonelada',
+      precio_unitario_venta: 180,
     });
 
     expect(created.cantidad_original).toBe(1.25);

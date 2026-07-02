@@ -14,8 +14,10 @@ import type { Cliente } from '../../clientes/types/cliente';
 import type { MovimientoStockPT } from '../../productos/types';
 import type { OrdenProduccion } from '../../ordenes/types';
 import { ApiService } from '../../../infrastructure/api';
+import { supabaseClient } from '../../../infrastructure/api/supabase/client';
+import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 
-const PERIODOS: DashboardPeriodo[] = ['HOY', 'SEMANA', 'MES'];
+const PERIODOS: DashboardPeriodo[] = ['HOY', 'SEMANA', 'MES', 'NEXT_7', 'NEXT_30'];
 
 export const DashboardOperativoPage = () => {
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
@@ -30,20 +32,56 @@ export const DashboardOperativoPage = () => {
 
   const queryParams = useMemo(() => buildDashboardOperativoQuery(periodo, now), [now, periodo]);
 
+  const [movimientosFlujo, setMovimientosFlujo] = useState<any[]>([]);
+  const [comprobantes, setComprobantes] = useState<any[]>([]);
+  const [stockLotesMP, setStockLotesMP] = useState<any[]>([]);
+  const [stockPT, setStockPT] = useState<any[]>([]);
+
   // Reusa la misma carga de datos operativos del dashboard ejecutivo.
   useEffect(() => {
-    void queryParams;
-    void Promise.allSettled([ApiService.ordenes.getAll(), ApiService.clientes.getAll(), ApiService.stockPT.getMovimientos()])
-      .then(([ordenesResult, clientesResult, movimientosResult]) => {
-        if (ordenesResult.status === 'fulfilled') setOrdenes(ordenesResult.value);
-        if (clientesResult.status === 'fulfilled') setClientes(clientesResult.value);
-        if (movimientosResult.status === 'fulfilled') setMovimientosPT(movimientosResult.value);
-      });
+    const loadAllData = async () => {
+      try {
+        const [ordenesResult, clientesResult, movimientosResult] = await Promise.all([
+          ApiService.ordenes.getAll(),
+          ApiService.clientes.getAll(),
+          ApiService.stockPT.getMovimientos()
+        ]);
+        setOrdenes(ordenesResult);
+        setClientes(clientesResult);
+        setMovimientosPT(movimientosResult);
+
+        const mode = runtimeConfig.mode;
+        if (mode === 'supabase') {
+          const [flujoRes, compRes, stockLotesRes, stockPtRes] = await Promise.all([
+            supabaseClient.from('flujo_caja_movimientos').select('fecha,created_at,tipo,monto,origen_operativo,estado').is('deleted_at', null).eq('estado', 'CONFIRMADO'),
+            supabaseClient.from('comprobantes').select('fecha_emision,created_at,tipo,total,saldo').is('deleted_at', null),
+            supabaseClient.from('stock_lotes_mp').select('cantidad_actual,costo_unitario').is('deleted_at', null),
+            supabaseClient.from('stock_pt').select('costo_total').is('deleted_at', null),
+          ]);
+          if (flujoRes.data) setMovimientosFlujo(flujoRes.data);
+          if (compRes.data) setComprobantes(compRes.data);
+          if (stockLotesRes.data) setStockLotesMP(stockLotesRes.data);
+          if (stockPtRes.data) setStockPT(stockPtRes.data);
+        } else {
+          // Fallback mock data
+          setMovimientosFlujo([
+            { fecha: new Date().toISOString(), tipo: 'INGRESO', monto: 1200000, origen_operativo: 'VENTA_PT', estado: 'CONFIRMADO' },
+            { fecha: new Date().toISOString(), tipo: 'EGRESO', monto: 800000, origen_operativo: 'PAGO', estado: 'CONFIRMADO' },
+          ]);
+          setComprobantes([
+            { fecha_emision: new Date().toISOString(), tipo: 'FACTURA_VENTA', total: 1200000, saldo: 400000 }
+          ]);
+        }
+      } catch (e) {
+        console.error('Error loading dashboard page data:', e);
+      }
+    };
+    void loadAllData();
   }, [queryParams]);
 
   const executiveMovimientos = useMemo(() => movimientosPT.filter((mov) => isWithinDashboardPeriodo(mov.created_at, periodo, now)), [movimientosPT, now, periodo]);
   const executiveInsights = useMemo(() => buildDashboardExecutiveInsights(executiveMovimientos, clientes, periodo, now), [clientes, executiveMovimientos, now, periodo]);
-  const temporalInsights = useMemo(() => buildDashboardTemporalInsights(ordenes, movimientosPT, [], periodo, now), [movimientosPT, ordenes, now, periodo]);
+  const temporalInsights = useMemo(() => buildDashboardTemporalInsights(ordenes, movimientosPT, [], periodo, now, movimientosFlujo, comprobantes, stockLotesMP, stockPT), [movimientosPT, ordenes, now, periodo, movimientosFlujo, comprobantes, stockLotesMP, stockPT]);
 
   if (loading && stockResumenes.stockMateriaPrima.length === 0 && stockResumenes.stockProductoTerminado.length === 0) {
     return <LoadingState label="Cargando dashboard operativo..." />;
@@ -149,9 +187,9 @@ export const DashboardOperativoPage = () => {
       </section>
 
       <section className="space-y-4">
-        <SectionTitle title="Finanzas" description="Costos, ingresos y flujo de caja del período." />
+        <SectionTitle title="Finanzas" description="Ingresos, egresos y flujo real de caja del período." />
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <KPIBox label="Costos" value={fmtARS(temporalInsights.costos)} trend={getTrendTone(temporalInsights.costos, undefined, false)} updatedAt={updatedAtLabel} tone="orange" />
+          <KPIBox label="Egresos" value={fmtARS(temporalInsights.costos)} trend={getTrendTone(temporalInsights.costos, undefined, false)} updatedAt={updatedAtLabel} tone="orange" />
           <KPIBox label="Ingresos" value={fmtARS(temporalInsights.ingresos)} trend={getTrendTone(temporalInsights.ingresos, undefined)} updatedAt={updatedAtLabel} tone="emerald" />
           <KPIBox label="Flujo de caja" value={fmtARS(temporalInsights.flujoCaja)} trend={getTrendTone(temporalInsights.flujoCaja, undefined)} updatedAt={updatedAtLabel} tone={temporalInsights.flujoCaja >= 0 ? 'cyan' : 'red'} />
         </div>
