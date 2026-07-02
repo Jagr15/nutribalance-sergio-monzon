@@ -1,12 +1,16 @@
 import type { Silo } from '../../../../features/silos/types';
+import type { Insumo } from '../../../../features/insumos/types/insumo';
 import initialData from '../data/silo.json';
 import { getMockStockSnapshot } from './mockMateriaPrimaService';
 import { getMockStockPTRows } from './mockStockPTService';
+import { mockInsumoService } from './mockInsumoService';
 
 type StockMateriaPrimaRow = {
   cantidad_actual?: number;
   cantidad_comprometida?: number;
   ubicacion?: string;
+  id_insumo?: string;
+  insumo_id?: string;
 };
 
 type StockPTRow = {
@@ -17,16 +21,28 @@ type StockPTRow = {
 
 const normalizeText = (value: string) => value.trim().toLowerCase();
 
-const buildMockStockBySilo = () => {
+const buildMockStockBySilo = async () => {
   const stockMateriaPrima = getMockStockSnapshot().stockDB as StockMateriaPrimaRow[];
   const stockPT = getMockStockPTRows() as StockPTRow[];
+  const insumos = await mockInsumoService.getAllInsumos();
+
+  const insumosMap = new Map<string, Insumo>();
+  insumos.forEach((i) => insumosMap.set(i.uid, i));
 
   const mpByLocation = new Map<string, number>();
   stockMateriaPrima.forEach((row) => {
     const ubicacion = row.ubicacion?.trim();
     if (!ubicacion) return;
-    const disponibleKg = Math.max(0, Number(row.cantidad_actual ?? 0) - Number(row.cantidad_comprometida ?? 0));
-    mpByLocation.set(ubicacion, (mpByLocation.get(ubicacion) ?? 0) + disponibleKg);
+
+    const insumoId = row.id_insumo || row.insumo_id || '';
+    const insumo = insumosMap.get(insumoId);
+    const unit = insumo?.unidad_medida || 'KG';
+    const isTons = ['tonelada', 'toneladas', 'tn'].includes(unit.trim().toLowerCase());
+
+    const disponible = Math.max(0, Number(row.cantidad_actual ?? 0) - Number(row.cantidad_comprometida ?? 0));
+    const disponibleKg = isTons ? disponible * 1000 : disponible;
+
+    mpByLocation.set(normalizeText(ubicacion), (mpByLocation.get(normalizeText(ubicacion)) ?? 0) + disponibleKg);
   });
 
   const ptBySilo = new Map<string, number>();
@@ -41,15 +57,14 @@ const buildMockStockBySilo = () => {
   return { mpByLocation, ptBySilo };
 };
 
-const { mpByLocation, ptBySilo } = buildMockStockBySilo();
-const getMockSiloStockTon = (silo: Silo) => {
+const getMockSiloStockTon = (silo: Silo, mpByLocation: Map<string, number>, ptBySilo: Map<string, number>) => {
   const mpKg = silo.tipo_uso === 'MATERIA_PRIMA'
-    ? mpByLocation.get(silo.nombre.trim()) ?? 0
+    ? mpByLocation.get(normalizeText(silo.nombre)) ?? 0
     : 0;
   const ptKg = silo.tipo_uso === 'PRODUCTO_TERMINADO'
     ? ptBySilo.get(normalizeText(silo.uid)) ?? ptBySilo.get(normalizeText(silo.nombre)) ?? 0
     : 0;
-  return Number((((mpKg + ptKg) / 1000)).toFixed(2));
+  return Number(((mpKg + ptKg) / 1000).toFixed(2));
 };
 
 // Simulamos una base de datos local para el mock
@@ -57,7 +72,7 @@ let silosDb: Silo[] = (initialData as Silo[]).map((silo) => ({
   ...silo,
   tipo_uso: silo.tipo_uso ?? 'MATERIA_PRIMA',
   esta_activo: silo.esta_activo ?? true,
-  stock_actual_ton: getMockSiloStockTon(silo),
+  stock_actual_ton: 0,
 }));
 
 export const mockSiloService = {
@@ -65,8 +80,13 @@ export const mockSiloService = {
    * Obtiene todos los silos registrados
    */
   getAll: async (): Promise<Silo[]> => {
+    const { mpByLocation, ptBySilo } = await buildMockStockBySilo();
+    const updated = silosDb.map(s => ({
+      ...s,
+      stock_actual_ton: getMockSiloStockTon(s, mpByLocation, ptBySilo)
+    }));
     return new Promise((resolve) => {
-      setTimeout(() => resolve([...silosDb]), 500);
+      setTimeout(() => resolve(updated), 500);
     });
   },
 
@@ -74,9 +94,15 @@ export const mockSiloService = {
    * Obtiene un silo por su UID
    */
   getById: async (uid: string): Promise<Silo | undefined> => {
+    const { mpByLocation, ptBySilo } = await buildMockStockBySilo();
     return new Promise((resolve) => {
       const silo = silosDb.find(s => s.uid === uid);
-      setTimeout(() => resolve(silo), 300);
+      if (!silo) return setTimeout(() => resolve(undefined), 300);
+      const updated = {
+        ...silo,
+        stock_actual_ton: getMockSiloStockTon(silo, mpByLocation, ptBySilo)
+      };
+      setTimeout(() => resolve(updated), 300);
     });
   },
 
@@ -100,6 +126,7 @@ export const mockSiloService = {
    * Actualiza los datos de un silo existente
    */
   update: async (uid: string, data: Partial<Silo>): Promise<Silo> => {
+    const { mpByLocation, ptBySilo } = await buildMockStockBySilo();
     return new Promise((resolve, reject) => {
       const index = silosDb.findIndex(s => s.uid === uid);
       if (index === -1) return reject(new Error("Silo no encontrado"));
@@ -107,7 +134,11 @@ export const mockSiloService = {
       const actualizado = { ...silosDb[index], ...data };
       silosDb[index] = actualizado;
       
-      setTimeout(() => resolve(actualizado), 600);
+      const updated = {
+        ...actualizado,
+        stock_actual_ton: getMockSiloStockTon(actualizado, mpByLocation, ptBySilo)
+      };
+      setTimeout(() => resolve(updated), 600);
     });
   },
 
@@ -122,12 +153,18 @@ export const mockSiloService = {
   },
 
   toggleActive: async (uid: string, activo: boolean): Promise<Silo> => {
+    const { mpByLocation, ptBySilo } = await buildMockStockBySilo();
     return new Promise((resolve, reject) => {
       const index = silosDb.findIndex((s) => s.uid === uid);
       if (index === -1) return reject(new Error('Silo no encontrado'));
       const actualizado = { ...silosDb[index], esta_activo: activo };
       silosDb[index] = actualizado;
-      setTimeout(() => resolve(actualizado), 300);
+
+      const updated = {
+        ...actualizado,
+        stock_actual_ton: getMockSiloStockTon(actualizado, mpByLocation, ptBySilo)
+      };
+      setTimeout(() => resolve(updated), 300);
     });
   }
 };

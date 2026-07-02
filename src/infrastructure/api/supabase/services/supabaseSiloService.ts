@@ -11,11 +11,7 @@ interface SiloRow {
   deleted_at: string | null;
 }
 
-type StockMateriaPrimaRow = {
-  ubicacion: string | null;
-  cantidad_actual: number | string | null;
-  cantidad_comprometida: number | string | null;
-};
+
 
 type StockPTRow = {
   silo_id: string | null;
@@ -41,7 +37,7 @@ const buildStockActualBySilo = async () => {
   const [mpResult, ptResult, silosResult] = await Promise.all([
     supabaseClient
       .from('stock_lotes_mp')
-      .select('ubicacion,cantidad_actual,cantidad_comprometida')
+      .select('ubicacion,cantidad_actual,cantidad_comprometida,insumo_id,insumos(unidad_medida)')
       .is('deleted_at', null),
     supabaseClient
       .from('stock_pt')
@@ -57,41 +53,53 @@ const buildStockActualBySilo = async () => {
   if (ptResult.error) throw ptResult.error;
   if (silosResult.error) throw silosResult.error;
 
-  const stockByUid = new Map<string, number>();
-  const stockByName = new Map<string, number>();
-  const stockByDbId = new Map<string, number>();
+  const mpStockByName = new Map<string, number>();
+  const ptStockByUid = new Map<string, number>();
+  const ptStockByName = new Map<string, number>();
+  const ptStockByDbId = new Map<string, number>();
 
   (mpResult.data ?? []).forEach((row) => {
-    const mp = row as StockMateriaPrimaRow;
+    const mp = row as any;
     const location = mp.ubicacion?.trim();
     if (!location) return;
-    const availableKg = Math.max(0, toNumber(mp.cantidad_actual) - toNumber(mp.cantidad_comprometida));
-    stockByName.set(normalizeText(location), (stockByName.get(normalizeText(location)) ?? 0) + availableKg);
+
+    const unit = mp.insumos?.unidad_medida || 'KG';
+    const isTons = ['tonelada', 'toneladas', 'tn'].includes(unit.trim().toLowerCase());
+    
+    const available = Math.max(0, toNumber(mp.cantidad_actual) - toNumber(mp.cantidad_comprometida));
+    const availableKg = isTons ? available * 1000 : available;
+
+    mpStockByName.set(normalizeText(location), (mpStockByName.get(normalizeText(location)) ?? 0) + availableKg);
   });
 
   (ptResult.data ?? []).forEach((row) => {
     const pt = row as StockPTRow;
     const saldoKg = Math.max(0, toNumber(pt.cantidad_total));
     if (pt.silo_id) {
-      stockByDbId.set(pt.silo_id, (stockByDbId.get(pt.silo_id) ?? 0) + saldoKg);
+      ptStockByDbId.set(pt.silo_id, (ptStockByDbId.get(pt.silo_id) ?? 0) + saldoKg);
     }
     if (pt.id_silo_legacy) {
-      stockByUid.set(pt.id_silo_legacy, (stockByUid.get(pt.id_silo_legacy) ?? 0) + saldoKg);
+      ptStockByUid.set(pt.id_silo_legacy, (ptStockByUid.get(pt.id_silo_legacy) ?? 0) + saldoKg);
     }
     if (pt.nombre_silo?.trim()) {
-      stockByName.set(normalizeText(pt.nombre_silo), (stockByName.get(normalizeText(pt.nombre_silo)) ?? 0) + saldoKg);
+      ptStockByName.set(normalizeText(pt.nombre_silo), (ptStockByName.get(normalizeText(pt.nombre_silo)) ?? 0) + saldoKg);
     }
   });
 
   const stockBySiloUid = new Map<string, number>();
   (silosResult.data ?? []).forEach((row) => {
     const silo = row as SiloRow;
-    const stockKg = (
-      stockByDbId.get(silo.id) ??
-      stockByUid.get(silo.legacy_uid ?? '') ??
-      stockByName.get(normalizeText(silo.nombre)) ??
-      0
-    );
+    let stockKg = 0;
+    if (silo.tipo_uso === 'MATERIA_PRIMA') {
+      stockKg = mpStockByName.get(normalizeText(silo.nombre)) ?? 0;
+    } else if (silo.tipo_uso === 'PRODUCTO_TERMINADO') {
+      stockKg = (
+        ptStockByDbId.get(silo.id) ??
+        ptStockByUid.get(silo.legacy_uid ?? '') ??
+        ptStockByName.get(normalizeText(silo.nombre)) ??
+        0
+      );
+    }
     stockBySiloUid.set(silo.legacy_uid ?? silo.id, stockKg);
   });
 
