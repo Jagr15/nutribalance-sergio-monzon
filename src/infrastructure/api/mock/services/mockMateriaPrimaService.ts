@@ -6,7 +6,7 @@ import type {
 } from '../../../../features/insumos/types';
 import { buildHistorialCompras, buildUltimosPrecios } from '../../../../features/insumos/utils/compras';
 import { buildStockMPResumen } from '../../../../features/insumos/utils/stockResumen';
-import { calcularCostoIngresoMP } from '../../../../features/insumos/utils/costoIngreso';
+import { resolverCostoIngresoMP } from '../../../../features/insumos/utils/costoIngreso';
 import type { DetalleInsumoLote } from '../../../../features/ordenes/types';
 import { type Movimiento, TipoMovimiento, OrigenMovimiento } from "../../../../features/movimientos/types";
 import { TipoUnidad } from "../../../../shared/types/global.interface";
@@ -39,9 +39,28 @@ const initialData: StockMateriaPrima[] = (initialDataRaw as unknown as StockMate
 })) as StockMateriaPrima[];
 
 let stockDB: StockMateriaPrima[] = [...initialData];
-const mockInsumos = insumosData as unknown as Array<{ uid: string; nombre?: string; unidad_medida?: string; umbral_alerta?: number | null }>;
+const mockInsumos = insumosData as unknown as Array<{
+  uid: string;
+  nombre?: string;
+  unidad_medida?: string;
+  umbral_alerta?: number | null;
+  costo?: number | null;
+  costo_por_kg?: number | null;
+  ref_costo_unitario?: number | null;
+}>;
 const mockProveedores = proveedoresData as unknown as Array<{ uid: string; nombre_empresa?: string }>;
 const movimientosDB: Movimiento[] = [];
+
+const parseLocalDateForBusinessDay = (value: string | Date) => {
+  if (value instanceof Date) return value;
+  const normalized = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return new Date(value);
+  }
+
+  const [year, month, day] = normalized.split('-').map(Number);
+  return new Date(year, (month ?? 1) - 1, day ?? 1, 12, 0, 0, 0);
+};
 
 export const getMockStockSnapshot = () => ({
   stockDB: structuredClone(stockDB),
@@ -195,18 +214,21 @@ export const mockMateriaPrimaService = {
     precio_unitario?: number;
     unidad_precio?: 'KG' | 'TON';
     costo_total?: number;
+    costo_unitario?: number;
     id_usuario: string;
     fecha_ingreso: Date;
     ubicacion: string; 
   }): Promise<StockMateriaPrima> {
     
     return new Promise((resolve) => {
-      const costo = calcularCostoIngresoMP({
+      const insumo = mockInsumos.find((item) => item.uid === data.id_insumo);
+      const costo = resolverCostoIngresoMP({
         cantidad: data.cantidad,
         unidad_entrada: data.unidad_entrada,
-        precio_unitario: data.precio_unitario,
-        unidad_precio: data.unidad_precio,
-        costo_total: data.costo_total,
+        costo_unitario: data.costo_unitario ?? data.precio_unitario ?? null,
+        costo_por_kg: insumo?.costo_por_kg ?? null,
+        ref_costo_unitario: insumo?.ref_costo_unitario ?? null,
+        costo: insumo?.costo ?? null,
       });
       const ahora = new Date();
 
@@ -220,7 +242,7 @@ export const mockMateriaPrimaService = {
         cantidad_inicial: costo.cantidad_kg,
         cantidad_actual: costo.cantidad_kg,
         cantidad_comprometida: 0,
-        costo_unitario: costo.precio_unitario_kg,
+        costo_unitario: costo.costo_unitario,
         costo_total: costo.costo_total,
         fecha_ingreso: data.fecha_ingreso,
         remito_nro: data.remito_nro,
@@ -245,6 +267,7 @@ export const mockMateriaPrimaService = {
         lote_afectado: nuevoLote.lote,
       };
 
+      nuevoLote.fecha_ingreso = parseLocalDateForBusinessDay(data.fecha_ingreso);
       stockDB = [nuevoLote, ...stockDB];
       movimientosDB.push(mov);
       

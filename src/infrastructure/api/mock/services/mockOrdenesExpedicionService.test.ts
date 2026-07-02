@@ -20,6 +20,7 @@ describe('mockOrdenesExpedicionService', () => {
     const created = await mockOrdenesExpedicionService.create({
       stock_pt_id: lote.uid,
       cliente_id: 'cli-001',
+      presentacion_key: 'GRANEL_KG',
       presentacion: 'GRANEL',
       cantidad: 10,
       unidad_cantidad: 'kg',
@@ -41,6 +42,7 @@ describe('mockOrdenesExpedicionService', () => {
     await expect(mockOrdenesExpedicionService.create({
       stock_pt_id: stock.uid,
       cliente_id: '',
+      presentacion_key: 'BOLSA_20',
       presentacion: 'BOLSA',
       cantidad: 1,
       unidad_cantidad: 'kg',
@@ -52,6 +54,7 @@ describe('mockOrdenesExpedicionService', () => {
     const created = await mockOrdenesExpedicionService.create({
       stock_pt_id: stock.uid,
       cliente_id: 'cli-001',
+      presentacion_key: 'TONELADA',
       presentacion: 'GRANEL',
       cantidad: 1.25,
       unidad_cantidad: 'tonelada',

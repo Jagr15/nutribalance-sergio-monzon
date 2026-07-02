@@ -5,6 +5,47 @@ vi.useFakeTimers();
 vi.setSystemTime(new Date('2026-06-18T12:00:00Z'));
 
 describe('estadosFinancieros', () => {
+  it('incluye movimientos del mismo día aunque estén en UTC a medianoche', () => {
+    const result = buildEstadosFinancieros({
+      periodo: 'RANGO',
+      rangoCustom: { desde: '2026-07-01', hasta: '2026-07-01' },
+      movimientos: [
+        { uid: '1', fecha: '2026-07-01T00:00:00Z', tipo: 'INGRESO', descripcion: 'Ingreso UTC', monto: 1000, origen_operativo: 'VENTA', estado: 'CONFIRMADO' },
+        { uid: '2', fecha: '2026-06-30T23:59:59Z', tipo: 'INGRESO', descripcion: 'Fuera de rango', monto: 500, origen_operativo: 'VENTA', estado: 'CONFIRMADO' },
+      ],
+      kpis: {
+        saldo_actual: 0,
+        ingresos_mes: 1000,
+        egresos_mes: 0,
+        flujo_neto: 1000,
+        margen_operativo: 100,
+        costo_produccion: 0,
+        valorizacion_inventario: 0,
+        cuentas_por_pagar: 0,
+        cuentas_por_cobrar: 0,
+        perdida_merma: 0,
+        valor_stock_mp: 0,
+        valor_stock_pt: 0,
+        valor_inventario_total: 0,
+      },
+      inventario: { valor_stock_mp: 0, valor_stock_pt: 0, valor_inventario_total: 0 },
+      tesoreria: {
+        presupuestoVsReal: [],
+        gastosPorRubro: [],
+        variacionesPorRubro: [],
+        carteraClientes: [],
+        chequesEmitidos: [],
+        chequesRecibidos: [],
+        proyeccionFlujo: [],
+        alertasTesoreria: [],
+      },
+    });
+
+    expect(result.estadoResultados.ingresos).toHaveLength(1);
+    expect(result.estadoResultados.ingresos[0]).toMatchObject({ label: 'VENTA', amount: 1000 });
+    expect(result.estadoResultados.utilidadNeta).toBe(1000);
+  });
+
   it('construye estado de resultados y balance desde movimientos reales', () => {
     const result = buildEstadosFinancieros({
       periodo: 'TODO',
@@ -83,5 +124,52 @@ describe('estadosFinancieros', () => {
 
     expect(result.estadoResultados.utilidadNeta).toBe(5000);
     expect(result.estadoResultados.egresos).toHaveLength(0);
+  });
+
+  it('reproduce el caso de validación financiera del 01/07/2026', () => {
+    const result = buildEstadosFinancieros({
+      periodo: 'RANGO',
+      rangoCustom: { desde: '2026-07-01', hasta: '2026-07-01' },
+      movimientos: [
+        { uid: '1', fecha: '2026-07-01T08:00:00Z', tipo: 'INGRESO', descripcion: 'test t', monto: 1000, origen_operativo: 'VENTA', estado: 'CONFIRMADO' },
+        { uid: '2', fecha: '2026-07-01T09:00:00Z', tipo: 'INGRESO', descripcion: 'test', monto: 1000, origen_operativo: 'VENTA', estado: 'CONFIRMADO' },
+        { uid: '3', fecha: '2026-07-01T10:00:00Z', tipo: 'INGRESO', descripcion: 'venta', monto: 500000, origen_operativo: 'VENTA', estado: 'CONFIRMADO' },
+        { uid: '4', fecha: '2026-07-01T11:00:00Z', tipo: 'INGRESO', descripcion: 'ventas', monto: 1500000, origen_operativo: 'VENTA', estado: 'CONFIRMADO' },
+        { uid: '5', fecha: '2026-07-01T12:00:00Z', tipo: 'EGRESO', descripcion: 'egreso 1', monto: 1500000, origen_operativo: 'COMPRA', estado: 'CONFIRMADO' },
+        { uid: '6', fecha: '2026-07-01T13:00:00Z', tipo: 'EGRESO', descripcion: 'egreso 2', monto: 1200000, origen_operativo: 'COMPRA', estado: 'CONFIRMADO' },
+      ],
+      kpis: {
+        saldo_actual: 0,
+        ingresos_mes: 2002000,
+        egresos_mes: 2700000,
+        flujo_neto: -698000,
+        margen_operativo: -34.86613386613387,
+        costo_produccion: 0,
+        valorizacion_inventario: 0,
+        cuentas_por_pagar: 0,
+        cuentas_por_cobrar: 0,
+        perdida_merma: 0,
+        valor_stock_mp: 0,
+        valor_stock_pt: 0,
+        valor_inventario_total: 0,
+      },
+      inventario: { valor_stock_mp: 0, valor_stock_pt: 0, valor_inventario_total: 0 },
+      tesoreria: {
+        presupuestoVsReal: [],
+        gastosPorRubro: [],
+        variacionesPorRubro: [],
+        carteraClientes: [],
+        chequesEmitidos: [],
+        chequesRecibidos: [],
+        proyeccionFlujo: [],
+        alertasTesoreria: [],
+      },
+    });
+
+    expect(result.estadoResultados.ingresos.reduce((acc, row) => acc + row.amount, 0)).toBe(2002000);
+    expect(result.estadoResultados.egresos.reduce((acc, row) => acc + row.amount, 0)).toBe(2700000);
+    expect(result.estadoResultados.utilidadNeta).toBe(-698000);
+    expect(result.libros.auxiliarIngresos.reduce((acc, row) => acc + row.amount, 0)).toBe(2002000);
+    expect(result.libros.auxiliarEgresos.reduce((acc, row) => acc + row.amount, 0)).toBe(2700000);
   });
 });

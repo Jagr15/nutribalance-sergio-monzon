@@ -8,6 +8,7 @@ export type EstadoCliente = (typeof EstadoCliente)[keyof typeof EstadoCliente];
 
 export interface Cliente {
   uid: string;
+  id?: string;
   nombre: string;
   razonSocial?: string;
   cuit?: string;
@@ -28,6 +29,19 @@ export interface Cliente {
   estaActivo: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface ClienteEstadoCuentaItem {
+  id: string;
+  fecha: string;
+  producto: string;
+  cantidad: number | null;
+  unidad?: string | null;
+  importe: number;
+  saldo: number;
+  referencia?: string | null;
+  estado: string;
+  comprobanteNumero?: string | null;
 }
 
 export type ClienteCreatePayload = Omit<Cliente, 'uid' | 'createdAt' | 'updatedAt'>;

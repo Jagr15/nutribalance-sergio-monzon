@@ -35,7 +35,7 @@ export const createEmptyFormulaDraft = (id: string, suffix: string): FormulaDraf
   nombre_producto: `Alternativa ${suffix}`,
   esta_activa: true,
   ingredientes: [
-    { id_insumo: '', nombre_insumo: '', porcentaje: 0 },
+    { id_insumo: '', nombre_insumo: '', porcentaje: '' },
   ],
 });
 

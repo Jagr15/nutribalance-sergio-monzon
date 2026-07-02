@@ -247,8 +247,8 @@ const DraftEditor: React.FC<DraftEditorProps> = ({ draft, onChange, maestroInsum
                   <input
                     type="number"
                     step="0.01"
-                    value={ingredient.porcentaje}
-                    onChange={(event) => handleChangeIngredient(index, { porcentaje: Number.parseFloat(event.target.value) || 0 })}
+                    value={ingredient.porcentaje === '' ? '' : ingredient.porcentaje}
+                    onChange={(event) => handleChangeIngredient(index, { porcentaje: event.target.value === '' ? '' : Number(event.target.value) })}
                     className="ui-input h-[40px] w-full rounded-xl px-3 pr-6 text-center text-sm font-black text-slate-900 outline-none focus:border-blue-500/30"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-500">%</span>
@@ -267,7 +267,7 @@ const DraftEditor: React.FC<DraftEditorProps> = ({ draft, onChange, maestroInsum
 
           <button
             type="button"
-            onClick={() => onChange({ ...draft, ingredientes: [...draft.ingredientes, { id_insumo: '', nombre_insumo: '', porcentaje: 0 }] })}
+            onClick={() => onChange({ ...draft, ingredientes: [...draft.ingredientes, { id_insumo: '', nombre_insumo: '', porcentaje: '' }] })}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 transition-colors hover:bg-slate-50"
           >
             <FiPlus size={14} />

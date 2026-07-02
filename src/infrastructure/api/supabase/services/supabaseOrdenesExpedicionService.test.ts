@@ -34,6 +34,7 @@ describe('supabaseOrdenesExpedicionService', () => {
                 lote_pt: 'L-1',
                 cliente_id: 'cli-db-1',
                 clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
+                presentacion_key: 'GRANEL_KG',
                 presentacion: 'GRANEL',
                 cantidad: 25,
                 cantidad_original: 25,
@@ -118,6 +119,7 @@ describe('supabaseOrdenesExpedicionService', () => {
     const row = await supabaseOrdenesExpedicionService.create({
       stock_pt_id: 'pt-001',
       cliente_id: 'cli-001',
+      presentacion_key: 'GRANEL_KG',
       presentacion: 'GRANEL',
       cantidad: 25,
       unidad_cantidad: 'kg',
@@ -128,6 +130,7 @@ describe('supabaseOrdenesExpedicionService', () => {
     expect(mockRpc).toHaveBeenCalledWith('registrar_orden_expedicion', {
       p_stock_pt_id: 'pt-db-1',
       p_cliente_id: 'cli-db-1',
+      p_presentacion_key: 'GRANEL_KG',
       p_presentacion: 'GRANEL',
       p_cantidad: 25,
       p_cantidad_original: 25,
@@ -177,6 +180,7 @@ describe('supabaseOrdenesExpedicionService', () => {
     await expect(supabaseOrdenesExpedicionService.create({
       stock_pt_id: 'pt-001',
       cliente_id: 'cli-001',
+      presentacion_key: 'GRANEL_KG',
       presentacion: 'GRANEL',
       cantidad: 25,
       unidad_cantidad: 'kg',
@@ -212,6 +216,7 @@ describe('supabaseOrdenesExpedicionService', () => {
         lote_pt: 'L-1',
         cliente_id: 'cli-db-1',
         clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
+        presentacion_key: 'TONELADA',
         presentacion: 'GRANEL',
         cantidad: 1250,
         cantidad_original: 1.25,
@@ -229,11 +234,13 @@ describe('supabaseOrdenesExpedicionService', () => {
     const row = await supabaseOrdenesExpedicionService.update('id-1', {
       cantidad: 1.25,
       unidad_cantidad: 'tonelada',
+      presentacion_key: 'TONELADA',
       motivo: 'Venta',
     });
 
     expect(mockRpc).toHaveBeenCalledWith('actualizar_orden_expedicion', expect.objectContaining({
       p_orden_id: 'id-1',
+      p_presentacion_key: 'TONELADA',
       p_cantidad_original: 1.25,
       p_unidad_cantidad: 'tonelada',
     }));
@@ -251,6 +258,7 @@ describe('supabaseOrdenesExpedicionService', () => {
       lote_pt: 'L-1',
       cliente_id: 'cli-db-1',
       clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
+      presentacion_key: 'GRANEL_KG',
       presentacion: 'GRANEL',
       cantidad: 25,
       cantidad_original: 25,
@@ -304,6 +312,7 @@ describe('supabaseOrdenesExpedicionService', () => {
       lote_pt: 'L-1',
       cliente_id: 'cli-db-1',
       clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
+      presentacion_key: 'GRANEL_KG',
       presentacion: 'GRANEL',
       cantidad: 25,
       cantidad_original: 25,
@@ -421,6 +430,7 @@ describe('supabaseOrdenesExpedicionService', () => {
     const creada = await supabaseOrdenesExpedicionService.create({
       stock_pt_id: 'pt-001',
       cliente_id: 'cli-001',
+      presentacion_key: 'GRANEL_KG',
       presentacion: 'GRANEL',
       cantidad: 25,
       unidad_cantidad: 'kg',

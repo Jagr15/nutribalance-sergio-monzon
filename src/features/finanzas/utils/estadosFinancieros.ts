@@ -46,6 +46,16 @@ export interface EstadosFinancierosData {
 
 const num = (value: unknown) => Number(value ?? 0);
 const toDate = (value: string) => new Date(value);
+const toUtcDateKey = (value: string) => {
+  const date = toDate(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+};
+const toUtcMonthKey = (value: string) => {
+  const date = toDate(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 7);
+};
 const toLocalDateInput = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -68,11 +78,11 @@ export const getPeriodoRango = (periodo: PeriodoFiltro, custom?: RangoFechas): R
 
 export const filtrarMovimientosPorPeriodo = (movimientos: MovimientoFinanciero[], rango: RangoFechas | null) => {
   if (!rango) return movimientos;
-  const desde = new Date(`${rango.desde}T00:00:00`).getTime();
-  const hasta = new Date(`${rango.hasta}T23:59:59.999`).getTime();
+  const desde = rango.desde;
+  const hasta = rango.hasta;
   return movimientos.filter((movimiento) => {
-    const fecha = toDate(movimiento.fecha).getTime();
-    return Number.isFinite(fecha) && fecha >= desde && fecha <= hasta;
+    const fecha = toUtcDateKey(movimiento.fecha);
+    return fecha !== null && fecha >= desde && fecha <= hasta;
   });
 };
 
@@ -89,6 +99,39 @@ export const buildEstadosFinancieros = (params: {
   const movimientosConfirmados = movimientos.filter((movimiento) => movimiento.estado === 'CONFIRMADO');
   const ingresos = movimientosConfirmados.filter((movimiento) => movimiento.tipo === 'INGRESO');
   const egresos = movimientosConfirmados.filter((movimiento) => movimiento.tipo === 'EGRESO');
+
+  if (typeof import.meta !== 'undefined' && import.meta.env.DEV) {
+    const excludedByPeriod = rango
+      ? params.movimientos.filter((movimiento) => {
+          const fecha = toUtcDateKey(movimiento.fecha);
+          return fecha === null || fecha < rango.desde || fecha > rango.hasta;
+        })
+      : [];
+    const excludedByStatus = movimientos.filter((movimiento) => movimiento.estado !== 'CONFIRMADO');
+    console.debug('[EstadosFinancieros] cálculo', {
+      rango,
+      totalLeidos: params.movimientos.length,
+      totalEnRango: movimientos.length,
+      totalConfirmados: movimientosConfirmados.length,
+      ingresosConfirmados: ingresos.length,
+      egresosConfirmados: egresos.length,
+      ingresosTotal: Number(ingresos.reduce((acc, row) => acc + num(row.monto), 0).toFixed(2)),
+      egresosTotal: Number(egresos.reduce((acc, row) => acc + num(row.monto), 0).toFixed(2)),
+      excluidosPorPeriodo: excludedByPeriod.length,
+      excluidosPorEstado: excludedByStatus.length,
+    });
+    if (excludedByPeriod.length > 0) {
+      console.debug('[EstadosFinancieros] excluidos por periodo', excludedByPeriod.slice(0, 20).map((movimiento) => ({
+        uid: movimiento.uid,
+        fecha: movimiento.fecha,
+        fechaUtc: toUtcDateKey(movimiento.fecha),
+        tipo: movimiento.tipo,
+        estado: movimiento.estado,
+        monto: movimiento.monto,
+        descripcion: movimiento.descripcion,
+      })));
+    }
+  }
 
   const ingresosPorCuenta = new Map<string, number>();
   const egresosPorCuenta = new Map<string, number>();
@@ -114,7 +157,7 @@ export const buildEstadosFinancieros = (params: {
   const patrimonioNeto = Number((activos.reduce((acc, row) => acc + row.amount, 0) - pasivos.reduce((acc, row) => acc + row.amount, 0)).toFixed(2));
   const patrimonio = [{ label: 'Patrimonio neto estimado', amount: patrimonioNeto }];
 
-  const libroMayor = movimientos.map((movimiento) => ({
+  const libroMayor = movimientosConfirmados.map((movimiento) => ({
     fecha: movimiento.fecha,
     descripcion: movimiento.descripcion,
     cuenta: movimiento.categoria ?? movimiento.origen_operativo ?? 'Operación',
@@ -124,8 +167,8 @@ export const buildEstadosFinancieros = (params: {
   })).sort((a, b) => toDate(b.fecha).getTime() - toDate(a.fecha).getTime());
 
   const libroPorMes = new Map<string, number>();
-  movimientos.forEach((movimiento) => {
-    const mes = keyMonth(toDate(movimiento.fecha));
+  movimientosConfirmados.forEach((movimiento) => {
+    const mes = toUtcMonthKey(movimiento.fecha) ?? keyMonth(toDate(movimiento.fecha));
     libroPorMes.set(mes, (libroPorMes.get(mes) ?? 0) + (movimiento.tipo === 'INGRESO' ? num(movimiento.monto) : -num(movimiento.monto)));
   });
 

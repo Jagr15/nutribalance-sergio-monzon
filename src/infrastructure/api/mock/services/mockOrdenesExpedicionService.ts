@@ -2,9 +2,13 @@ import type {
   ActualizarOrdenExpedicionPayload,
   OrdenExpedicion,
   RegistrarOrdenExpedicionPayload,
-  PresentacionExpedicion,
 } from '../../../../features/ordenes/types';
 import { normalizeCantidadOrden } from '../../../../features/ordenes/utils/cantidad';
+import {
+  buildPresentacionPersistencia,
+  isPresentacionExpedicionKey,
+  type PresentacionExpedicionKey,
+} from '../../../../features/ordenes/utils/presentacionExpedicion';
 import { mockStockPTService } from './mockStockPTService';
 import { applyMockSalidaAjuste } from './mockStockPTService';
 import { mockApiCall } from '../mockClient';
@@ -18,8 +22,6 @@ const clienteNombreByUid = new Map<string, string>([
   ['cli-003', 'Tambo San Miguel'],
 ]);
 
-const presentacionByIndex = (idx: number): PresentacionExpedicion => (idx % 3 === 0 ? 'GRANEL' : idx % 3 === 1 ? 'BIG_BAG' : 'BOLSA');
-
 let nextExpedition = 1;
 let expedicionesDb: OrdenExpedicion[] = [];
 
@@ -31,11 +33,12 @@ const buildExpedicion = (input: {
   nombre_producto: string;
   lote_pt: string;
   cliente_id: string | null;
-  presentacion: PresentacionExpedicion;
+  presentacion_key: PresentacionExpedicionKey;
   cantidad: number;
   cantidad_original: number;
   unidad_cantidad: 'kg' | 'tonelada';
   cantidad_kg: number;
+  cantidad_empaques?: number | null;
   motivo: string | null;
   referencia: string | null;
   created_at: string;
@@ -49,11 +52,16 @@ const buildExpedicion = (input: {
   lote_pt: input.lote_pt,
   cliente_id: input.cliente_id,
   cliente_nombre: input.cliente_id ? (clienteNombreByUid.get(input.cliente_id) ?? 'Sin cliente asociado') : 'Sin cliente asociado',
-  presentacion: input.presentacion,
+  presentacion_key: input.presentacion_key,
+  presentacion: buildPresentacionPersistencia(input.presentacion_key, input.cantidad_empaques ?? 0).presentacion,
   cantidad: input.cantidad,
   cantidad_original: input.cantidad_original,
-  unidad_cantidad: input.unidad_cantidad,
+  unidad_cantidad: input.unidad_cantidad as OrdenExpedicion['unidad_cantidad'],
   cantidad_kg: input.cantidad_kg,
+  modo_calculo: buildPresentacionPersistencia(input.presentacion_key, input.cantidad_empaques ?? 0).modo_calculo,
+  tipo_empaque: buildPresentacionPersistencia(input.presentacion_key, input.cantidad_empaques ?? 0).tipo_empaque,
+  capacidad_empaque_kg: buildPresentacionPersistencia(input.presentacion_key, input.cantidad_empaques ?? 0).capacidad_empaque_kg,
+  cantidad_empaques: buildPresentacionPersistencia(input.presentacion_key, input.cantidad_empaques ?? 0).cantidad_empaques,
   estado: 'pendiente',
   motivo: input.motivo,
   referencia: input.referencia,
@@ -69,6 +77,7 @@ const resetMockOrdenesExpedicionState = () => {
       nombre_producto: 'Lechera 13% PB alta energia',
       lote_pt: 'PT-LE13-2605-A',
       cliente_id: 'cli-001',
+      presentacion_key: 'GRANEL_KG' as PresentacionExpedicionKey,
       cantidad: 120,
       referencia: 'EXP-2605-001',
     },
@@ -78,7 +87,8 @@ const resetMockOrdenesExpedicionState = () => {
       nombre_producto: 'Lechera 13% PB alta energia',
       lote_pt: 'PT-LE13-2605-A',
       cliente_id: 'cli-003',
-      cantidad: 80,
+      presentacion_key: 'TONELADA' as PresentacionExpedicionKey,
+      cantidad: 1000,
       referencia: 'EXP-2605-002',
     },
     {
@@ -87,7 +97,8 @@ const resetMockOrdenesExpedicionState = () => {
       nombre_producto: 'Lechera 18% PB',
       lote_pt: 'PT-LE18-2605-B',
       cliente_id: 'cli-002',
-      cantidad: 60,
+      presentacion_key: 'BOLSA_15' as PresentacionExpedicionKey,
+      cantidad: 30,
       referencia: 'EXP-2605-003',
     },
     {
@@ -96,6 +107,7 @@ const resetMockOrdenesExpedicionState = () => {
       nombre_producto: 'Engorde Smart',
       lote_pt: 'PT-ENGS-2605-C',
       cliente_id: 'cli-002',
+      presentacion_key: 'BOLSA_20' as PresentacionExpedicionKey,
       cantidad: 40,
       referencia: 'EXP-2605-004',
     },
@@ -105,7 +117,8 @@ const resetMockOrdenesExpedicionState = () => {
       nombre_producto: 'Engorde Smart',
       lote_pt: 'PT-ENGS-2605-C',
       cliente_id: 'cli-001',
-      cantidad: 32,
+      presentacion_key: 'BIG_BAG_1000' as PresentacionExpedicionKey,
+      cantidad: 2000,
       referencia: 'EXP-2605-005',
     },
   ];
@@ -118,11 +131,12 @@ const resetMockOrdenesExpedicionState = () => {
     nombre_producto: row.nombre_producto,
     lote_pt: row.lote_pt,
     cliente_id: row.cliente_id,
-    presentacion: presentacionByIndex(idx),
+    presentacion_key: row.presentacion_key,
     cantidad: row.cantidad,
     cantidad_original: row.cantidad,
     unidad_cantidad: 'kg',
     cantidad_kg: row.cantidad,
+    cantidad_empaques: row.presentacion_key === 'BOLSA_15' ? 2 : row.presentacion_key === 'BOLSA_20' ? 2 : row.presentacion_key === 'BIG_BAG_1000' ? 2 : null,
     motivo: 'Despacho demo',
     referencia: row.referencia,
     created_at: new Date(Date.now() - (idx + 1) * 3600_000).toISOString(),
@@ -143,6 +157,7 @@ export const mockOrdenesExpedicionService = {
       throw new Error('El cliente destino es obligatorio.');
     }
     const cantidad = normalizeCantidadOrden(payload.cantidad, payload.unidad_cantidad);
+    const presentacionKey = isPresentacionExpedicionKey(payload.presentacion_key) ? payload.presentacion_key : 'GRANEL_KG';
 
     const stockPt = (await mockStockPTService.getAll()).find((item) => item.uid === payload.stock_pt_id);
     if (!stockPt) {
@@ -161,11 +176,12 @@ export const mockOrdenesExpedicionService = {
       nombre_producto: stockPt.nombre_producto,
       lote_pt: stockPt.lote,
       cliente_id: payload.cliente_id,
-      presentacion: payload.presentacion,
+      presentacion_key: presentacionKey,
       cantidad: cantidad.cantidadOriginal,
       cantidad_original: cantidad.cantidadOriginal,
-      unidad_cantidad: cantidad.unidad,
+      unidad_cantidad: 'kg',
       cantidad_kg: cantidad.cantidadKg,
+      cantidad_empaques: payload.cantidad_empaques ?? null,
       motivo: payload.motivo ?? null,
       referencia: payload.referencia ?? null,
       created_at: createdAt,
@@ -186,6 +202,8 @@ export const mockOrdenesExpedicionService = {
     const normalized = payload.cantidad !== undefined || payload.unidad_cantidad !== undefined
       ? normalizeCantidadOrden(payload.cantidad ?? current.cantidad_original, payload.unidad_cantidad ?? current.unidad_cantidad)
       : { cantidadOriginal: current.cantidad_original, unidad: current.unidad_cantidad, cantidadKg: current.cantidad_kg };
+    const presentacionKey = isPresentacionExpedicionKey(payload.presentacion_key) ? payload.presentacion_key : (current.presentacion_key ?? 'GRANEL_KG');
+    const persistencia = buildPresentacionPersistencia(presentacionKey, payload.cantidad_empaques ?? current.cantidad_empaques ?? 0);
 
     const stock = (await mockStockPTService.getAll()).find((item) => item.uid === current.stock_pt_id);
     if (!stock) throw new Error('No se encontró el stock PT seleccionado.');
@@ -202,13 +220,19 @@ export const mockOrdenesExpedicionService = {
       });
     }
 
-    const updated = {
+    const updated: OrdenExpedicion = {
       ...current,
       ...payload,
+      presentacion_key: presentacionKey,
+      presentacion: persistencia.presentacion,
       cantidad: normalized.cantidadKg,
       cantidad_original: normalized.cantidadOriginal,
-      unidad_cantidad: normalized.unidad,
+      unidad_cantidad: 'kg' as OrdenExpedicion['unidad_cantidad'],
       cantidad_kg: normalized.cantidadKg,
+      modo_calculo: persistencia.modo_calculo,
+      tipo_empaque: persistencia.tipo_empaque,
+      capacidad_empaque_kg: persistencia.capacidad_empaque_kg,
+      cantidad_empaques: persistencia.cantidad_empaques,
       updated_at: nowIso(),
     };
     expedicionesDb[index] = updated;

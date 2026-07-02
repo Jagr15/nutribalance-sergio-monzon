@@ -7,9 +7,9 @@ import type { OrdenExpedicion } from '../types';
 import OrdenExpedicionModal from '../components/OrdenExpedicionModal';
 import { cancelarOrdenExpedicionEnLista, puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
 import { openConfiguracionEmpaquesModal } from '../../productos/utils/openConfiguracionEmpaquesModal';
+import { formatCantidadVisualOrden, getPresentacionExpedicionKeyFromOrder, getPresentacionExpedicionOption } from '../utils/presentacionExpedicion';
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
-const formatUnidadOrden = (value: string) => (value === 'tonelada' ? 'tn' : 'kg');
 
 const estadoBadge: Record<string, string> = {
   pendiente: 'bg-amber-50 text-amber-700',
@@ -214,8 +214,11 @@ const OrdenesSalidaPage: React.FC = () => {
                     <td className="px-6 py-4 text-slate-700">{orden.nombre_producto}</td>
                     <td className="px-6 py-4 text-slate-700">{orden.lote_pt}</td>
                     <td className="px-6 py-4 text-slate-700">
-                      <div>{Number(orden.cantidad_original ?? orden.cantidad).toLocaleString('es-AR')} {formatUnidadOrden(orden.unidad_cantidad)}</div>
+                      <div>{formatCantidadVisualOrden(orden)}</div>
                       <div className="text-xs text-slate-500">{formatKg(Number(orden.cantidad_kg ?? orden.cantidad ?? 0))}</div>
+                      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
+                        {getPresentacionExpedicionOption(getPresentacionExpedicionKeyFromOrder(orden)).label}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${estadoBadge[orden.estado] ?? 'bg-slate-100 text-slate-600'}`}>

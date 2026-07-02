@@ -259,7 +259,7 @@ const StockMateriaPrimaPage: React.FC = () => {
                       <td className="px-4 py-2 text-slate-700">{row.proveedor}</td>
                       <td className="px-4 py-2 text-slate-900 font-semibold">{row.insumo}</td>
                       <td className="px-4 py-2 font-mono text-[11px] text-slate-600">{row.lote}</td>
-                      <td className="px-4 py-2 font-mono text-[11px] text-slate-600">-</td>
+                      <td className="px-4 py-2 font-mono text-[11px] text-slate-600">{row.remito_nro ?? '-'}</td>
                       <td className="px-4 py-2 text-right text-slate-900">{formatNumber(row.cantidad)}</td>
                     </tr>
                   ))}

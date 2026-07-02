@@ -1,9 +1,10 @@
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import { Card } from "../../../shared/components/card";
 import { formatDateDDMMYYYY } from "../../../shared/utils/formatters";
 import { clienteService } from "../services/clienteService";
-import { EstadoCliente, type Cliente, type ClienteCreatePayload, type EstadoCliente as EstadoClienteType } from "../types/cliente";
+import { EstadoCliente, type Cliente, type ClienteCreatePayload, type ClienteEstadoCuentaItem, type EstadoCliente as EstadoClienteType } from "../types/cliente";
 
 type ClienteFormPayload = {
   nombre: string;
@@ -35,9 +36,16 @@ const statusStyle: Record<EstadoClienteType, string> = {
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(value);
 
+const formatCuentaCantidad = (row: ClienteEstadoCuentaItem) => {
+  if (row.cantidad === null || row.cantidad === undefined) return "—";
+  const cantidad = row.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 3 });
+  if (!row.unidad) return cantidad;
+  return `${cantidad} ${row.unidad === "tonelada" ? "tn" : row.unidad}`;
+};
+
 const formatDate = (value?: string | null) => {
   if (!value) return "—";
-  const date = new Date(`${value}T00:00:00`);
+  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return "—";
   return formatDateDDMMYYYY(date);
 };
@@ -531,35 +539,17 @@ const buildDetalleHtml = (cliente: Cliente) => `
   </div>
 `;
 
-const buildCuentaHtml = (cliente: Cliente) => `
-  <div style="text-align:left; color:#0f172a; font-size:14px;">
-    <div style="display:grid; gap:10px;">
-      <div style="display:grid; gap:3px; padding:12px 14px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0;">
-        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Saldo pendiente</span>
-        <span style="color:#0f172a; font-weight:800;">${formatCurrency(cliente.saldoPendienteArs)}</span>
-      </div>
-      <div style="display:grid; gap:3px;">
-        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Condición comercial</span>
-        <span style="color:#0f172a; font-weight:600;">${normalizeText(cliente.condicionComercial)}</span>
-      </div>
-      <div style="display:grid; gap:3px;">
-        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Estado comercial</span>
-        <span style="color:#1d4ed8; font-weight:700;">${cliente.estado}</span>
-      </div>
-      <div style="display:grid; gap:3px; padding:12px 14px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0;">
-        <span style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#475569;">Observaciones</span>
-        <span style="color:#334155; line-height:1.5;">${normalizeText(cliente.observaciones)}</span>
-      </div>
-    </div>
-  </div>
-`;
-
 const ClientesPage = () => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [estadoFilter, setEstadoFilter] = useState<(typeof ESTADO_FILTERS)[number]>('Todos');
+  const [cuentaCliente, setCuentaCliente] = useState<Cliente | null>(null);
+  const [cuentaRows, setCuentaRows] = useState<ClienteEstadoCuentaItem[]>([]);
+  const [cuentaLoading, setCuentaLoading] = useState(false);
+  const [cuentaError, setCuentaError] = useState<string | null>(null);
+  const [cuentaOpen, setCuentaOpen] = useState(false);
 
   const loadClientes = async () => {
     try {
@@ -619,6 +609,31 @@ const ClientesPage = () => {
     }
   };
 
+  const handleOpenCuentaCorriente = async (cliente: Cliente) => {
+    setCuentaCliente(cliente);
+    setCuentaOpen(true);
+    setCuentaLoading(true);
+    setCuentaError(null);
+    setCuentaRows([]);
+
+    try {
+      const rows = await clienteService.getEstadoCuentaCliente(cliente.uid);
+      setCuentaRows(rows);
+    } catch (error: unknown) {
+      setCuentaError(error instanceof Error ? error.message : 'No se pudo cargar el estado de cuenta.');
+    } finally {
+      setCuentaLoading(false);
+    }
+  };
+
+  const handleCloseCuentaCorriente = () => {
+    setCuentaOpen(false);
+    setCuentaCliente(null);
+    setCuentaRows([]);
+    setCuentaError(null);
+    setCuentaLoading(false);
+  };
+
   const handleToggleEstado = async (cliente: Cliente) => {
     const nextEstado: EstadoClienteType = cliente.estado === EstadoCliente.SUSPENDIDO ? EstadoCliente.ACTIVO : EstadoCliente.SUSPENDIDO;
     const result = await Swal.fire({
@@ -675,6 +690,7 @@ const ClientesPage = () => {
     .map((cliente) => (cliente.ultimaCompra ? new Date(`${cliente.ultimaCompra}T00:00:00`).getTime() : null))
     .filter((value): value is number => value !== null)
     .reduce<number | null>((max, current) => (max === null ? current : Math.max(max, current)), null);
+  const totalCuentaPendiente = cuentaRows.reduce((acc, item) => acc + item.saldo, 0);
 
   return (
     <div className="space-y-6">
@@ -810,17 +826,7 @@ const ClientesPage = () => {
                           <div className="absolute right-0 z-10 mt-2 w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
                             <button
                               type="button"
-                              onClick={() =>
-                                void Swal.fire({
-                                  title: `Cuenta corriente · ${cliente.nombre}`,
-                                  html: buildCuentaHtml(cliente),
-                                  background: "#ffffff",
-                                  color: "#0f172a",
-                                  confirmButtonColor: "#2563eb",
-                                  confirmButtonText: "Cerrar",
-                                  width: 700,
-                                })
-                              }
+                              onClick={() => { void handleOpenCuentaCorriente(cliente); }}
                               className="block w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50"
                             >
                               Cuenta corriente
@@ -843,6 +849,97 @@ const ClientesPage = () => {
           </div>
         )}
       </Card>
+
+      {cuentaOpen && cuentaCliente ? createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-6 py-5">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-cyan-500">Cuenta corriente</p>
+                <h3 className="mt-1 text-2xl font-black text-slate-900">{cuentaCliente.nombre}</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Estado de cuenta simple basado en comprobantes y salidas registradas para este cliente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseCuentaCorriente}
+                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="border-b border-slate-200 px-6 py-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Saldo total pendiente</p>
+                  <p className="mt-2 text-xl font-black text-slate-900">{formatCurrency(totalCuentaPendiente)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Registros</p>
+                  <p className="mt-2 text-xl font-black text-slate-900">{cuentaRows.length}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Observación técnica</p>
+                  <p className="mt-2 text-sm text-slate-600">El importe puede basarse en costo estimado y no en precio comercial.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto px-6 py-5">
+              {cuentaLoading ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  Cargando estado de cuenta...
+                </div>
+              ) : cuentaError ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{cuentaError}</div>
+              ) : cuentaRows.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  No hay movimientos o comprobantes asociados a este cliente.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="w-full min-w-[1080px] text-left">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                        <th className="px-4 py-3">Fecha</th>
+                        <th className="px-4 py-3">Producto / concepto</th>
+                        <th className="px-4 py-3">Cantidad</th>
+                        <th className="px-4 py-3 text-right">Importe</th>
+                        <th className="px-4 py-3 text-right">Saldo pendiente</th>
+                        <th className="px-4 py-3">Referencia</th>
+                        <th className="px-4 py-3">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cuentaRows.map((row) => (
+                        <tr key={row.id} className="border-b border-slate-100 last:border-b-0">
+                          <td className="px-4 py-3 text-sm text-slate-700">{formatDate(row.fecha)}</td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-slate-900">{row.producto || '—'}</div>
+                            {row.comprobanteNumero ? <div className="text-xs text-slate-500">Comprobante {row.comprobanteNumero}</div> : null}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{formatCuentaCantidad(row)}</td>
+                          <td className="px-4 py-3 text-right text-sm font-semibold text-slate-900">{formatCurrency(row.importe)}</td>
+                          <td className="px-4 py-3 text-right text-sm font-semibold text-slate-900">{formatCurrency(row.saldo)}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{row.referencia || '—'}</td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                              {row.estado || '—'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body,
+      ) : null}
     </div>
   );
 };

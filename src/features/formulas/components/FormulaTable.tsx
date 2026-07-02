@@ -54,6 +54,15 @@ const FormulaTable: React.FC<Props> = ({ data = [], onEdit, onDelete, enableSear
     }
   };
 
+  const getDisplayedProtein = (formula: Formula) => {
+    const hasIngredientProteinData = formula.ingredientes?.some((ing) => typeof ing.aporte_proteina_pct === 'number' && !Number.isNaN(ing.aporte_proteina_pct));
+    if (hasIngredientProteinData) {
+      return formula.ingredientes.reduce((acc, ing) => acc + (Number(ing.aporte_proteina_pct) || 0), 0);
+    }
+
+    return typeof formula.proteina_calculada_pct === 'number' ? formula.proteina_calculada_pct : undefined;
+  };
+
   const formatProteina = (value?: number) => (typeof value === 'number' ? `${value.toFixed(2)}%` : 'Sin dato');
 
   return (
@@ -124,7 +133,7 @@ const FormulaTable: React.FC<Props> = ({ data = [], onEdit, onDelete, enableSear
                 </TableCell>
                 <TableCell className="text-center">
                   <span className="inline-flex items-center justify-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-800 whitespace-nowrap">
-                    {formatProteina(formula.proteina_calculada_pct)}
+                    {formatProteina(getDisplayedProtein(formula))}
                   </span>
                 </TableCell>
                 <TableCell className="text-center font-semibold text-emerald-700">
@@ -152,7 +161,7 @@ const FormulaTable: React.FC<Props> = ({ data = [], onEdit, onDelete, enableSear
                             <div key={ing.id_insumo} className="bg-white rounded-lg px-3 py-1.5 border border-slate-200 flex items-center gap-3 max-w-full">
                               <span className="text-xs text-slate-700 font-semibold uppercase truncate">{ing.nombre_insumo}</span>
                               <div className="h-3 w-px bg-slate-200" />
-                              <span className="text-xs text-blue-700 font-semibold whitespace-nowrap">{ing.porcentaje}%</span>
+                              <span className="text-xs text-blue-700 font-semibold whitespace-nowrap">{Number(ing.porcentaje || 0)}%</span>
                             </div>
                           ))}
                         </div>
@@ -160,11 +169,11 @@ const FormulaTable: React.FC<Props> = ({ data = [], onEdit, onDelete, enableSear
 
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
                         <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-3">Análisis de proteína</h4>
-                        {typeof formula.proteina_calculada_pct === 'number' ? (
+                        {typeof getDisplayedProtein(formula) === 'number' ? (
                           <div className="space-y-3">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                              <p className="text-slate-700">Proteína total fórmula: <strong>{formula.proteina_calculada_pct.toFixed(2)}%</strong></p>
-                              <p className="text-slate-700">Proteína g/kg aproximada: <strong>{(formula.proteina_calculada_pct * 10).toFixed(1)}</strong></p>
+                              <p className="text-slate-700">Proteína total fórmula: <strong>{getDisplayedProtein(formula)!.toFixed(2)}%</strong></p>
+                              <p className="text-slate-700">Proteína g/kg aproximada: <strong>{(getDisplayedProtein(formula)! * 10).toFixed(1)}</strong></p>
                             </div>
                             <div className="overflow-x-auto">
                               <table className="w-full min-w-[560px] text-xs">
@@ -180,7 +189,7 @@ const FormulaTable: React.FC<Props> = ({ data = [], onEdit, onDelete, enableSear
                                   {proteinRows.map((ing) => (
                                     <tr key={`${formula.uid}-${ing.id_insumo}`}>
                                       <td className="px-2 py-1.5 text-slate-800">{ing.nombre_insumo}</td>
-                                      <td className="px-2 py-1.5 text-right text-slate-700">{ing.porcentaje.toFixed(2)}%</td>
+                                      <td className="px-2 py-1.5 text-right text-slate-700">{Number(ing.porcentaje || 0).toFixed(2)}%</td>
                                       <td className="px-2 py-1.5 text-right text-slate-700">{typeof ing.aporte_proteina_pct === 'number' ? `${ing.aporte_proteina_pct.toFixed(3)}%` : 'Sin dato'}</td>
                                       <td className="px-2 py-1.5 text-right text-slate-700">{typeof ing.aporte_proteina_g_kg === 'number' ? ing.aporte_proteina_g_kg.toFixed(2) : 'Sin dato'}</td>
                                     </tr>

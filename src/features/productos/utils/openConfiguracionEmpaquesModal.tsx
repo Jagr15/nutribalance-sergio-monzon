@@ -1,6 +1,7 @@
 import Swal from 'sweetalert2';
 import { ApiService } from '../../../infrastructure/api';
 import type { ConfiguracionEmpaque } from '../types/configuracionEmpaque';
+import { isDefaultConfiguracionEmpaque, mergeConfiguracionEmpaques } from '../constants/configuracionEmpaquesDefaults';
 
 const formatLabel = (item: Pick<ConfiguracionEmpaque, 'tipo_empaque' | 'capacidad_kg'>) =>
   `${item.tipo_empaque === 'BOLSA' ? 'Bolsa' : 'Big Bag'} · ${Number(item.capacidad_kg)} kg`;
@@ -15,14 +16,20 @@ export const openConfiguracionEmpaquesModal = async (onRefresh?: () => Promise<v
       console.error("[empaques] no se pudo cargar la configuracion global", error);
       loadError = error;
     }
-    const htmlList = rows.length > 0
-      ? rows.map((item) => `
+    const mergedRows = mergeConfiguracionEmpaques(rows);
+    const htmlList = mergedRows.length > 0
+      ? mergedRows.map((item) => `
           <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:12px; margin-bottom:8px; background:${item.esta_activo ? '#f8fafc' : '#fff7ed'};">
             <div>
               <div style="font-weight:700; color:#0f172a;">${formatLabel(item)}</div>
-              <div style="font-size:12px; color:${item.esta_activo ? '#64748b' : '#c2410c'};">${item.esta_activo ? 'Activo' : 'Inactivo'}</div>
+              <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:${item.esta_activo ? '#64748b' : '#c2410c'};">
+                <span>${item.esta_activo ? 'Activo' : 'Inactivo'}</span>
+                ${isDefaultConfiguracionEmpaque(item) ? '<span style="padding:2px 8px; border-radius:999px; background:#dbeafe; color:#1d4ed8; font-weight:700;">Base</span>' : ''}
+              </div>
             </div>
-            <button type="button" class="toggle-empaque-btn" data-id="${item.id}" data-active="${item.esta_activo ? '1' : '0'}" style="border:1px solid #cbd5e1; background:#fff; color:#0f172a; border-radius:10px; padding:8px 12px; font-size:12px; font-weight:700;">${item.esta_activo ? 'Desactivar' : 'Activar'}</button>
+            ${isDefaultConfiguracionEmpaque(item)
+              ? '<span style="border:1px solid #cbd5e1; background:#f8fafc; color:#64748b; border-radius:10px; padding:8px 12px; font-size:12px; font-weight:700;">Base</span>'
+              : `<button type="button" class="toggle-empaque-btn" data-id="${item.id}" data-active="${item.esta_activo ? '1' : '0'}" style="border:1px solid #cbd5e1; background:#fff; color:#0f172a; border-radius:10px; padding:8px 12px; font-size:12px; font-weight:700;">${item.esta_activo ? 'Desactivar' : 'Activar'}</button>`}
           </div>
         `).join('')
       : '<div style="padding:12px; border:1px dashed #f59e0b; border-radius:12px; background:#fffbeb; color:#b45309;">No hay empaques configurados.</div>';

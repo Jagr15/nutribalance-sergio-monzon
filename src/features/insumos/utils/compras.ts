@@ -39,6 +39,7 @@ export const buildHistorialCompras = (
       id_insumo: lote.id_insumo,
       fecha_compra: toIso(lote.fecha_ingreso),
       lote: lote.lote,
+      remito_nro: lote.remito_nro,
       cantidad: num(lote.cantidad_inicial ?? lote.cantidad_actual),
       costo_unitario: num(lote.costo_unitario),
       costo_total: num(lote.costo_total),

@@ -7,6 +7,7 @@ import { mockProveedorService } from '../mock/services/mockProveedorService';
 import { mockSiloService } from '../mock/services/mockSiloService';
 import { mockStockPTService } from '../mock/services/mockStockPTService';
 import { mockEmpaquesProductoService } from '../mock/services/mockEmpaquesProductoService';
+import { mockConfiguracionEmpaquesService } from '../mock/services/mockConfiguracionEmpaquesService';
 import { mockUsuarioService } from '../mock/services/mockUsuarioService';
 import { mockMateriaPrimaService } from '../mock/services/mockMateriaPrimaService';
 import { mockTrazabilidadService } from '../mock/services/mockTrazabilidadService';
@@ -53,7 +54,7 @@ export const mockAdapter: ApiServices = {
     },
   },
   stockPT: mockStockPTService,
-  configuracionEmpaques: mockEmpaquesProductoService as never,
+  configuracionEmpaques: mockConfiguracionEmpaquesService,
   empaquesProducto: mockEmpaquesProductoService as never,
   trazabilidad: mockTrazabilidadService,
   silos: mockSiloService,

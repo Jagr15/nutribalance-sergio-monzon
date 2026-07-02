@@ -37,6 +37,9 @@ const badgeLabel = (value: number | null, positive: string, negative: string) =>
   return value > 0 ? positive : negative;
 };
 
+const normalizeIngredientPercent = (value: number | ''): number | '' => (value === 0 ? '' : value);
+const toNumericPercentage = (value: number | '') => Number(value || 0);
+
 const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSuccess }) => {
   const { create, update, isLoading } = useFormulas();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,7 +53,12 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
 
   const [nombre, setNombre] = useState(formula?.nombre_producto || '');
   const [estaActiva, setEstaActiva] = useState(formula?.esta_activa ?? true);
-  const [insumosSeleccionados, setInsumosSeleccionados] = useState<InsumoFormula[]>(formula?.ingredientes || []);
+  const [insumosSeleccionados, setInsumosSeleccionados] = useState<InsumoFormula[]>(() => (
+    (formula?.ingredientes ?? []).map((ingredient) => ({
+      ...ingredient,
+      porcentaje: normalizeIngredientPercent(ingredient.porcentaje),
+    }))
+  ));
   
   const [maestroInsumos, setMaestroInsumos] = useState<Insumo[]>([]);
   const [maestroStock, setMaestroStock] = useState<StockMateriaPrima[]>([]);
@@ -63,6 +71,15 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
     () => formulas.filter((item) => item.uid !== formula?.uid),
     [formulas, formula?.uid]
   );
+
+  useEffect(() => {
+    setInsumosSeleccionados((formula?.ingredientes ?? []).map((ingredient) => ({
+      ...ingredient,
+      porcentaje: normalizeIngredientPercent(ingredient.porcentaje),
+    })));
+    setNombre(formula?.nombre_producto || '');
+    setEstaActiva(formula?.esta_activa ?? true);
+  }, [formula]);
 
   const Toast = Swal.mixin({
     toast: true,
@@ -106,7 +123,7 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
   );
 
   const sumaTotal = useMemo(
-    () => ingredientesValidos.reduce((acc, ing) => acc + (Number(ing.porcentaje) || 0), 0),
+    () => ingredientesValidos.reduce((acc, ing) => acc + toNumericPercentage(ing.porcentaje), 0),
     [ingredientesValidos]
   );
 
@@ -170,7 +187,7 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
       const original = formula.ingredientes[idx];
       return (
         item.id_insumo === original.id_insumo &&
-        Number(item.porcentaje) === Number(original.porcentaje)
+        toNumericPercentage(item.porcentaje) === toNumericPercentage(original.porcentaje)
       );
     });
   }, [nombre, insumosSeleccionados, formula]);
@@ -457,9 +474,9 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
 
                     <div className="w-20 relative">
                     <input 
-                      type="number" step="0.01" value={item.porcentaje}
+                      type="number" step="0.01" value={item.porcentaje === '' ? '' : item.porcentaje}
                       onChange={e => {
-                        const val = parseFloat(e.target.value) || 0;
+                        const val = e.target.value === '' ? '' : Number(e.target.value);
                         setInsumosSeleccionados(prev => prev.map((it, i) => i === index ? { ...it, porcentaje: val } : it));
                       }}
                       className="ui-input w-full rounded-xl py-2 pr-6 text-center text-[10px] text-slate-900 font-black outline-none focus:border-blue-500/30 transition-all duration-200 ease-out h-[36px]"
@@ -476,7 +493,7 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
             </div>
 
             <button 
-              type="button" onClick={() => setInsumosSeleccionados(prev => [...prev, { id_insumo: '', nombre_insumo: '', porcentaje: 0 }])}
+              type="button" onClick={() => setInsumosSeleccionados(prev => [...prev, { id_insumo: '', nombre_insumo: '', porcentaje: '' }])}
               className="w-full py-3 border border-dashed border-slate-200 rounded-xl text-gray-500 text-[9px] font-black uppercase hover:bg-slate-100 transition-all duration-200 ease-out flex items-center justify-center gap-2"
             ><FiPlus size={14}/> Añadir Insumo</button>
           </div>

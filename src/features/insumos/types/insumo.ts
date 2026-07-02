@@ -16,7 +16,7 @@ export interface Insumo {
     unidad_costo?: 'KG' | 'TON';
     costo_por_kg?: number;
     costo_por_tonelada?: number;
-    proteina_bruta_pct?: number;
+    proteina_bruta_pct?: number | null;
     humedad_pct?: number;
     fibra_pct?: number;
     grasa_pct?: number;
@@ -85,6 +85,7 @@ export interface HistorialCompraMP {
   id_insumo: string;
   fecha_compra: string;
   lote: string;
+  remito_nro?: string;
   cantidad: number;
   costo_unitario: number;
   costo_total: number;

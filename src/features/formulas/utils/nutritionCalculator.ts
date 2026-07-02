@@ -5,7 +5,7 @@ export interface NutritionIngredientBreakdown {
   id_insumo: string;
   nombre_insumo: string;
   inclusion_pct: number;
-  proteina_bruta_pct?: number;
+  proteina_bruta_pct?: number | null;
   aporte_proteina_pct: number;
   aporte_proteina_g_kg: number;
   aporte_humedad_pct: number;
@@ -31,7 +31,7 @@ export interface NutritionCalculationResult {
   hasMissingValues: boolean;
 }
 
-const safeNumber = (value: number | undefined): number => {
+const safeNumber = (value: number | '' | undefined | null): number => {
   if (typeof value !== 'number' || Number.isNaN(value)) return 0;
   return value;
 };

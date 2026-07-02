@@ -16,6 +16,16 @@ export const PresentacionExpedicion = {
 
 export type PresentacionExpedicion = (typeof PresentacionExpedicion)[keyof typeof PresentacionExpedicion];
 
+export type PresentacionExpedicionKey =
+  | 'GRANEL_KG'
+  | 'TONELADA'
+  | 'BOLSA_15'
+  | 'BOLSA_20'
+  | 'BOLSA_25'
+  | 'BOLSA_40'
+  | 'BIG_BAG_500'
+  | 'BIG_BAG_1000';
+
 export interface OrdenExpedicion {
   id: string;
   legacy_uid: string;
@@ -26,6 +36,7 @@ export interface OrdenExpedicion {
   lote_pt: string;
   cliente_id: string | null;
   cliente_nombre: string | null;
+  presentacion_key?: PresentacionExpedicionKey | null;
   presentacion: PresentacionExpedicion;
   cantidad: number;
   cantidad_original: number;
@@ -48,10 +59,15 @@ export interface OrdenExpedicion {
 export interface RegistrarOrdenExpedicionPayload {
   stock_pt_id: string;
   cliente_id: string;
+  presentacion_key: PresentacionExpedicionKey;
   presentacion: PresentacionExpedicion;
   cantidad: number;
   cantidad_original?: number;
   unidad_cantidad: 'kg' | 'tonelada';
+  modo_calculo?: 'kg_requeridos' | 'empaques';
+  tipo_empaque?: 'BOLSA' | 'BIG_BAG' | null;
+  capacidad_empaque_kg?: number | null;
+  cantidad_empaques?: number | null;
   motivo?: string | null;
   referencia?: string | null;
 }

@@ -32,6 +32,12 @@ interface FormulaIngredienteRow {
   insumos: { legacy_uid: string | null; nombre: string } | null;
 }
 
+const hasIngredientProteinData = (ingredientes: Ingrediente[]) =>
+  ingredientes.some((ing) => typeof ing.aporte_proteina_pct === 'number' && !Number.isNaN(ing.aporte_proteina_pct));
+
+const getProteinFromIngredients = (ingredientes: Ingrediente[]) =>
+  ingredientes.reduce((acc, ing) => acc + (Number(ing.aporte_proteina_pct) || 0), 0);
+
 const toFormula = (row: FormulaRow, ingredientes: Ingrediente[]): Formula => ({
   uid: row.legacy_uid ?? crypto.randomUUID(),
   nombre_producto: row.nombre_producto,
@@ -42,7 +48,9 @@ const toFormula = (row: FormulaRow, ingredientes: Ingrediente[]): Formula => ({
   id_usuario: row.usuarios?.legacy_uid ?? 'usr-admin-01',
   author: row.author || row.usuarios?.nombre || 'Sin autor',
   createdAt: new Date(row.created_at),
-  proteina_calculada_pct: row.proteina_calculada_pct ?? undefined,
+  proteina_calculada_pct: hasIngredientProteinData(ingredientes)
+    ? getProteinFromIngredients(ingredientes)
+    : row.proteina_calculada_pct ?? undefined,
   costo_total: row.costo_total ?? undefined,
   costo_por_kg: row.costo_por_kg ?? undefined,
   costo_por_tonelada: row.costo_por_tonelada ?? undefined,
@@ -146,6 +154,9 @@ export const supabaseFormulaService = {
 
   async create(payload: Omit<Formula, 'uid' | 'ultima_edicion'>): Promise<Formula> {
     const usuarioId = await findUsuarioId(payload.id_usuario);
+    const proteinaCalculadaPct = hasIngredientProteinData(payload.ingredientes)
+      ? getProteinFromIngredients(payload.ingredientes)
+      : payload.proteina_calculada_pct ?? null;
 
     const { data, error } = await supabaseClient
       .from('formulas')
@@ -155,7 +166,7 @@ export const supabaseFormulaService = {
         version: payload.version,
         esta_activa: payload.esta_activa,
         ultima_edicion: new Date().toISOString(),
-        proteina_calculada_pct: payload.proteina_calculada_pct ?? null,
+        proteina_calculada_pct: proteinaCalculadaPct,
         costo_total: payload.costo_total ?? null,
         costo_por_kg: payload.costo_por_kg ?? null,
         costo_por_tonelada: payload.costo_por_tonelada ?? null,
@@ -218,12 +229,16 @@ export const supabaseFormulaService = {
       usuarioId = await findUsuarioId(payload.id_usuario);
     }
 
+    const proteinaCalculadaPct = payload.ingredientes && hasIngredientProteinData(payload.ingredientes)
+      ? getProteinFromIngredients(payload.ingredientes)
+      : payload.proteina_calculada_pct;
+
     const rawPayload = {
       nombre_producto: payload.nombre_producto,
       version: payload.version,
       esta_activa: payload.esta_activa,
       ultima_edicion: new Date().toISOString(),
-      proteina_calculada_pct: payload.proteina_calculada_pct,
+      proteina_calculada_pct: proteinaCalculadaPct,
       costo_total: payload.costo_total,
       costo_por_kg: payload.costo_por_kg,
       costo_por_tonelada: payload.costo_por_tonelada,

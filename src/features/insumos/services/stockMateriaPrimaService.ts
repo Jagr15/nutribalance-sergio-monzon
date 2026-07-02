@@ -3,6 +3,17 @@ import type { StockMateriaPrima } from "../types";
 import { assertPermission } from '../../auth/accessControl';
 import { auditAction } from '../../auth/audit';
 import type { Silo } from '../../silos/types';
+import { resolverCostoIngresoMP } from '../utils/costoIngreso';
+
+const parseLocalDateForBusinessDay = (value: string) => {
+  const normalized = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return new Date(value);
+  }
+
+  const [year, month, day] = normalized.split('-').map(Number);
+  return new Date(year, (month ?? 1) - 1, day ?? 1, 12, 0, 0, 0);
+};
 
 export interface NewStockEntryData {
   id_insumo: string;
@@ -46,18 +57,42 @@ export const stockMateriaPrimaService = {
       }
     }
 
+    let insumoSeleccionado: { costo_por_kg?: number | null; ref_costo_unitario?: number | null; costo?: number | null } | null = null;
+    try {
+      const insumos = await ApiService.insumos.getAllInsumos();
+      const encontrado = insumos.find((item) => item.uid === data.id_insumo);
+      if (encontrado) {
+        insumoSeleccionado = {
+          costo_por_kg: encontrado.costo_por_kg ?? null,
+          ref_costo_unitario: encontrado.ref_costo_unitario ?? null,
+          costo: encontrado.costo ?? null,
+        };
+      }
+    } catch (error) {
+      console.warn('No se pudo resolver el costo de referencia del insumo.', error);
+    }
+
+    const costoResuelto = resolverCostoIngresoMP({
+      cantidad: data.cantidad,
+      unidad_entrada: data.unidad_entrada,
+      costo_unitario: data.costo_unitario ?? null,
+      costo_por_kg: insumoSeleccionado?.costo_por_kg ?? null,
+      ref_costo_unitario: insumoSeleccionado?.ref_costo_unitario ?? null,
+      costo: insumoSeleccionado?.costo ?? null,
+    });
+
     const created = await ApiService.stockMP.create({
       id_insumo: data.id_insumo,
       id_proveedor: data.id_proveedor,
       lote,
       remito_nro: remito,
-      cantidad: data.cantidad,
+      cantidad: costoResuelto.cantidad_kg,
       unidad_entrada: data.unidad_entrada,
-      costo_total: 0,
-      costo_unitario: 0,
+      costo_total: costoResuelto.costo_total,
+      costo_unitario: costoResuelto.costo_unitario,
       // TODO: deuda técnica: reemplazar id fijo por sesión autenticada
       id_usuario: 'usr-101',
-      fecha_ingreso: new Date(data.fecha_ingreso),
+      fecha_ingreso: parseLocalDateForBusinessDay(data.fecha_ingreso),
       ubicacion: data.ubicacion,
     });
 
@@ -68,7 +103,7 @@ export const stockMateriaPrimaService = {
       entidad_ref: created.uid,
       payload: {
         lote,
-        cantidad: data.cantidad,
+        cantidad: costoResuelto.cantidad_kg,
       },
     });
     return created;

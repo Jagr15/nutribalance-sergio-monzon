@@ -48,11 +48,17 @@ const getIngredientCost = (ing: Ingrediente): number | null => {
 };
 
 const getFormulaProtein = (formula: Formula): number | null => {
+  const hasIngredientProteinData = formula.ingredientes.some((ing) => typeof ing.aporte_proteina_pct === 'number' && !Number.isNaN(ing.aporte_proteina_pct));
+  const computed = formula.ingredientes.reduce((acc, ing) => acc + (Number(ing.aporte_proteina_pct) || 0), 0);
+
+  if (hasIngredientProteinData) {
+    return round6(computed);
+  }
+
   if (typeof formula.proteina_calculada_pct === 'number' && !Number.isNaN(formula.proteina_calculada_pct)) {
     return round6(formula.proteina_calculada_pct);
   }
 
-  const computed = formula.ingredientes.reduce((acc, ing) => acc + (Number(ing.aporte_proteina_pct) || 0), 0);
   return formula.ingredientes.length > 0 ? round6(computed) : null;
 };
 

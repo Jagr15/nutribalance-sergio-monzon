@@ -35,6 +35,11 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
           ? String(insumo.costo)
           : ''
   );
+  const [proteinaBruta, setProteinaBruta] = useState<string>(
+    insumo?.proteina_bruta_pct !== undefined && insumo?.proteina_bruta_pct !== null
+      ? String(insumo.proteina_bruta_pct)
+      : ''
+  );
   const [unidadCosto, setUnidadCosto] = useState<UnidadCostoInsumo>(insumo?.unidad_costo ?? 'KG');
   
   // Nuevo estado para la Unidad de Medida
@@ -44,7 +49,9 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
 
   const umbralValue = parseNumericInput(umbral);
   const costoValue = parseNumericInput(costo);
+  const proteinaValue = parseNumericInput(proteinaBruta);
   const isUmbralInvalid = umbralValue === null || umbralValue <= 0;
+  const isProteinaInvalid = proteinaBruta.trim() !== '' && (proteinaValue === null || proteinaValue < 0 || proteinaValue > 100);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +69,10 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
     }
     if (!categoria) {
       setSubmitError('La categoría es obligatoria.');
+      return;
+    }
+    if (isProteinaInvalid) {
+      setSubmitError('La proteína bruta debe estar entre 0 y 100.');
       return;
     }
     const duplicated = existingInsumos.some(
@@ -83,6 +94,7 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
       costo_por_kg: costoNormalizado?.costo_por_kg,
       costo_por_tonelada: costoNormalizado?.costo_por_tonelada,
       ref_costo_unitario: costoNormalizado?.costo_por_kg,
+      proteina_bruta_pct: proteinaBruta.trim() === '' ? null : proteinaValue,
     };
 
     setIsSubmitting(true);
@@ -234,6 +246,28 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
                 Se normaliza automáticamente a costo por kg para inventario y finanzas.
               </p>
             </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Proteína bruta (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.0001"
+                value={proteinaBruta}
+                onChange={(e) => setProteinaBruta(e.target.value)}
+                placeholder="Ej. 44"
+                className={`ui-input w-full rounded-lg py-2.5 px-3 text-sm text-slate-700 font-mono ${isProteinaInvalid ? 'border-red-500/40' : ''}`}
+              />
+              <p className="text-[9px] text-slate-500 ml-1">
+                Opcional. Se usará para calcular la proteína en fórmulas.
+              </p>
+              {isProteinaInvalid ? (
+                <p className="text-[9px] text-red-500 font-bold ml-1 uppercase tracking-tighter italic">
+                  * La proteína bruta debe estar entre 0 y 100
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <footer className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3 bg-slate-50">
@@ -246,7 +280,7 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
             </button>
             <button 
               type="submit" 
-              disabled={isLoading || isSubmitting || isUmbralInvalid}
+              disabled={isLoading || isSubmitting || isUmbralInvalid || isProteinaInvalid}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-bold transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md"
             >
               {(isLoading || isSubmitting) ? 'GUARDANDO...' : (insumo ? 'ACTUALIZAR' : 'GUARDAR INSUMO')}

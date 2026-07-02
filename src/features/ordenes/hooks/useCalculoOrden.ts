@@ -48,7 +48,7 @@ export const useCalculoOrden = () => {
       let stockSuficienteGlobal = true;
 
       for (const ingrediente of formula.ingredientes) {
-        const cantidadNecesaria = cantidadObjetivo * (ingrediente.porcentaje / 100);
+        const cantidadNecesaria = cantidadObjetivo * (Number(ingrediente.porcentaje) || 0) / 100;
         let cantidadPendiente = cantidadNecesaria;
 
         // 1. Filtrar lotes que tengan stock DISPONIBLE real (actual - comprometido)

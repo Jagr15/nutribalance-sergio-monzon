@@ -21,6 +21,8 @@ interface InsumoRow {
   categoria: string;
 }
 
+const toNullableNumber = (value: number | null | undefined) => (value === undefined ? undefined : value);
+
 const mapInsumo = (row: InsumoRow): Insumo => ({
   uid: row.legacy_uid ?? crypto.randomUUID(),
   nombre: row.nombre,
@@ -60,17 +62,17 @@ export const supabaseInsumoService = {
       .insert({
         legacy_uid: legacyUid,
         nombre: payload.nombre,
-        unidad_medida: payload.unidad_medida,
-        umbral_alerta: payload.umbral_alerta,
-        costo: payload.costo ?? payload.costo_por_kg ?? payload.ref_costo_unitario ?? null,
-        unidad_costo: payload.unidad_costo ?? 'KG',
-        ref_costo_unitario: payload.costo_por_kg ?? payload.ref_costo_unitario ?? null,
-        costo_por_kg: payload.costo_por_kg ?? payload.ref_costo_unitario ?? null,
-        costo_por_tonelada: payload.costo_por_tonelada ?? (((payload.costo_por_kg ?? payload.ref_costo_unitario ?? 0) * 1000) || null),
-        proteina_bruta_pct: payload.proteina_bruta_pct ?? null,
-        humedad_pct: payload.humedad_pct ?? null,
-        fibra_pct: payload.fibra_pct ?? null,
-        grasa_pct: payload.grasa_pct ?? null,
+  unidad_medida: payload.unidad_medida,
+  umbral_alerta: payload.umbral_alerta,
+  costo: payload.costo ?? payload.costo_por_kg ?? payload.ref_costo_unitario ?? null,
+  unidad_costo: payload.unidad_costo ?? 'KG',
+  ref_costo_unitario: payload.costo_por_kg ?? payload.ref_costo_unitario ?? null,
+  costo_por_kg: payload.costo_por_kg ?? payload.ref_costo_unitario ?? null,
+  costo_por_tonelada: payload.costo_por_tonelada ?? (((payload.costo_por_kg ?? payload.ref_costo_unitario ?? 0) * 1000) || null),
+  proteina_bruta_pct: payload.proteina_bruta_pct ?? null,
+  humedad_pct: payload.humedad_pct ?? null,
+  fibra_pct: payload.fibra_pct ?? null,
+  grasa_pct: payload.grasa_pct ?? null,
         cenizas_pct: payload.cenizas_pct ?? null,
         unidad_base: payload.unidad_base ?? null,
         observaciones: payload.observaciones ?? null,
@@ -95,7 +97,7 @@ export const supabaseInsumoService = {
         ref_costo_unitario: payload.costo_por_kg ?? payload.ref_costo_unitario,
         costo_por_kg: payload.costo_por_kg ?? payload.ref_costo_unitario,
         costo_por_tonelada: payload.costo_por_tonelada ?? (((payload.costo_por_kg ?? payload.ref_costo_unitario ?? 0) * 1000) || null),
-        proteina_bruta_pct: payload.proteina_bruta_pct,
+        proteina_bruta_pct: toNullableNumber(payload.proteina_bruta_pct),
         humedad_pct: payload.humedad_pct,
         fibra_pct: payload.fibra_pct,
         grasa_pct: payload.grasa_pct,

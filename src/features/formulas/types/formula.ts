@@ -1,7 +1,7 @@
 export interface Ingrediente {
   id_insumo: string;
   nombre_insumo: string; // Útil para mostrar en la UI de creación
-  porcentaje: number;
+  porcentaje: number | '';
   aporte_proteina_pct?: number;
   aporte_proteina_g_kg?: number;
   costo_unitario_usado?: number;

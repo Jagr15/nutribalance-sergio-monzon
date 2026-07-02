@@ -23,6 +23,7 @@ export const mockInsumoService = {
       costo: data.costo ?? data.costo_por_kg ?? data.ref_costo_unitario,
       costo_por_kg: data.costo_por_kg ?? data.ref_costo_unitario,
       costo_por_tonelada: data.costo_por_tonelada ?? ((data.costo_por_kg ?? data.ref_costo_unitario ?? 0) * 1000),
+      proteina_bruta_pct: data.proteina_bruta_pct ?? null,
       unidad_costo: data.unidad_costo ?? 'KG',
       uid: `i-${Math.floor(Math.random() * 1000)}`
     };

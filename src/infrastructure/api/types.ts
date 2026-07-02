@@ -1,5 +1,5 @@
 import type { Formula } from '../../features/formulas/types';
-import type { Cliente } from '../../features/clientes/types/cliente';
+import type { Cliente, ClienteEstadoCuentaItem } from '../../features/clientes/types/cliente';
 import type {
   HistorialCompraMP,
   Insumo,
@@ -46,6 +46,7 @@ export interface ResetSystemResult {
 export interface ClientesService {
   getAll: () => Promise<Cliente[]>;
   getById: (uid: string) => Promise<Cliente | undefined>;
+  getEstadoCuentaCliente: (clienteId: string) => Promise<ClienteEstadoCuentaItem[]>;
   create: (data: Omit<Cliente, 'uid' | 'createdAt' | 'updatedAt'>) => Promise<Cliente>;
   update: (uid: string, data: Partial<Omit<Cliente, 'uid'>>) => Promise<Cliente>;
   delete: (uid: string) => Promise<boolean>;

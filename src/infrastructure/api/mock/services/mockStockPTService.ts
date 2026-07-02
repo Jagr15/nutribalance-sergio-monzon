@@ -1,4 +1,5 @@
 import { ControlEstado, type MovimientoStockPT, type RegistrarSalidaStockPTData, type StockProductoTerminado, type StockProductoTerminadoResumen } from '../../../../features/productos/types';
+import type { ClienteEstadoCuentaItem } from '../../../../features/clientes/types/cliente';
 import { buildStockPTResumen } from '../../../../features/productos/utils/stockPtResumen';
 import { mockApiCall } from '../mockClient';
 
@@ -97,6 +98,8 @@ const seedStockPT: StockProductoTerminado[] = [
 
 let stockPTMock: StockProductoTerminado[] = structuredClone(seedStockPT);
 let movimientosMock: MovimientoStockPT[] = [];
+type MockCuentaCorrienteRow = ClienteEstadoCuentaItem & { cliente_id: string | null };
+let cuentaCorrienteMock: MockCuentaCorrienteRow[] = [];
 let nextUid = seedStockPT.length + 1;
 let nextMovimiento = 1;
 
@@ -117,6 +120,30 @@ const pushMovimiento = (movimiento: Omit<MovimientoStockPT, 'id' | 'created_at'>
     created_at: createdAt,
   };
   movimientosMock = [row, ...movimientosMock];
+  return row;
+};
+
+const buildCuentaCorrienteRow = (movimiento: MovimientoStockPT): MockCuentaCorrienteRow => ({
+  cliente_id: movimiento.cliente_id ?? null,
+  id: `cxc-${movimiento.id}`,
+  fecha: movimiento.created_at,
+  producto: movimiento.nombre_producto || '—',
+  cantidad: Number(movimiento.cantidad ?? 0),
+  unidad: movimiento.unidad ?? null,
+  importe: Number(movimiento.valor_total ?? 0),
+  saldo: Number(movimiento.valor_total ?? 0),
+  referencia: movimiento.referencia ?? null,
+  estado: 'PENDIENTE',
+  comprobanteNumero: movimiento.referencia ?? null,
+});
+
+const pushCuentaCorrienteFromMovimiento = (movimiento: MovimientoStockPT) => {
+  if (!movimiento.cliente_id || Number(movimiento.valor_total ?? 0) <= 0) {
+    return null;
+  }
+
+  const row = buildCuentaCorrienteRow(movimiento);
+  cuentaCorrienteMock = [row, ...cuentaCorrienteMock];
   return row;
 };
 
@@ -183,6 +210,10 @@ const resetMockStockPTState = () => {
     buildSalidaMovimiento(stockPTMock[2]!, 18, 'Salida demo PT 3', null, 'Egreso sin cliente'),
     ...movimientosMock,
   ];
+  cuentaCorrienteMock = movimientosMock
+    .filter((movimiento) => movimiento.tipo === 'SALIDA' && Boolean(movimiento.cliente_id) && Number(movimiento.valor_total ?? 0) > 0)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .map(buildCuentaCorrienteRow);
   nextUid = seedStockPT.length + 1;
   nextMovimiento = movimientosMock.length + 1;
 };
@@ -240,6 +271,7 @@ export const registerMockIngresoPT = (data: {
 export const resetMockStockPTService = resetMockStockPTState;
 
 export const getMockStockPTRows = () => structuredClone(stockPTMock);
+export const getMockCuentaCorrienteRows = () => structuredClone(cuentaCorrienteMock);
 
 export const mockStockPTService = {
   getAll: async (): Promise<StockProductoTerminado[]> => mockApiCall([...stockPTMock], 450),
@@ -271,7 +303,7 @@ export const mockStockPTService = {
     };
 
     stockPTMock[index] = nextStock;
-    pushMovimiento({
+    const movimiento = pushMovimiento({
       stock_pt_id: nextStock.uid,
       producto_id: nextStock.id_formula ?? nextStock.nombre_producto,
       nombre_producto: nextStock.nombre_producto,
@@ -288,6 +320,7 @@ export const mockStockPTService = {
       cliente_id: payload.cliente_id ?? null,
       cliente_nombre: payload.cliente_nombre ?? null,
     });
+    pushCuentaCorrienteFromMovimiento(movimiento);
 
     return mockApiCall(nextStock, 300);
   },
