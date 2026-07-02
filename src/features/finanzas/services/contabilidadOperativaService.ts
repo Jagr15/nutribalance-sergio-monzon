@@ -386,4 +386,8 @@ export const contabilidadOperativaService = {
 
     if (error) throw error;
   },
+
+  getMovimientosMock(): Array<MovimientoContablePayload & { id?: string }> {
+    return readMock();
+  },
 };

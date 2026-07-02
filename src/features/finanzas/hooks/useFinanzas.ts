@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 import { finanzasService } from '../services/finanzasService';
 import type { CostosFormulaVsReal, FinanzasInventarioResumen, FinanzasKPIs, FinanzasReportes, FinanzasTesoreriaInsights, MovimientoFinanciero } from '../types';
+import { calcularCuentasPorCobrar, calcularCuentasPorPagar, obtenerMontoPendiente } from '../utils/finanzasCalculations';
 
 const EMPTY_KPIS: FinanzasKPIs = {
   saldo_actual: 0,
@@ -68,17 +69,24 @@ export const useFinanzas = () => {
       finanzasService.getInventarioResumen(),
     ]);
 
-    if (kpisResult.status === 'fulfilled') setKpis(kpisResult.value);
-    else setKpis(EMPTY_KPIS);
+    const finalMovimientos = movimientosResult.status === 'fulfilled' ? movimientosResult.value : [];
+    let finalKpis = kpisResult.status === 'fulfilled' ? kpisResult.value : EMPTY_KPIS;
+    const finalCtasCobrar = calcularCuentasPorCobrar(finalMovimientos);
+    const finalCtasPagar = calcularCuentasPorPagar(finalMovimientos);
+    finalKpis = {
+      ...finalKpis,
+      cuentas_por_cobrar: finalCtasCobrar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0),
+      cuentas_por_pagar: finalCtasPagar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0),
+    };
+
+    setKpis(finalKpis);
+    setMovimientos(finalMovimientos);
 
     if (reportesResult.status === 'fulfilled') setReportes(reportesResult.value);
     else setReportes(EMPTY_REPORTES);
 
     if (tesoreriaResult.status === 'fulfilled') setTesoreria(tesoreriaResult.value);
     else setTesoreria(EMPTY_TESORERIA);
-
-    if (movimientosResult.status === 'fulfilled') setMovimientos(movimientosResult.value);
-    else setMovimientos([]);
 
     if (costosResult.status === 'fulfilled') setCostosComparativos(costosResult.value);
     else setCostosComparativos([]);
@@ -91,14 +99,21 @@ export const useFinanzas = () => {
     if (useMocks || failed.length > 0) {
       try {
         const fallback = await finanzasService.getOperationalFallback();
-        setKpis(fallback.kpis);
+        const fallbackMovimientos = fallback.movimientos;
+        const fallbackCtasCobrar = calcularCuentasPorCobrar(fallbackMovimientos);
+        const fallbackCtasPagar = calcularCuentasPorPagar(fallbackMovimientos);
+        const fallbackKpis = {
+          ...fallback.kpis,
+          cuentas_por_cobrar: fallbackCtasCobrar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0),
+          cuentas_por_pagar: fallbackCtasPagar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0),
+        };
+
+        setKpis(fallbackKpis);
         setReportes(fallback.reportes);
         setTesoreria(fallback.tesoreria);
         setCostosComparativos(fallback.costosComparativos);
         setInventario(fallback.inventario);
-        if (movimientosResult.status !== 'fulfilled') {
-          setMovimientos(fallback.movimientos);
-        }
+        setMovimientos(fallbackMovimientos);
         setInfoMessage('Datos financieros estimados desde operación local');
         fallbackApplied = true;
       } catch {

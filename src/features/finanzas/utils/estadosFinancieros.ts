@@ -1,4 +1,5 @@
 import type { FinanzasInventarioResumen, FinanzasKPIs, FinanzasTesoreriaInsights, MovimientoFinanciero } from '../types';
+import { calcularCuentasPorCobrar, calcularCuentasPorPagar, obtenerMontoPendiente } from './finanzasCalculations';
 
 export type PeriodoFiltro = 'MES_ACTUAL' | 'TRIMESTRE_ACTUAL' | 'ANIO_ACTUAL' | 'TODO' | 'RANGO';
 
@@ -145,13 +146,19 @@ export const buildEstadosFinancieros = (params: {
   const gastos = egresos.reduce((acc, row) => acc + num(row.monto), 0);
   const utilidadNeta = Number((ventas - gastos).toFixed(2));
 
+  const ctasCobrarFiltradas = calcularCuentasPorCobrar(movimientos);
+  const ctasPagarFiltradas = calcularCuentasPorPagar(movimientos);
+
+  const totalCuentasPorCobrar = ctasCobrarFiltradas.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0);
+  const totalCuentasPorPagar = ctasPagarFiltradas.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0);
+
   const activos = [
     { label: 'Caja y bancos', amount: Number(params.kpis.saldo_actual.toFixed(2)) },
-    { label: 'Cuentas por cobrar', amount: Number(params.kpis.cuentas_por_cobrar.toFixed(2)) },
+    { label: 'Cuentas por cobrar', amount: Number(totalCuentasPorCobrar.toFixed(2)) },
     { label: 'Inventario total', amount: Number(params.inventario.valor_inventario_total.toFixed(2)) },
   ].filter((row) => row.amount !== 0);
   const pasivos = [
-    { label: 'Cuentas por pagar', amount: Number(params.kpis.cuentas_por_pagar.toFixed(2)) },
+    { label: 'Cuentas por pagar', amount: Number(totalCuentasPorPagar.toFixed(2)) },
     { label: 'Cheques emitidos pendientes', amount: Number(params.tesoreria.chequesEmitidos.filter((cheque) => cheque.estado === 'PENDIENTE').reduce((acc, cheque) => acc + cheque.importe, 0).toFixed(2)) },
   ].filter((row) => row.amount !== 0);
   const patrimonioNeto = Number((activos.reduce((acc, row) => acc + row.amount, 0) - pasivos.reduce((acc, row) => acc + row.amount, 0)).toFixed(2));

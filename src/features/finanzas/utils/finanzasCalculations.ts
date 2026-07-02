@@ -1,10 +1,38 @@
-import type { FinanzasKPIs } from '../types';
+import type { FinanzasKPIs, MovimientoFinanciero } from '../types';
 
 export const calcFlujoNeto = (ingresos: number, egresos: number) => ingresos - egresos;
 
 export const calcMargenOperativo = (ingresos: number, egresos: number) => {
   if (ingresos <= 0) return 0;
   return ((ingresos - egresos) / ingresos) * 100;
+};
+
+export const obtenerMontoPendiente = (m: any): number => {
+  if (m.monto_pendiente !== undefined && m.monto_pendiente !== null) return Number(m.monto_pendiente);
+  if (m.saldo_pendiente !== undefined && m.saldo_pendiente !== null) return Number(m.saldo_pendiente);
+  if (m.saldo !== undefined && m.saldo !== null) return Number(m.saldo);
+  if (m.total !== undefined && m.total !== null) return Number(m.total);
+  return Number(m.monto ?? 0);
+};
+
+export const calcularCuentasPorCobrar = (movimientos: MovimientoFinanciero[]): MovimientoFinanciero[] => {
+  return movimientos.filter((m) => {
+    if (m.tipo !== 'INGRESO') return false;
+    const est = (m.estado_financiero || m.estado || '').toUpperCase();
+    const isPending = ['PENDIENTE', 'PENDIENTE_COBRO', 'POR_COBRAR', 'VENCIDO'].includes(est);
+    const isExcluded = ['COBRADO', 'PAGADO', 'CONFIRMADO', 'CANCELADO'].includes(est);
+    return isPending && !isExcluded;
+  });
+};
+
+export const calcularCuentasPorPagar = (movimientos: MovimientoFinanciero[]): MovimientoFinanciero[] => {
+  return movimientos.filter((m) => {
+    if (m.tipo !== 'EGRESO') return false;
+    const est = (m.estado_financiero || m.estado || '').toUpperCase();
+    const isPending = ['PENDIENTE', 'PENDIENTE_PAGO', 'POR_PAGAR', 'VENCIDO'].includes(est);
+    const isExcluded = ['PAGADO', 'COBRADO', 'CONFIRMADO', 'CANCELADO'].includes(est);
+    return isPending && !isExcluded;
+  });
 };
 
 export const normalizeKpis = (kpi: Partial<FinanzasKPIs>): FinanzasKPIs => {

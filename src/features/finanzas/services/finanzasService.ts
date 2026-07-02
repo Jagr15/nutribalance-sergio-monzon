@@ -12,7 +12,7 @@ import type {
   PresupuestoMensualGestionRow,
   RubroFinancieroCatalogo,
 } from '../types';
-import { normalizeKpis } from '../utils/finanzasCalculations';
+import { normalizeKpis, calcularCuentasPorCobrar, calcularCuentasPorPagar, obtenerMontoPendiente } from '../utils/finanzasCalculations';
 import { buildCostosFormulaVsReal } from '../utils/costosFormulaVsReal';
 import { buildIngresosPtPorProducto } from '../utils/ingresosPtPorProducto';
 import { buildTesoreriaInsights } from '../utils/tesoreriaInsights';
@@ -288,14 +288,14 @@ export const finanzasService = {
       categoria: row.categorias_financieras?.nombre ?? null,
       centro_costo: row.centros_costo?.nombre ?? null,
     }));
-    const flujo = (unwrap<FlujoCajaRubroDbRow[]>(flujoResult, [], 'flujo_caja_movimientos') as FlujoCajaRubroDbRow[]).map((row) => ({
+    const flujo = (unwrap<any[]>(flujoResult, [], 'flujo_caja_movimientos')).map((row) => ({
       fecha: row.fecha,
       tipo: row.tipo,
       origen_operativo: row.origen_operativo,
       descripcion: row.descripcion,
       monto: row.monto,
-      categoria: row.categoria ?? null,
-      centro_costo: row.centro_costo ?? null,
+      categoria: row.categorias_financieras?.nombre ?? null,
+      centro_costo: row.centros_costo?.nombre ?? null,
     }));
     const comprobantes = unwrap<ComprobanteCarteraDbRow[]>(comprobantesResult, [], 'comprobantes') as ComprobanteCarteraDbRow[];
     const cheques = (unwrap<ChequeTesoreriaDbRow[]>(chequesResult, [], 'tesoreria_cheques') as ChequeTesoreriaDbRow[]).map((row) => ({
@@ -802,19 +802,55 @@ export const finanzasService = {
       costo_operativo_mensual: costoOperativoMensual,
     };
 
-    const movimientosFinancierosUi: MovimientoFinanciero[] = movimientosFinancieros
-      .map((movimiento, index) => ({
-        uid: `fml-${index}-${movimiento.tipo.toLowerCase()}-${movimiento.fecha}-${movimiento.descripcion}`.replace(/[^a-zA-Z0-9-]/g, '-'),
-        fecha: movimiento.fecha,
-        tipo: movimiento.tipo,
-        origen_operativo: movimiento.origen_operativo ?? undefined,
-        descripcion: movimiento.descripcion,
-        monto: Number(movimiento.monto ?? 0),
-        categoria: movimiento.categoria ?? undefined,
-        centro_costo: movimiento.centro_costo ?? undefined,
-        estado: 'CONFIRMADO' as const,
-      }))
-      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    const comprobantesMovimientos: MovimientoFinanciero[] = comprobantes.map((comp, index) => {
+      const isIngreso = comp.tipo === 'FACTURA_VENTA';
+      return {
+        uid: `comp-mov-${index}-${comp.tipo.toLowerCase()}-${comp.fecha_emision}-${comp.tercero}`.replace(/[^a-zA-Z0-9-]/g, '-'),
+        fecha: comp.fecha_emision,
+        tipo: (isIngreso ? 'INGRESO' : 'EGRESO') as any,
+        origen_operativo: comp.tipo,
+        descripcion: `${isIngreso ? 'Venta' : 'Compra'} a ${comp.tercero}`,
+        monto: Number(comp.saldo ?? 0),
+        categoria: isIngreso ? 'Ventas PT' : 'Materia Prima',
+        centro_costo: 'Planta',
+        estado: comp.estado as any,
+        fecha_vencimiento: comp.fecha_vencimiento || undefined,
+        estado_financiero: isIngreso ? 'PENDIENTE_COBRO' : 'PENDIENTE_PAGO',
+      };
+    });
+
+    const customMockMovimientos: MovimientoFinanciero[] = contabilidadOperativaService.getMovimientosMock().map((row: any): MovimientoFinanciero => ({
+      uid: row.legacy_uid || row.id || crypto.randomUUID(),
+      fecha: row.fecha,
+      tipo: row.tipo,
+      origen_operativo: row.origen_operativo || undefined,
+      origen_modulo: row.origen_modulo || undefined,
+      origen_id: row.origen_id || undefined,
+      descripcion: row.descripcion,
+      monto: Number(row.monto ?? 0),
+      estado: row.estado || 'CONFIRMADO',
+      fecha_operacion: row.fecha_operacion || undefined,
+      fecha_vencimiento: row.fecha_vencimiento || undefined,
+      estado_financiero: row.estado_financiero || undefined,
+      fecha_cobro_pago: row.fecha_cobro_pago || undefined,
+    }));
+
+    const movimientosFinancierosUi: MovimientoFinanciero[] = [
+      ...movimientosFinancieros
+        .map((movimiento, index) => ({
+          uid: `fml-${index}-${movimiento.tipo.toLowerCase()}-${movimiento.fecha}-${movimiento.descripcion}`.replace(/[^a-zA-Z0-9-]/g, '-'),
+          fecha: movimiento.fecha,
+          tipo: movimiento.tipo,
+          origen_operativo: movimiento.origen_operativo ?? undefined,
+          descripcion: movimiento.descripcion,
+          monto: Number(movimiento.monto ?? 0),
+          categoria: movimiento.categoria ?? undefined,
+          centro_costo: movimiento.centro_costo ?? undefined,
+          estado: 'CONFIRMADO' as const,
+        })),
+      ...comprobantesMovimientos,
+      ...customMockMovimientos,
+    ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
     const tesoreria = buildTesoreriaInsights(
       [
@@ -862,7 +898,11 @@ export const finanzasService = {
 
     const ingresoMes = flujoCajaMensual.length > 0 ? flujoCajaMensual[flujoCajaMensual.length - 1].ingresos : 0;
     const egresoMes = flujoCajaMensual.length > 0 ? flujoCajaMensual[flujoCajaMensual.length - 1].egresos : 0;
-    const cuentasPorCobrar = tesoreria.carteraClientes.reduce((acc, row) => acc + row.saldo_pendiente, 0);
+
+    const ctasCobrar = calcularCuentasPorCobrar(movimientosFinancierosUi);
+    const ctasPagar = calcularCuentasPorPagar(movimientosFinancierosUi);
+    const totalCobrar = ctasCobrar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0);
+    const totalPagar = ctasPagar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0);
 
     const kpis: FinanzasKPIs = {
       saldo_actual: 0,
@@ -872,8 +912,8 @@ export const finanzasService = {
       margen_operativo: ingresoMes > 0 ? ((ingresoMes - egresoMes) / ingresoMes) * 100 : 0,
       costo_produccion: costoProduccion,
       valorizacion_inventario: valorizacionInventario,
-      cuentas_por_pagar: 0,
-      cuentas_por_cobrar: cuentasPorCobrar,
+      cuentas_por_pagar: totalPagar,
+      cuentas_por_cobrar: totalCobrar,
       perdida_merma: perdidaMerma,
       valor_stock_mp: valorStockMp,
       valor_stock_pt: valorStockPt,

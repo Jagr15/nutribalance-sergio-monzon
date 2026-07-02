@@ -23,6 +23,7 @@ import {
   type RubroFinancieroTipo,
 } from '../utils/finanzasDashboard';
 import { finanzasService } from '../services/finanzasService';
+import { calcularCuentasPorCobrar, calcularCuentasPorPagar, obtenerMontoPendiente } from '../utils/finanzasCalculations';
 
 const rubroTipoLabels: Record<RubroFinancieroTipo, string> = {
   FIJO: 'Fijo',
@@ -322,22 +323,22 @@ const FinanzasPage = () => {
   }, [movimientos, movimientosHistoryFilter]);
 
   const cuentasPorCobrar = useMemo(() => {
-    return movimientos.filter((m) => {
-      const isIngreso = m.tipo === 'INGRESO';
-      const isPending = m.estado === 'PENDIENTE' || ['PENDIENTE_COBRO', 'VENCIDO'].includes(m.estado_financiero || '');
-      const isNotCobrado = m.estado_financiero !== 'COBRADO';
-      return isIngreso && isPending && isNotCobrado;
-    });
+    return calcularCuentasPorCobrar(movimientos);
   }, [movimientos]);
 
   const cuentasPorPagar = useMemo(() => {
-    return movimientos.filter((m) => {
-      const isEgreso = m.tipo === 'EGRESO';
-      const isPending = m.estado === 'PENDIENTE' || ['PENDIENTE_PAGO', 'VENCIDO'].includes(m.estado_financiero || '');
-      const isNotPagado = m.estado_financiero !== 'PAGADO';
-      return isEgreso && isPending && isNotPagado;
-    });
+    return calcularCuentasPorPagar(movimientos);
   }, [movimientos]);
+
+  const kpisConCuentasActualizadas = useMemo(() => {
+    const totalCobrar = cuentasPorCobrar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0);
+    const totalPagar = cuentasPorPagar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0);
+    return {
+      ...kpis,
+      cuentas_por_cobrar: totalCobrar,
+      cuentas_por_pagar: totalPagar,
+    };
+  }, [kpis, cuentasPorCobrar, cuentasPorPagar]);
 
   const hasMoreThanTenMovimientos = movimientos.length > 10;
   const handleRubroSubmit = async () => {
@@ -1176,7 +1177,7 @@ const FinanzasPage = () => {
           ))}
         </section>
       ) : (
-        <KpiGrid kpis={kpis} />
+        <KpiGrid kpis={kpisConCuentasActualizadas} />
       )}
 
       {loading ? (
