@@ -4,7 +4,7 @@ import Swal from "sweetalert2";
 import { Card } from "../../../shared/components/card";
 import { formatDateDDMMYYYY } from "../../../shared/utils/formatters";
 import { clienteService } from "../services/clienteService";
-import { EstadoCliente, type Cliente, type ClienteCreatePayload, type ClienteEstadoCuentaItem, type EstadoCliente as EstadoClienteType } from "../types/cliente";
+import { EstadoCliente, type Cliente, type ClienteCreatePayload, type ClienteEstadoCuentaItem, type EstadoCliente as EstadoClienteType, type ClientePagoHistorial } from "../types/cliente";
 
 type ClienteFormPayload = {
   nombre: string;
@@ -556,6 +556,35 @@ const ClientesPage = () => {
   const [cuentaError, setCuentaError] = useState<string | null>(null);
   const [cuentaOpen, setCuentaOpen] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<'clientes' | 'pagos'>('clientes');
+  const [pagos, setPagos] = useState<ClientePagoHistorial[]>([]);
+  const [pagosLoading, setPagosLoading] = useState(false);
+  const [pagosError, setPagosError] = useState<string | null>(null);
+
+  const [pagoClienteFilter, setPagoClienteFilter] = useState("");
+  const [pagoFechaDesde, setPagoFechaDesde] = useState("");
+  const [pagoFechaHasta, setPagoFechaHasta] = useState("");
+
+  const loadPagos = async () => {
+    try {
+      setPagosLoading(true);
+      setPagosError(null);
+      const data = await clienteService.getPagos();
+      setPagos(data);
+    } catch {
+      setPagos([]);
+      setPagosError("No se pudieron cargar los pagos.");
+    } finally {
+      setPagosLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'pagos') {
+      void loadPagos();
+    }
+  }, [activeTab]);
+
   const loadClientes = async () => {
     try {
       setIsLoading(true);
@@ -946,6 +975,23 @@ const ClientesPage = () => {
     .reduce<number | null>((max, current) => (max === null ? current : Math.max(max, current)), null);
   const totalCuentaPendiente = cuentaRows.reduce((acc, item) => acc + item.saldo, 0);
 
+  const filteredPagos = useMemo(() => {
+    return pagos.filter((pago) => {
+      if (pagoClienteFilter && pago.clienteId !== pagoClienteFilter) {
+        return false;
+      }
+      if (pagoFechaDesde) {
+        const pDate = pago.fecha.split('T')[0];
+        if (pDate < pagoFechaDesde) return false;
+      }
+      if (pagoFechaHasta) {
+        const pDate = pago.fecha.split('T')[0];
+        if (pDate > pagoFechaHasta) return false;
+      }
+      return true;
+    });
+  }, [pagos, pagoClienteFilter, pagoFechaDesde, pagoFechaHasta]);
+
   return (
     <div className="space-y-6">
       <section>
@@ -977,148 +1023,310 @@ const ClientesPage = () => {
         </Card>
       </section>
 
-      <Card>
-        <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-5">
-          <h2 className="text-xl font-semibold">Listado de clientes</h2>
-          <div className="flex gap-2 w-full md:w-auto">
-            <select
-              value={estadoFilter}
-              onChange={(event) => setEstadoFilter(event.target.value as typeof estadoFilter)}
-              className="w-full md:w-[180px] bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
-            >
-              {ESTADO_FILTERS.map((estado) => (
-                <option key={estado} value={estado}>
-                  {estado}
-                </option>
-              ))}
-            </select>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por nombre, segmento, ubicación o producto"
-              className="w-full md:w-[340px] bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
-            />
-            <button
-              type="button"
-              onClick={() => openNuevoCliente(handleCreate)}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
-            >
-              Nuevo cliente
-            </button>
-          </div>
-        </div>
+      <div className="flex border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab('clientes')}
+          className={`py-3 px-6 font-medium text-sm border-b-2 transition-colors ${
+            activeTab === 'clientes'
+              ? 'border-blue-600 text-blue-600 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+          }`}
+        >
+          Listado de clientes
+        </button>
+        <button
+          onClick={() => setActiveTab('pagos')}
+          className={`py-3 px-6 font-medium text-sm border-b-2 transition-colors ${
+            activeTab === 'pagos'
+              ? 'border-blue-600 text-blue-600 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+          }`}
+        >
+          Historial de pagos
+        </button>
+      </div>
 
-        {isLoading ? (
-          <div className="text-center py-10 text-slate-500">Cargando clientes...</div>
-        ) : loadError ? (
-          <div className="text-center py-10 text-red-600">{loadError}</div>
-        ) : filteredClientes.length === 0 ? (
-          <div className="text-center py-10 text-slate-500">No se encontraron clientes con ese criterio.</div>
-        ) : (
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <table className="w-full min-w-[980px] text-left">
-              <thead>
-                <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
-                  <th className="px-4 py-4 font-semibold">Cliente</th>
-                  <th className="px-4 py-4 font-semibold">Segmento</th>
-                  <th className="px-4 py-4 font-semibold">Ubicación</th>
-                  <th className="px-4 py-4 font-semibold text-right">Saldo pendiente</th>
-                  <th className="px-4 py-4 font-semibold">Estado</th>
-                  <th className="px-4 py-4 font-semibold">Última compra</th>
-                  <th className="px-4 py-4 font-semibold text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredClientes.map((cliente) => (
-                  <tr key={cliente.uid} className="border-b border-slate-100 align-top hover:bg-slate-50/80">
-                    <td className="px-4 py-4">
-                      <div className="space-y-1">
-                        <p className="font-semibold text-slate-900">{cliente.nombre}</p>
-                        <p className="text-xs text-slate-500">{normalizeText(cliente.contacto)}</p>
-                        <p className="text-xs text-slate-500">{cliente.productoPrincipal?.trim() ? cliente.productoPrincipal : <span className="text-slate-400">-</span>}</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{normalizeText(cliente.segmento)}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{normalizeText(cliente.ubicacion)}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-slate-900">{formatCurrency(cliente.saldoPendienteArs)}</td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyle[cliente.estado]}`}>
-                        {cliente.estado}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{formatDate(cliente.ultimaCompra)}</td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void Swal.fire({
-                              title: `Detalle de ${cliente.nombre}`,
-                              html: buildDetalleHtml(cliente),
-                              background: "#ffffff",
-                              color: "#0f172a",
-                              confirmButtonColor: "#2563eb",
-                              confirmButtonText: "Cerrar",
-                              width: 700,
-                              didOpen: () => {
-                                const btn = document.getElementById("btn-registrar-pago-detalle");
-                                if (btn) {
-                                  btn.addEventListener("click", () => {
-                                    Swal.close();
-                                    openRegistrarPago(cliente);
-                                  });
-                                }
-                              }
-                            })
-                          }
-                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                        >
-                          Ver detalle
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditarCliente(cliente, (payload) => handleEdit(cliente.uid, payload))}
-                          className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                        >
-                          Editar
-                        </button>
-                        <details className="relative">
-                          <summary className="flex h-8 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100">
-                            •••
-                          </summary>
-                          <div className="absolute right-0 z-10 mt-2 w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
-                            <button
-                              type="button"
-                              onClick={() => { void handleOpenCuentaCorriente(cliente); }}
-                              className="block w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50"
-                            >
-                              Cuenta corriente
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openRegistrarPago(cliente)}
-                              className="block w-full px-4 py-3 text-left text-sm text-emerald-600 hover:bg-emerald-50/50 font-medium"
-                            >
-                              Registrar pago
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleToggleEstado(cliente)}
-                              className="block w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50"
-                            >
-                              {cliente.estado === EstadoCliente.SUSPENDIDO ? "Reactivar" : "Suspender"}
-                            </button>
-                          </div>
-                        </details>
-                      </div>
-                    </td>
-                  </tr>
+      {activeTab === 'clientes' ? (
+        <Card>
+          <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-5">
+            <h2 className="text-xl font-semibold">Listado de clientes</h2>
+            <div className="flex gap-2 w-full md:w-auto">
+              <select
+                value={estadoFilter}
+                onChange={(event) => setEstadoFilter(event.target.value as typeof estadoFilter)}
+                className="w-full md:w-[180px] bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
+              >
+                {ESTADO_FILTERS.map((estado) => (
+                  <option key={estado} value={estado}>
+                    {estado}
+                  </option>
                 ))}
-              </tbody>
-            </table>
+              </select>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nombre, segmento, ubicación o producto"
+                className="w-full md:w-[340px] bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
+              />
+              <button
+                type="button"
+                onClick={() => openNuevoCliente(handleCreate)}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
+              >
+                Nuevo cliente
+              </button>
+            </div>
           </div>
-        )}
-      </Card>
+
+          {isLoading ? (
+            <div className="text-center py-10 text-slate-500">Cargando clientes...</div>
+          ) : loadError ? (
+            <div className="text-center py-10 text-red-600">{loadError}</div>
+          ) : filteredClientes.length === 0 ? (
+            <div className="text-center py-10 text-slate-500">No se encontraron clientes con ese criterio.</div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+              <table className="w-full min-w-[980px] text-left">
+                <thead>
+                  <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                    <th className="px-4 py-4 font-semibold">Cliente</th>
+                    <th className="px-4 py-4 font-semibold">Segmento</th>
+                    <th className="px-4 py-4 font-semibold">Ubicación</th>
+                    <th className="px-4 py-4 font-semibold text-right">Saldo pendiente</th>
+                    <th className="px-4 py-4 font-semibold">Estado</th>
+                    <th className="px-4 py-4 font-semibold">Última compra</th>
+                    <th className="px-4 py-4 font-semibold text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredClientes.map((cliente) => (
+                    <tr key={cliente.uid} className="border-b border-slate-100 align-top hover:bg-slate-50/80">
+                      <td className="px-4 py-4">
+                        <div className="space-y-1">
+                          <p className="font-semibold text-slate-900">{cliente.nombre}</p>
+                          <p className="text-xs text-slate-500">{normalizeText(cliente.contacto)}</p>
+                          <p className="text-xs text-slate-500">{cliente.productoPrincipal?.trim() ? cliente.productoPrincipal : <span className="text-slate-400">-</span>}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-slate-700">{normalizeText(cliente.segmento)}</td>
+                      <td className="px-4 py-4 text-sm text-slate-700">{normalizeText(cliente.ubicacion)}</td>
+                      <td className="px-4 py-4 text-right font-semibold text-slate-900">{formatCurrency(cliente.saldoPendienteArs)}</td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyle[cliente.estado]}`}>
+                          {cliente.estado}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-slate-700">{formatDate(cliente.ultimaCompra)}</td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void Swal.fire({
+                                title: `Detalle de ${cliente.nombre}`,
+                                html: buildDetalleHtml(cliente),
+                                background: "#ffffff",
+                                color: "#0f172a",
+                                confirmButtonColor: "#2563eb",
+                                confirmButtonText: "Cerrar",
+                                width: 700,
+                                didOpen: () => {
+                                  const btn = document.getElementById("btn-registrar-pago-detalle");
+                                  if (btn) {
+                                    btn.addEventListener("click", () => {
+                                      Swal.close();
+                                      openRegistrarPago(cliente);
+                                    });
+                                  }
+                                }
+                              })
+                            }
+                            className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                          >
+                            Ver detalle
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditarCliente(cliente, (payload) => handleEdit(cliente.uid, payload))}
+                            className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                          >
+                            Editar
+                          </button>
+                          <details className="relative">
+                            <summary className="flex h-8 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                              •••
+                            </summary>
+                            <div className="absolute right-0 z-10 mt-2 w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+                              <button
+                                type="button"
+                                onClick={() => { void handleOpenCuentaCorriente(cliente); }}
+                                className="block w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                Cuenta corriente
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openRegistrarPago(cliente)}
+                                className="block w-full px-4 py-3 text-left text-sm text-emerald-600 hover:bg-emerald-50/50 font-medium"
+                              >
+                                Registrar pago
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleToggleEstado(cliente)}
+                                className="block w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                {cliente.estado === EstadoCliente.SUSPENDIDO ? "Reactivar" : "Suspender"}
+                              </button>
+                            </div>
+                          </details>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : (
+        <Card>
+          <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-5">
+            <div>
+              <h2 className="text-xl font-semibold">Historial de pagos</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Visualización general de cobros y pagos realizados por clientes.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 bg-blue-50/50 border border-blue-100 rounded-xl px-4 py-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">Total pagado</span>
+              <span className="text-lg font-bold text-blue-900">{formatCurrency(filteredPagos.filter((p) => p.estado !== 'ANULADO' && p.estado !== 'CANCELADO').reduce((acc, p) => acc + p.monto, 0))}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Filtrar por Cliente</label>
+              <select
+                value={pagoClienteFilter}
+                onChange={(e) => setPagoClienteFilter(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Todos los clientes</option>
+                {clientes.map((c) => (
+                  <option key={c.uid} value={c.uid}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Fecha Desde</label>
+              <input
+                type="date"
+                value={pagoFechaDesde}
+                onChange={(e) => setPagoFechaDesde(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Fecha Hasta</label>
+              <input
+                type="date"
+                value={pagoFechaHasta}
+                onChange={(e) => setPagoFechaHasta(e.target.value)}
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setPagoClienteFilter("");
+                  setPagoFechaDesde("");
+                  setPagoFechaHasta("");
+                }}
+                className="w-full px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          </div>
+
+          {pagosLoading ? (
+            <div className="text-center py-10 text-slate-500">Cargando historial de pagos...</div>
+          ) : pagosError ? (
+            <div className="text-center py-10 text-red-600">{pagosError}</div>
+          ) : filteredPagos.length === 0 ? (
+            <div className="text-center py-10 text-slate-500">No se encontraron pagos con ese criterio.</div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-left">
+                  <thead>
+                    <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                      <th className="px-4 py-4 font-semibold">Fecha</th>
+                      <th className="px-4 py-4 font-semibold">Cliente</th>
+                      <th className="px-4 py-4 font-semibold text-right">Monto</th>
+                      <th className="px-4 py-4 font-semibold">Método</th>
+                      <th className="px-4 py-4 font-semibold">Referencia</th>
+                      <th className="px-4 py-4 font-semibold">Concepto / Descripción</th>
+                      <th className="px-4 py-4 font-semibold">Estado</th>
+                      <th className="px-4 py-4 font-semibold">Relación</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPagos.map((pago) => (
+                      <tr key={pago.id} className="border-b border-slate-100 align-top hover:bg-slate-50/80">
+                        <td className="px-4 py-4 text-sm text-slate-700 font-medium">
+                          {formatDate(pago.fecha)}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-slate-900 font-semibold">
+                          {pago.clienteNombre}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-right font-black text-slate-900">
+                          {formatCurrency(pago.monto)}
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-800 capitalize">
+                            {pago.metodoPago || 'Efectivo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-slate-700">
+                          {pago.referencia ? pago.referencia : <span className="text-slate-400">—</span>}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-slate-600">
+                          {pago.concepto}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            pago.estado === 'CONFIRMADO' || pago.estado === 'PAGADO' || pago.estado === 'COBRADO'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : pago.estado === 'PENDIENTE'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {pago.estado}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-xs text-slate-500">
+                          <div className="space-y-1">
+                            {pago.movimientoId && <p><span className="font-semibold">Mov:</span> {pago.movimientoId}</p>}
+                            {pago.comprobanteId && <p><span className="font-semibold">Recibo:</span> {pago.comprobanteId}</p>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {cuentaOpen && cuentaCliente ? createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">

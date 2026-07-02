@@ -62,3 +62,18 @@ export interface ClientePagoPayload {
     fechaVencimiento: string;
   };
 }
+
+export interface ClientePagoHistorial {
+  id: string;
+  fecha: string;
+  clienteId: string;
+  clienteNombre: string;
+  monto: number;
+  metodoPago?: string;
+  referencia?: string;
+  concepto: string;
+  estado: string;
+  movimientoId?: string;
+  comprobanteId?: string;
+}
+

@@ -496,4 +496,116 @@ export const supabaseClienteService = {
       if (chequeError) throw chequeError;
     }
   },
+
+  async getPagos(): Promise<ClientePagoHistorial[]> {
+    const { data: clientsData, error: clientsError } = await supabaseClient
+      .from('clientes')
+      .select('id, legacy_uid, nombre')
+      .is('deleted_at', null);
+
+    if (clientsError) throw clientsError;
+
+    const clientMapByDbId = new Map<string, { legacy_uid: string; nombre: string }>();
+    const clientMapByLegacyId = new Map<string, { legacy_uid: string; nombre: string }>();
+    if (clientsData) {
+      clientsData.forEach((c) => {
+        const info = { legacy_uid: c.legacy_uid, nombre: c.nombre };
+        clientMapByDbId.set(c.id, info);
+        clientMapByLegacyId.set(c.legacy_uid, info);
+      });
+    }
+
+    const { data: movements, error: movementsError } = await supabaseClient
+      .from('flujo_caja_movimientos')
+      .select(`
+        id,
+        legacy_uid,
+        fecha,
+        tipo,
+        origen_operativo,
+        descripcion,
+        monto,
+        estado,
+        metadata,
+        comprobante_id,
+        comprobantes (
+          id,
+          legacy_uid,
+          numero,
+          tipo,
+          tercero,
+          cliente_id
+        )
+      `)
+      .eq('tipo', 'INGRESO')
+      .in('origen_operativo', ['COBRANZA', 'COBRANZA_MANUAL'])
+      .is('deleted_at', null)
+      .order('fecha', { ascending: false });
+
+    if (movementsError) throw movementsError;
+
+    const pagos: ClientePagoHistorial[] = [];
+    const processedUids = new Set<string>();
+
+    if (movements) {
+      movements.forEach((row: any) => {
+        const uid = row.legacy_uid || row.id;
+        if (processedUids.has(uid)) return;
+        processedUids.add(uid);
+
+        const metadata = (row.metadata || {}) as Record<string, any>;
+        const clientLegacyIdFromMeta = metadata.cliente_legacy_uid;
+
+        let clienteNombre = 'Cliente desconocido';
+        let clienteId = '';
+
+        if (row.comprobantes) {
+          const comp = row.comprobantes;
+          if (comp.cliente_id) {
+            const clientInfo = clientMapByDbId.get(comp.cliente_id);
+            if (clientInfo) {
+              clienteNombre = clientInfo.nombre;
+              clienteId = clientInfo.legacy_uid;
+            }
+          }
+          if (!clienteId && comp.tercero) {
+            clienteNombre = comp.tercero;
+            const clientByName = clientsData?.find(c => c.nombre.toLowerCase() === comp.tercero.toLowerCase());
+            if (clientByName) {
+              clienteId = clientByName.legacy_uid;
+            }
+          }
+        }
+
+        if (!clienteId && clientLegacyIdFromMeta) {
+          const clientInfo = clientMapByLegacyId.get(clientLegacyIdFromMeta);
+          if (clientInfo) {
+            clienteNombre = clientInfo.nombre;
+            clienteId = clientInfo.legacy_uid;
+          }
+        }
+
+        if (!clienteId) {
+          // Only show client payments where the client could be resolved
+          return;
+        }
+
+        pagos.push({
+          id: uid,
+          fecha: row.fecha,
+          clienteId,
+          clienteNombre,
+          monto: Number(row.monto ?? 0),
+          metodoPago: metadata.metodo_pago || 'efectivo',
+          referencia: metadata.referencia || row.comprobantes?.numero || '',
+          concepto: row.descripcion,
+          estado: row.estado || 'CONFIRMADO',
+          movimientoId: row.legacy_uid || row.id,
+          comprobanteId: row.comprobantes?.legacy_uid || row.comprobantes?.id || undefined,
+        });
+      });
+    }
+
+    return pagos;
+  },
 };

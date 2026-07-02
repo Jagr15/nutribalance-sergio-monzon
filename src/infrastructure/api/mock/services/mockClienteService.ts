@@ -1,4 +1,4 @@
-import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload, ClientePagoPayload } from '../../../../features/clientes/types/cliente';
+import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload, ClientePagoPayload, ClientePagoHistorial } from '../../../../features/clientes/types/cliente';
 import { mockApiCall } from '../mockClient';
 import { getMockCuentaCorrienteRows, setMockCuentaCorrienteRows } from './mockStockPTService';
 import { contabilidadOperativaService } from '../../../../features/finanzas/services/contabilidadOperativaService';
@@ -208,5 +208,46 @@ export const mockClienteService = {
         cliente_nombre: client.nombre,
       });
     }
+  },
+
+  getPagos: async (): Promise<ClientePagoHistorial[]> => {
+    const mockMovs = contabilidadOperativaService.getMovimientosMock();
+    const payments = mockMovs.filter((m) => m.tipo === 'INGRESO' && (m.origen_operativo === 'COBRANZA' || m.origen_operativo === 'COBRANZA_MANUAL'));
+
+    const pagos: ClientePagoHistorial[] = [];
+    const processedUids = new Set<string>();
+
+    payments.forEach((mov) => {
+      const uid = mov.legacy_uid || mov.id || '';
+      if (!uid || processedUids.has(uid)) return;
+      processedUids.add(uid);
+
+      const metadata = (mov.metadata || {}) as Record<string, any>;
+      const clienteId = metadata.cliente_legacy_uid || '';
+      const client = mockClientes.find((c) => c.uid === clienteId);
+      const clienteNombre = client ? client.nombre : 'Cliente desconocido';
+
+      if (!clienteId) {
+        // Only show client payments where the client could be resolved
+        return;
+      }
+
+      pagos.push({
+        id: uid,
+        fecha: mov.fecha,
+        clienteId,
+        clienteNombre,
+        monto: Number(mov.monto ?? 0),
+        metodoPago: metadata.metodo_pago || 'efectivo',
+        referencia: metadata.referencia || '',
+        concepto: mov.descripcion,
+        estado: mov.estado || 'CONFIRMADO',
+        movimientoId: mov.legacy_uid || mov.id,
+        comprobanteId: mov.comprobante_id || undefined,
+      });
+    });
+
+    pagos.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    return mockApiCall(pagos);
   },
 };
