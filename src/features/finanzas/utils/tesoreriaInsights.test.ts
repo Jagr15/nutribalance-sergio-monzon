@@ -271,7 +271,7 @@ describe('buildTesoreriaInsights', () => {
       vi.setSystemTime(new Date('2026-06-18T12:00:00Z'));
     });
 
-    it('Caso A: Recibido A DEPOSITAR con fecha futura -> NO genera alerta', () => {
+    it('Caso A: Recibido A DEPOSITAR con fecha próxima (vence pronto) -> SÍ genera alerta próximo a vencer', () => {
       vi.setSystemTime(new Date('2026-07-02T12:00:00Z'));
       const cheque = {
         id: '11111',
@@ -285,6 +285,24 @@ describe('buildTesoreriaInsights', () => {
       };
       const alerts = buildWithCheque(cheque);
       const alert = alerts.find(a => a.alerta_id.includes('11111'));
+      expect(alert).toBeDefined();
+      expect(alert?.tipo).toBe('Cheque recibido próximo a vencer');
+    });
+
+    it('Caso A-2: Recibido A DEPOSITAR con fecha muy futura (> 7 días) -> NO genera alerta', () => {
+      vi.setSystemTime(new Date('2026-07-02T12:00:00Z'));
+      const cheque = {
+        id: '11111-far',
+        numero: '11111-far',
+        tipo: 'RECIBIDO',
+        tercero: 'Cliente Test',
+        importe: 15000,
+        fecha_emision: '2026-06-01',
+        fecha_vencimiento: '2026-07-20',
+        estado: 'A_DEPOSITAR',
+      };
+      const alerts = buildWithCheque(cheque);
+      const alert = alerts.find(a => a.alerta_id.includes('11111-far'));
       expect(alert).toBeUndefined();
     });
 
@@ -341,7 +359,7 @@ describe('buildTesoreriaInsights', () => {
       expect(alert).toBeUndefined();
     });
 
-    it('Caso E: Emitido con fecha de pago/vencimiento futura -> NO genera alerta', () => {
+    it('Caso E: Emitido con fecha de pago/vencimiento próxima -> SÍ genera alerta próximo a vencer', () => {
       vi.setSystemTime(new Date('2026-07-02T12:00:00Z'));
       const cheque = {
         id: '22222',
@@ -355,7 +373,74 @@ describe('buildTesoreriaInsights', () => {
       };
       const alerts = buildWithCheque(cheque);
       const alert = alerts.find(a => a.alerta_id.includes('22222'));
+      expect(alert).toBeDefined();
+      expect(alert?.tipo).toBe('Cheque emitido próximo a vencer');
+    });
+
+    it('Caso E-2: Emitido con fecha de pago/vencimiento muy futura (> 7 días) -> NO genera alerta', () => {
+      vi.setSystemTime(new Date('2026-07-02T12:00:00Z'));
+      const cheque = {
+        id: '22222-far',
+        numero: '22222-far',
+        tipo: 'EMITIDO',
+        tercero: 'Proveedor Test',
+        importe: 20000,
+        fecha_emision: '2026-06-01',
+        fecha_vencimiento: '2026-07-20',
+        estado: 'PENDIENTE',
+      };
+      const alerts = buildWithCheque(cheque);
+      const alert = alerts.find(a => a.alerta_id.includes('22222-far'));
       expect(alert).toBeUndefined();
+    });
+
+    it('Caso F: Recibido con estado escrito con variaciones -> Normaliza correctamente y genera alerta si aplica', () => {
+      vi.setSystemTime(new Date('2026-07-02T12:00:00Z'));
+      const cheque1 = {
+        id: 'var-1',
+        numero: 'var-1',
+        tipo: 'recibido',
+        tercero: 'Cliente Test',
+        importe: 700,
+        fecha_emision: '2026-06-01',
+        fecha_vencimiento: '2026-07-02',
+        estado: 'A DEPOSITAR',
+      };
+      const cheque2 = {
+        id: 'var-2',
+        numero: 'var-2',
+        tipo: 'RECIBIDO',
+        tercero: 'Cliente Test',
+        importe: 800,
+        fecha_emision: '2026-06-01',
+        fecha_vencimiento: '2026-07-01',
+        estado: 'a_depositar',
+      };
+      const cheque3 = {
+        id: 'var-3',
+        numero: 'var-3',
+        tipo: 'RECIBIDO',
+        tercero: 'Cliente Test',
+        importe: 900,
+        fecha_emision: '2026-06-01',
+        fecha_vencimiento: '02/07/2026',
+        estado: 'Recibido',
+      };
+
+      const alerts1 = buildWithCheque(cheque1);
+      const alert1 = alerts1.find(a => a.alerta_id.includes('var-1'));
+      expect(alert1).toBeDefined();
+      expect(alert1?.tipo).toBe('Cheque recibido listo para depositar');
+
+      const alerts2 = buildWithCheque(cheque2);
+      const alert2 = alerts2.find(a => a.alerta_id.includes('var-2'));
+      expect(alert2).toBeDefined();
+      expect(alert2?.tipo).toBe('Cheque recibido vencido');
+
+      const alerts3 = buildWithCheque(cheque3);
+      const alert3 = alerts3.find(a => a.alerta_id.includes('var-3'));
+      expect(alert3).toBeDefined();
+      expect(alert3?.tipo).toBe('Cheque recibido listo para depositar');
     });
   });
 });

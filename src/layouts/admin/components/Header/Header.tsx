@@ -114,7 +114,7 @@ export const Header = () => {
       <div className="flex items-center gap-4 md:gap-6 min-w-0">
         <BrandLogo variant="compact" className="shrink-0 w-[154px] md:w-[172px] max-w-none" />
         <div className="min-w-0 leading-tight">
-          <h2 className="text-xl md:text-[1.7rem] font-black truncate">Ditmona Agro</h2>
+          <h2 className="text-xl md:text-[1.7rem] font-black truncate">Ditmon Agro</h2>
           <p className="hidden md:block text-sm text-slate-500">Sistema de Producción e Inventario</p>
         </div>
       </div>

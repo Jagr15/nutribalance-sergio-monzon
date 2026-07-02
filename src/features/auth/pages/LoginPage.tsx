@@ -80,7 +80,7 @@ const LoginPage = () => {
                     <BrandLogo variant="full" className="w-full max-w-none" />
                   </div>
                   <div>
-                    <h1 className="text-4xl md:text-5xl font-black leading-tight text-emerald-950">Ditmona Agro</h1>
+                    <h1 className="text-4xl md:text-5xl font-black leading-tight text-emerald-950">Ditmon Agro</h1>
                     <p className="mt-2 text-amber-700 text-lg md:text-xl font-semibold">Sistema de Producción e Inventario</p>
                     <p className="mt-4 text-slate-600 max-w-xl leading-relaxed">
                       Sistema operativo de producción, inventario y trazabilidad para coordinar la operación con mayor control y visibilidad.

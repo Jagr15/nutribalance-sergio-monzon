@@ -81,6 +81,86 @@ const monthKey = (isoLike: string) => {
 const currentMonthKey = monthKey(today.toISOString());
 
 const normalize = (value: string | null | undefined) => (value ?? '').trim().toLowerCase();
+
+const normalizeChequeTipo = (value: unknown): 'EMITIDO' | 'RECIBIDO' => {
+  const text = String(value ?? '').trim().toUpperCase();
+  return text === 'EMITIDO' ? 'EMITIDO' : 'RECIBIDO';
+};
+
+const normalizeChequeEstado = (value: unknown): EstadoChequeTesoreria => {
+  const clean = String(value ?? '').trim().toUpperCase().replace(/[\s_]+/g, '_');
+  if (clean === 'PENDIENTE' || clean === 'RECIBIDO') return 'PENDIENTE';
+  if (clean === 'A_DEPOSITAR') return 'A_DEPOSITAR';
+  if (clean === 'DEPOSITADO') return 'DEPOSITADO';
+  if (clean === 'COBRADO' || clean === 'PAGADO') return 'COBRADO';
+  if (clean === 'RECHAZADO') return 'RECHAZADO';
+  if (clean === 'ENDOSADO') return 'ENDOSADO';
+  if (clean === 'VENCIDO') return 'VENCIDO';
+  return 'PENDIENTE';
+};
+
+const normalizeToLocalDateStr = (dateVal: any): string => {
+  if (!dateVal) return '';
+  
+  if (dateVal instanceof Date) {
+    if (Number.isNaN(dateVal.getTime())) return '';
+    const year = dateVal.getFullYear();
+    const month = String(dateVal.getMonth() + 1).padStart(2, '0');
+    const day = String(dateVal.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  const str = String(dateVal).trim();
+  if (!str) return '';
+
+  const datePart = str.split(/[T ]/)[0];
+
+  const slashParts = datePart.split('/');
+  if (slashParts.length === 3) {
+    let day = slashParts[0];
+    let month = slashParts[1];
+    let year = slashParts[2];
+    if (year.length === 2) year = '20' + year;
+    day = day.padStart(2, '0');
+    month = month.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  const dashParts = datePart.split('-');
+  if (dashParts.length === 3) {
+    let year = dashParts[0];
+    let month = dashParts[1];
+    let day = dashParts[2];
+    
+    if (year.length === 2 && day.length === 4) {
+      const temp = year;
+      year = day;
+      day = temp;
+    }
+    
+    day = day.padStart(2, '0');
+    month = month.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  const parsed = new Date(str);
+  if (!Number.isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  return '';
+};
+
+const getDiffDays = (dateStr1: string, dateStr2: string): number => {
+  if (!dateStr1 || !dateStr2) return 0;
+  const d1 = new Date(`${dateStr1}T00:00:00`);
+  const d2 = new Date(`${dateStr2}T00:00:00`);
+  if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime())) return 0;
+  return Math.round((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+};
 const resolveRubroNombre = (
   row: Pick<FlujoCajaRubroRow, 'categoria' | 'centro_costo' | 'origen_operativo' | 'descripcion'>,
   rubros: RubroFinancieroCatalogo[],
@@ -244,13 +324,21 @@ export const buildCarteraClientes = (
         proximo_vencimiento: null,
       };
       current.saldo_pendiente += num(row.saldo);
-      const venc = row.fecha_vencimiento ? new Date(row.fecha_vencimiento) : null;
-      if (venc && (!current.proximo_vencimiento || venc.getTime() < new Date(current.proximo_vencimiento).getTime())) {
+      const vencStr = row.fecha_vencimiento ? normalizeToLocalDateStr(row.fecha_vencimiento) : '';
+      if (vencStr && (!current.proximo_vencimiento || vencStr < normalizeToLocalDateStr(current.proximo_vencimiento))) {
         current.proximo_vencimiento = row.fecha_vencimiento;
       }
       current.ultima_compra = ventasByCliente.get(row.cliente_id ?? '')?.ultimaCompra ?? current.ultima_compra;
-      if (venc) {
-        const diffDays = Math.floor((today.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
+      if (vencStr) {
+        const localToday = new Date();
+        const getLocalDateStr = (d: Date) => {
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        };
+        const todayStr = getLocalDateStr(localToday);
+        const diffDays = getDiffDays(todayStr, vencStr);
         if (diffDays > 0) {
           current.dias_atraso = current.dias_atraso === null ? diffDays : Math.max(current.dias_atraso, diffDays);
         }
@@ -265,37 +353,55 @@ export const buildChequesTesoreria = (rows: ChequeTesoreriaSourceRow[]): { emiti
   const mapRow = (row: ChequeTesoreriaSourceRow): ChequeTesoreriaRow => ({
     id: row.id,
     numero: row.numero,
-    tipo: row.tipo,
+    tipo: normalizeChequeTipo(row.tipo),
     tercero: row.tercero,
     importe: num(row.importe),
-    fecha_emision: row.fecha_emision,
-    fecha_vencimiento: row.fecha_vencimiento,
-    fecha_acreditacion: row.fecha_acreditacion ?? null,
-    estado: row.estado,
+    fecha_emision: normalizeToLocalDateStr(row.fecha_emision),
+    fecha_vencimiento: normalizeToLocalDateStr(row.fecha_vencimiento),
+    fecha_acreditacion: row.fecha_acreditacion ? normalizeToLocalDateStr(row.fecha_acreditacion) : null,
+    estado: normalizeChequeEstado(row.estado),
     cliente_id: row.cliente_id,
     cliente_nombre: row.cliente_nombre,
   });
 
-  const emitidos = rows.filter((row) => row.tipo === 'EMITIDO').map(mapRow).sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime());
-  const recibidos = rows.filter((row) => row.tipo === 'RECIBIDO').map(mapRow).sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime());
+  const emitidos = rows.filter((row) => normalizeChequeTipo(row.tipo) === 'EMITIDO').map(mapRow).sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime());
+  const recibidos = rows.filter((row) => normalizeChequeTipo(row.tipo) === 'RECIBIDO').map(mapRow).sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime());
   return { emitidos, recibidos };
 };
 
 export const buildProyeccionFlujo = (inputs: FlujoProjectionInputs): ProyeccionFlujoRow[] => {
+  const localToday = new Date();
+  const getLocalDateStr = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const todayStr = getLocalDateStr(localToday);
+
   const cxcPorVencer = inputs.cartera
     .filter((row) => row.proximo_vencimiento && row.saldo_pendiente > 0)
-    .map((row) => ({
-      saldo: row.saldo_pendiente,
-      days: Math.max(0, Math.ceil((new Date(row.proximo_vencimiento as string).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))),
-    }));
-  const chequesRecibidos = inputs.chequesRecibidos.map((row) => ({
-    saldo: row.importe,
-    days: Math.max(0, Math.ceil((new Date(row.fecha_vencimiento).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))),
-  }));
-  const chequesEmitidos = inputs.chequesEmitidos.map((row) => ({
-    saldo: row.importe,
-    days: Math.max(0, Math.ceil((new Date(row.fecha_vencimiento).getTime() - today.getTime()) / (1000 * 60 * 60 * 24))),
-  }));
+    .map((row) => {
+      const venceStr = normalizeToLocalDateStr(row.proximo_vencimiento);
+      return {
+        saldo: row.saldo_pendiente,
+        days: Math.max(0, getDiffDays(venceStr, todayStr)),
+      };
+    });
+  const chequesRecibidos = inputs.chequesRecibidos.map((row) => {
+    const venceStr = normalizeToLocalDateStr(row.fecha_vencimiento);
+    return {
+      saldo: row.importe,
+      days: Math.max(0, getDiffDays(venceStr, todayStr)),
+    };
+  });
+  const chequesEmitidos = inputs.chequesEmitidos.map((row) => {
+    const venceStr = normalizeToLocalDateStr(row.fecha_vencimiento);
+    return {
+      saldo: row.importe,
+      days: Math.max(0, getDiffDays(venceStr, todayStr)),
+    };
+  });
 
   const horizons = [0, 7, 15, 30] as const;
   return horizons.map((days) => {
@@ -330,17 +436,14 @@ export const buildAlertasTesoreria = (inputs: {
   };
   const todayStr = getLocalDateStr(today);
 
-  const parseLocalDate = (dateStr: string) => {
-    return dateStr ? dateStr.split('T')[0] : '';
-  };
-
   // Emitidos
   inputs.chequesEmitidos.forEach((cheque) => {
-    if (['COBRADO', 'DEPOSITADO', 'ENDOSADO', 'PAGADO'].includes(cheque.estado)) {
+    const normalizedEstado = normalizeChequeEstado(cheque.estado);
+    if (['COBRADO', 'DEPOSITADO', 'ENDOSADO', 'PAGADO'].includes(normalizedEstado)) {
       return;
     }
 
-    const fechaRef = parseLocalDate(cheque.fecha_vencimiento);
+    const fechaRef = normalizeToLocalDateStr(cheque.fecha_vencimiento);
     if (!fechaRef) return;
 
     // Vencido
@@ -377,18 +480,39 @@ export const buildAlertasTesoreria = (inputs: {
         fecha_evento: cheque.fecha_vencimiento,
       });
     }
+    // Próximo a vencer
+    else {
+      const diff = getDiffDays(fechaRef, todayStr);
+      if (diff > 0 && diff <= 7) {
+        alerts.push({
+          alerta_id: `tes-cheque-emitido-proximo-${cheque.id}`,
+          tipo: 'Cheque emitido próximo a vencer',
+          prioridad: 'media',
+          area: 'tesoreria',
+          titulo: `Cheque emitido ${cheque.numero} próximo a vencer`,
+          dato_asociado: {
+            cheque: cheque.numero,
+            tercero: cheque.tercero,
+            importe: cheque.importe,
+            vence: cheque.fecha_vencimiento,
+          },
+          fecha_evento: cheque.fecha_vencimiento,
+        });
+      }
+    }
   });
 
   // Recibidos
   inputs.chequesRecibidos.forEach((cheque) => {
-    if (['COBRADO', 'DEPOSITADO', 'ENDOSADO', 'PAGADO'].includes(cheque.estado)) {
+    const normalizedEstado = normalizeChequeEstado(cheque.estado);
+    if (['COBRADO', 'DEPOSITADO', 'ENDOSADO', 'PAGADO'].includes(normalizedEstado)) {
       return;
     }
 
-    const fechaRef = parseLocalDate(cheque.fecha_vencimiento);
+    const fechaRef = normalizeToLocalDateStr(cheque.fecha_vencimiento);
     if (!fechaRef) return;
 
-    if (cheque.estado === 'RECHAZADO') {
+    if (normalizedEstado === 'RECHAZADO') {
       alerts.push({
         alerta_id: `tes-cheque-recibido-rechazado-${cheque.id}`,
         tipo: 'Cheque recibido rechazado',
@@ -440,22 +564,57 @@ export const buildAlertasTesoreria = (inputs: {
         fecha_evento: cheque.fecha_vencimiento,
       });
     }
+    // Próximo a vencer / listo para depositar
+    else {
+      const diff = getDiffDays(fechaRef, todayStr);
+      if (diff > 0 && diff <= 7) {
+        alerts.push({
+          alerta_id: `tes-cheque-recibido-proximo-${cheque.id}`,
+          tipo: 'Cheque recibido próximo a vencer',
+          prioridad: 'media',
+          area: 'tesoreria',
+          titulo: `Cheque recibido ${cheque.numero} próximo a vencer`,
+          dato_asociado: {
+            cheque: cheque.numero,
+            tercero: cheque.tercero,
+            importe: cheque.importe,
+            vence: cheque.fecha_vencimiento,
+          },
+          fecha_evento: cheque.fecha_vencimiento,
+        });
+      }
+    }
   });
 
   // Risk of overdraft check
-  const pendingChequesEmitidos = inputs.chequesEmitidos.filter((cheque) => cheque.estado === 'PENDIENTE' || cheque.estado === 'A_DEPOSITAR');
-  const pendingChequesRecibidos = inputs.chequesRecibidos.filter((cheque) => cheque.estado === 'PENDIENTE' || cheque.estado === 'A_DEPOSITAR');
+  const pendingChequesEmitidos = inputs.chequesEmitidos.filter((cheque) => {
+    const est = normalizeChequeEstado(cheque.estado);
+    return est === 'PENDIENTE' || est === 'A_DEPOSITAR';
+  });
+  const pendingChequesRecibidos = inputs.chequesRecibidos.filter((cheque) => {
+    const est = normalizeChequeEstado(cheque.estado);
+    return est === 'PENDIENTE' || est === 'A_DEPOSITAR';
+  });
 
   const saldoProyectadoAlVencimiento = (cheque: ChequeTesoreriaRow) => {
-    const vencimiento = new Date(cheque.fecha_vencimiento).getTime();
+    const vencimientoStr = normalizeToLocalDateStr(cheque.fecha_vencimiento);
     const saldoCxc = inputs.cartera
-      .filter((row) => row.proximo_vencimiento && row.saldo_pendiente > 0 && new Date(row.proximo_vencimiento).getTime() <= vencimiento)
+      .filter((row) => {
+        const rowVencStr = normalizeToLocalDateStr(row.proximo_vencimiento);
+        return rowVencStr && row.saldo_pendiente > 0 && rowVencStr <= vencimientoStr;
+      })
       .reduce((acc, row) => acc + row.saldo_pendiente, 0);
     const recibidosHastaVencimiento = pendingChequesRecibidos
-      .filter((row) => new Date(row.fecha_vencimiento).getTime() <= vencimiento)
+      .filter((row) => {
+        const rowVencStr = normalizeToLocalDateStr(row.fecha_vencimiento);
+        return rowVencStr && rowVencStr <= vencimientoStr;
+      })
       .reduce((acc, row) => acc + row.importe, 0);
     const emitidosHastaVencimiento = pendingChequesEmitidos
-      .filter((row) => row.id !== cheque.id && new Date(row.fecha_vencimiento).getTime() <= vencimiento)
+      .filter((row) => {
+        const rowVencStr = normalizeToLocalDateStr(row.fecha_vencimiento);
+        return row.id !== cheque.id && rowVencStr && rowVencStr <= vencimientoStr;
+      })
       .reduce((acc, row) => acc + row.importe, 0);
     return inputs.saldoActual + saldoCxc + recibidosHastaVencimiento - emitidosHastaVencimiento - cheque.importe;
   };
