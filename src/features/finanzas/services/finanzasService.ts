@@ -782,7 +782,7 @@ export const finanzasService = {
       };
     });
 
-    const customMockMovimientos: MovimientoFinanciero[] = contabilidadOperativaService.getMockMovimientos ? contabilidadOperativaService.getMockMovimientos() : contabilidadOperativaService.getMovimientosMock().map((row: any): MovimientoFinanciero => ({
+    const customMockMovimientos: MovimientoFinanciero[] = contabilidadOperativaService.getMovimientosMock().map((row: any): MovimientoFinanciero => ({
       uid: row.legacy_uid || row.id || crypto.randomUUID(),
       fecha: row.fecha,
       tipo: row.tipo,

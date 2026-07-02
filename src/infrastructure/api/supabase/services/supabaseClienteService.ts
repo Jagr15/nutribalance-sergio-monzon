@@ -1,4 +1,4 @@
-import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload, EstadoCliente, ClientePagoPayload } from '../../../../features/clientes/types/cliente';
+import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload, EstadoCliente, ClientePagoPayload, ClientePagoHistorial } from '../../../../features/clientes/types/cliente';
 import { supabaseClient } from '../client';
 
 interface ClienteRow {

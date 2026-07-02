@@ -10,6 +10,7 @@ import type {
   ProyeccionFlujoRow,
   RubroFinanciero,
   RubroFinancieroCatalogo,
+  EstadoChequeTesoreria,
 } from '../types';
 
 const num = (value: unknown) => Number(value ?? 0);
