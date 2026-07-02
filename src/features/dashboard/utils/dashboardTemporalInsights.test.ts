@@ -230,4 +230,86 @@ describe('dashboardTemporalInsights', () => {
     expect(result.vencidosCobrar).toBe(150);
     expect(result.vencidosPagar).toBe(0);
   });
+
+  describe('Requisitos de negocio para Flujo Neto (Flujo Real)', () => {
+    it('Entrada de stock sin egreso registrado: no cambia flujo neto', () => {
+      const result = buildDashboardTemporalInsights(
+        [], // ordenes
+        [], // movimientosPT
+        [], // alertas
+        'MES', // periodo
+        now, // date
+        [], // movimientosFlujo (empty)
+        [], // comprobantes
+        [{ cantidad_actual: 10, costo_unitario: 5 }], // stockLotesMP
+        [] // stockPT
+      );
+
+      expect(result.ingresosReales).toBe(0);
+      expect(result.egresosReales).toBe(0);
+      expect(result.flujoReal).toBe(0);
+    });
+
+    it('Egreso registrado en movimientos: disminuye flujo neto', () => {
+      const movimientosFlujo = [
+        { fecha: '2026-06-18T10:00:00Z', tipo: 'EGRESO', monto: 1500, estado: 'CONFIRMADO', estado_financiero: 'PAGADO', deleted_at: null }
+      ];
+
+      const result = buildDashboardTemporalInsights(
+        [], [], [], 'MES', now, movimientosFlujo, [], [], []
+      );
+
+      expect(result.ingresosReales).toBe(0);
+      expect(result.egresosReales).toBe(1500);
+      expect(result.flujoReal).toBe(-1500);
+    });
+
+    it('Ingreso registrado en movimientos: aumenta flujo neto', () => {
+      const movimientosFlujo = [
+        { fecha: '2026-06-18T10:00:00Z', tipo: 'INGRESO', monto: 2000, estado: 'CONFIRMADO', estado_financiero: 'COBRADO', deleted_at: null }
+      ];
+
+      const result = buildDashboardTemporalInsights(
+        [], [], [], 'MES', now, movimientosFlujo, [], [], []
+      );
+
+      expect(result.ingresosReales).toBe(2000);
+      expect(result.egresosReales).toBe(0);
+      expect(result.flujoReal).toBe(2000);
+    });
+
+    it('Ingresos menos egresos da el flujo neto correcto', () => {
+      const movimientosFlujo = [
+        { fecha: '2026-06-18T10:00:00Z', tipo: 'INGRESO', monto: 2000, estado: 'CONFIRMADO', estado_financiero: 'COBRADO', deleted_at: null },
+        { fecha: '2026-06-18T11:00:00Z', tipo: 'EGRESO', monto: 500, estado: 'CONFIRMADO', estado_financiero: 'PAGADO', deleted_at: null }
+      ];
+
+      const result = buildDashboardTemporalInsights(
+        [], [], [], 'MES', now, movimientosFlujo, [], [], []
+      );
+
+      expect(result.flujoReal).toBe(1500);
+    });
+
+    it('El filtro por periodo afecta ingresos y egresos según la fecha del movimiento', () => {
+      const movimientosFlujo = [
+        { fecha: '2026-06-18T10:00:00Z', tipo: 'INGRESO', monto: 1000, estado: 'CONFIRMADO', estado_financiero: 'COBRADO', deleted_at: null },
+        { fecha: '2026-06-17T10:00:00Z', tipo: 'EGRESO', monto: 500, estado: 'CONFIRMADO', estado_financiero: 'PAGADO', deleted_at: null }
+      ];
+
+      const resultHoy = buildDashboardTemporalInsights(
+        [], [], [], 'HOY', now, movimientosFlujo, [], [], []
+      );
+      expect(resultHoy.ingresosReales).toBe(1000);
+      expect(resultHoy.egresosReales).toBe(0);
+      expect(resultHoy.flujoReal).toBe(1000);
+
+      const resultMes = buildDashboardTemporalInsights(
+        [], [], [], 'MES', now, movimientosFlujo, [], [], []
+      );
+      expect(resultMes.ingresosReales).toBe(1000);
+      expect(resultMes.egresosReales).toBe(500);
+      expect(resultMes.flujoReal).toBe(500);
+    });
+  });
 });
