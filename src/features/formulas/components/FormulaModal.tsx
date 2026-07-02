@@ -194,7 +194,7 @@ const FormulaModal: React.FC<Props> = ({ formula, formulas = [], onClose, onSucc
 
   const hasStatusChanged = useMemo(() => formula ? estaActiva !== formula.esta_activa : false, [estaActiva, formula]);
 
-  const isSumaValida = Math.abs(sumaTotal - 100) < 0.01;
+  const isSumaValida = Math.abs(sumaTotal - 100) <= 0.015;
   const sumDelta = Number((100 - sumaTotal).toFixed(2));
   const sumMessage = isSumaValida
     ? 'La fórmula está completa al 100%.'

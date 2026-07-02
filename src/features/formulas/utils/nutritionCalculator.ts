@@ -43,7 +43,7 @@ export const calculateFormulaNutrition = (
   const warnings: string[] = [];
   const inclusionTotal = ingredientes.reduce((acc, item) => acc + safeNumber(item.porcentaje), 0);
 
-  if (Math.abs(inclusionTotal - 100) > 0.01) {
+  if (Math.abs(inclusionTotal - 100) > 0.015) {
     warnings.push(`La suma de ingredientes es ${inclusionTotal.toFixed(2)}% (debe ser 100%).`);
   }
 

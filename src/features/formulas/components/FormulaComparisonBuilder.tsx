@@ -55,7 +55,7 @@ const getDraftSaveError = (draft: FormulaDraftState) => {
   }
 
   const sumaIngredientes = validIngredients.reduce((acc, ingredient) => acc + (Number(ingredient.porcentaje) || 0), 0);
-  if (Math.abs(sumaIngredientes - 100) > 0.01) {
+  if (Math.abs(sumaIngredientes - 100) > 0.015) {
     return 'La suma de ingredientes debe ser 100%.';
   }
 
