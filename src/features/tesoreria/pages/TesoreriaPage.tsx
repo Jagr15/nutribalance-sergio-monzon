@@ -13,13 +13,19 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('es-AR', { style
 const formatDate = (value?: string | null) => value ? formatDateDDMMYYYY(value) : 'Sin dato';
 const dayMs = 24 * 60 * 60 * 1000;
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 const isDeprecatedText = (value?: string | null) => {
   const text = (value ?? '').trim().toLowerCase();
   if (!text) return true;
   return ['prueba', 'test', 'demo', 'www', 'tttt'].some((keyword) => text.includes(keyword));
 };
-const isDueToday = (value: string) => value.slice(0, 10) === todayIso();
+const isPastOrDue = (value: string) => value.slice(0, 10) <= todayIso();
 
 const normalizeSearchText = (value: string) => value
   .normalize('NFD')
@@ -300,8 +306,8 @@ const TesoreriaPage = () => {
     const cobrosPeriodo = movimientos
       .filter((movimiento) => movimiento.tipo === 'INGRESO' && /venta|cobranza|cobro/i.test(`${movimiento.descripcion} ${movimiento.origen_operativo ?? ''}`))
       .reduce((acc, movimiento) => acc + Number(movimiento.monto ?? 0), 0);
-    const chequesRecibidosHoy = filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'RECIBIDO' && (normalizeChequeEstado(cheque.estado) === 'A_DEPOSITAR' || (normalizeChequeEstado(cheque.estado) === 'PENDIENTE' && isDueToday(cheque.fecha_vencimiento))));
-    const chequesEmitidosHoy = filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'EMITIDO' && normalizeChequeEstado(cheque.estado) === 'PENDIENTE' && isDueToday(cheque.fecha_vencimiento));
+    const chequesRecibidosHoy = filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'RECIBIDO' && ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && isPastOrDue(cheque.fecha_vencimiento));
+    const chequesEmitidosHoy = filteredCheques.filter((cheque) => normalizeChequeTipo(cheque.tipo) === 'EMITIDO' && ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && isPastOrDue(cheque.fecha_vencimiento));
     const ctasCobrar = kpis.cuentas_por_cobrar || tesoreria.carteraClientes.reduce((acc, row) => acc + row.saldo_pendiente, 0);
     const cajaDisponible = kpis.saldo_actual;
 
@@ -316,17 +322,13 @@ const TesoreriaPage = () => {
   }, [filteredCheques, kpis.cuentas_por_cobrar, kpis.saldo_actual, movimientos, reportes.ingresos_pt_por_producto, tesoreria.carteraClientes]);
 
   const alertaPrioritaria = useMemo(() => {
-    const emitidoVenceHoy = filteredChequesEmitidos.find((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && isDueToday(cheque.fecha_vencimiento));
+    const emitidoVenceHoy = filteredChequesEmitidos.find((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && isPastOrDue(cheque.fecha_vencimiento));
     if (emitidoVenceHoy) {
       return `Cheque emitido ${emitidoVenceHoy.numero} por cubrir hoy por ${formatCurrency(emitidoVenceHoy.importe)}.`;
     }
-    const recibidoListoDepositar = filteredChequesRecibidos.find((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && isDueToday(cheque.fecha_vencimiento));
+    const recibidoListoDepositar = filteredChequesRecibidos.find((cheque) => ['PENDIENTE', 'A_DEPOSITAR'].includes(normalizeChequeEstado(cheque.estado)) && isPastOrDue(cheque.fecha_vencimiento));
     if (recibidoListoDepositar) {
       return `Cheque recibido ${recibidoListoDepositar.numero} listo para depositar por ${formatCurrency(recibidoListoDepositar.importe)}.`;
-    }
-    const recibidoADepositar = filteredChequesRecibidos.find((cheque) => normalizeChequeEstado(cheque.estado) === 'A_DEPOSITAR');
-    if (recibidoADepositar) {
-      return `Cheque recibido ${recibidoADepositar.numero} listo para depositar por ${formatCurrency(recibidoADepositar.importe)}.`;
     }
     return null;
   }, [filteredChequesEmitidos, filteredChequesRecibidos]);
@@ -430,8 +432,8 @@ const TesoreriaPage = () => {
         <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Ventas del período</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.ventasPeriodo)}</p></Card>
         <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Cobros del período</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.cobrosPeriodo)}</p></Card>
         <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Cuentas por cobrar</p><p className="mt-2 text-2xl font-semibold">{formatCurrency(cajasYcobranza.ctasCobrar)}</p></Card>
-        <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Recibidos hoy</p><p className="mt-2 text-2xl font-semibold">{cajasYcobranza.chequesRecibidosHoy.length}</p></Card>
-        <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Emitidos hoy</p><p className="mt-2 text-2xl font-semibold">{cajasYcobranza.chequesEmitidosHoy.length}</p></Card>
+        <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Listos para depositar hoy</p><p className="mt-2 text-2xl font-semibold">{cajasYcobranza.chequesRecibidosHoy.length}</p></Card>
+        <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Listos para pagar hoy</p><p className="mt-2 text-2xl font-semibold">{cajasYcobranza.chequesEmitidosHoy.length}</p></Card>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">

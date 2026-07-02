@@ -5,7 +5,7 @@ vi.hoisted(() => {
   vi.setSystemTime(new Date('2026-06-18T12:00:00Z'));
 });
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import type { Cliente } from '../../clientes/types/cliente';
 import type { MovimientoStockPT } from '../../productos/types';
 import { buildTesoreriaInsights } from './tesoreriaInsights';
@@ -252,5 +252,110 @@ describe('buildTesoreriaInsights', () => {
     // 8. Cheque emitido cerrado (pagado/cobrado/etc.): no alerta
     const emPagado = alertas.find((a) => a.alerta_id.includes('ch-emitido-pagado'));
     expect(emPagado).toBeUndefined();
+  });
+
+  describe('Alertas de cheques en Tesorería - Casos de Prueba Reales', () => {
+    const buildWithCheque = (cheque: any) => {
+      return buildTesoreriaInsights(
+        [] as never,
+        [] as never,
+        [] as never,
+        [] as never,
+        [] as never,
+        [cheque] as never,
+        100000,
+      ).alertasTesoreria;
+    };
+
+    afterAll(() => {
+      vi.setSystemTime(new Date('2026-06-18T12:00:00Z'));
+    });
+
+    it('Caso A: Recibido A DEPOSITAR con fecha futura -> NO genera alerta', () => {
+      vi.setSystemTime(new Date('2026-07-02T12:00:00Z'));
+      const cheque = {
+        id: '11111',
+        numero: '11111',
+        tipo: 'RECIBIDO',
+        tercero: 'Cliente Test',
+        importe: 15000,
+        fecha_emision: '2026-06-01',
+        fecha_vencimiento: '2026-07-07',
+        estado: 'A_DEPOSITAR',
+      };
+      const alerts = buildWithCheque(cheque);
+      const alert = alerts.find(a => a.alerta_id.includes('11111'));
+      expect(alert).toBeUndefined();
+    });
+
+    it('Caso B: Recibido A DEPOSITAR con fecha actual (hoy) -> SÍ genera alerta listo para depositar', () => {
+      vi.setSystemTime(new Date('2026-07-07T12:00:00Z'));
+      const cheque = {
+        id: '11111',
+        numero: '11111',
+        tipo: 'RECIBIDO',
+        tercero: 'Cliente Test',
+        importe: 15000,
+        fecha_emision: '2026-06-01',
+        fecha_vencimiento: '2026-07-07',
+        estado: 'A_DEPOSITAR',
+      };
+      const alerts = buildWithCheque(cheque);
+      const alert = alerts.find(a => a.alerta_id.includes('11111'));
+      expect(alert).toBeDefined();
+      expect(alert?.tipo).toBe('Cheque recibido listo para depositar');
+    });
+
+    it('Caso C: Recibido A DEPOSITAR con fecha vencida -> SÍ genera alerta vencido', () => {
+      vi.setSystemTime(new Date('2026-07-08T12:00:00Z'));
+      const cheque = {
+        id: '11111',
+        numero: '11111',
+        tipo: 'RECIBIDO',
+        tercero: 'Cliente Test',
+        importe: 15000,
+        fecha_emision: '2026-06-01',
+        fecha_vencimiento: '2026-07-07',
+        estado: 'A_DEPOSITAR',
+      };
+      const alerts = buildWithCheque(cheque);
+      const alert = alerts.find(a => a.alerta_id.includes('11111'));
+      expect(alert).toBeDefined();
+      expect(alert?.tipo).toBe('Cheque recibido vencido');
+    });
+
+    it('Caso D: Recibido COBRADO con fecha vencida -> NO genera alerta', () => {
+      vi.setSystemTime(new Date('2026-07-08T12:00:00Z'));
+      const cheque = {
+        id: '11111',
+        numero: '11111',
+        tipo: 'RECIBIDO',
+        tercero: 'Cliente Test',
+        importe: 15000,
+        fecha_emision: '2026-06-01',
+        fecha_vencimiento: '2026-07-07',
+        estado: 'COBRADO',
+      };
+      const alerts = buildWithCheque(cheque);
+      const alert = alerts.find(a => a.alerta_id.includes('11111'));
+      expect(alert).toBeUndefined();
+    });
+
+    it('Caso E: Emitido con fecha de pago/vencimiento futura -> NO genera alerta', () => {
+      vi.setSystemTime(new Date('2026-07-02T12:00:00Z'));
+      const cheque = {
+        id: '22222',
+        numero: '22222',
+        tipo: 'EMITIDO',
+        tercero: 'Proveedor Test',
+        importe: 20000,
+        fecha_emision: '2026-06-01',
+        fecha_vencimiento: '2026-07-07',
+        estado: 'PENDIENTE',
+      };
+      const alerts = buildWithCheque(cheque);
+      const alert = alerts.find(a => a.alerta_id.includes('22222'));
+      expect(alert).toBeUndefined();
+    });
   });
 });

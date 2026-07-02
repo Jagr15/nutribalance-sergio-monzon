@@ -1,4 +1,4 @@
-import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload, EstadoCliente } from '../../../../features/clientes/types/cliente';
+import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload, EstadoCliente, ClientePagoPayload } from '../../../../features/clientes/types/cliente';
 import { supabaseClient } from '../client';
 
 interface ClienteRow {
@@ -343,5 +343,157 @@ export const supabaseClienteService = {
 
     if (error) throw error;
     return true;
+  },
+
+  async registrarPago(payload: ClientePagoPayload): Promise<void> {
+    // 1. Resolve client database UUID
+    const clienteDbId = await resolveClienteDbId(payload.clienteId);
+    if (!clienteDbId) throw new Error('Cliente no encontrado');
+
+    // Fetch client name for referencing
+    const { data: clientObj } = await supabaseClient
+      .from('clientes')
+      .select('nombre')
+      .eq('id', clienteDbId)
+      .single<{ nombre: string }>();
+    const clientName = clientObj?.nombre || 'Cliente';
+
+    // 2. Fetch outstanding/pending facturas
+    let query = supabaseClient
+      .from('comprobantes')
+      .select('id,legacy_uid,saldo,total,estado')
+      .eq('cliente_id', clienteDbId)
+      .eq('tipo', 'FACTURA_VENTA')
+      .gt('saldo', 0)
+      .is('deleted_at', null)
+      .order('fecha_emision', { ascending: true });
+
+    if (payload.comprobanteId) {
+      // Find database ID for the specific comprobante legacy_uid
+      const { data: compObj } = await supabaseClient
+        .from('comprobantes')
+        .select('id')
+        .eq('legacy_uid', payload.comprobanteId)
+        .is('deleted_at', null)
+        .maybeSingle<{ id: string }>();
+
+      if (compObj) {
+        query = query.eq('id', compObj.id);
+      }
+    }
+
+    const { data: facturas, error: facturasError } = await query;
+    if (facturasError) throw facturasError;
+
+    const totalOutstanding = (facturas ?? []).reduce((acc, f) => acc + Number(f.saldo ?? 0), 0);
+    if (payload.monto > totalOutstanding) {
+      throw new Error(`El monto del pago (${payload.monto}) no puede superar el saldo pendiente del cliente (${totalOutstanding}).`);
+    }
+
+    // 3. Deduct payment from facturas
+    let remainingAmount = payload.monto;
+    const updates: Promise<any>[] = [];
+
+    for (const factura of (facturas ?? [])) {
+      if (remainingAmount <= 0) break;
+
+      const currentSaldo = Number(factura.saldo ?? 0);
+      const applied = Math.min(remainingAmount, currentSaldo);
+      const newSaldo = Number((currentSaldo - applied).toFixed(2));
+      remainingAmount = Number((remainingAmount - applied).toFixed(2));
+
+      const newEstado = newSaldo <= 0 ? 'PAGADO' : factura.estado;
+
+      updates.push(
+        supabaseClient
+          .from('comprobantes')
+          .update({
+            saldo: newSaldo,
+            estado: newEstado,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', factura.id) as any
+      );
+    }
+
+    await Promise.all(updates);
+
+    // 4. Create RECIBO type comprobante
+    const receiptLegacyUid = `comp-recibo-${Math.floor(Math.random() * 1000000)}`;
+    const { data: receipt, error: receiptError } = await supabaseClient
+      .from('comprobantes')
+      .insert({
+        legacy_uid: receiptLegacyUid,
+        tipo: 'RECIBO',
+        numero: payload.referencia || `REC-${Date.now()}`,
+        fecha_emision: payload.fechaPago,
+        fecha_vencimiento: payload.fechaPago,
+        tercero: clientName,
+        estado: 'PAGADO',
+        total: payload.monto,
+        saldo: 0,
+        cliente_id: clienteDbId,
+      })
+      .select('id')
+      .single<{ id: string }>();
+
+    if (receiptError) throw receiptError;
+
+    // 5. Fetch category id if exists (optional but nice)
+    let cfId = null;
+    try {
+      const { data: cat } = await supabaseClient
+        .from('categorias_financieras')
+        .select('id')
+        .eq('legacy_uid', 'cat-ventas')
+        .maybeSingle();
+      cfId = cat?.id || null;
+    } catch {
+      // Ignorar si no existe
+    }
+
+    // 6. Create flujo_caja_movimientos record
+    const movementLegacyUid = `fcm-pago-cliente-${receiptLegacyUid}`;
+    const { error: fcmError } = await supabaseClient
+      .from('flujo_caja_movimientos')
+      .insert({
+        legacy_uid: movementLegacyUid,
+        fecha: payload.fechaPago,
+        tipo: 'INGRESO',
+        origen_operativo: 'COBRANZA',
+        descripcion: payload.observaciones?.trim() || `Cobro cliente - Ref: ${payload.referencia || 'S/R'}`,
+        monto: payload.monto,
+        comprobante_id: receipt.id,
+        estado: payload.metodoPago === 'cheque' ? 'PENDIENTE' : 'CONFIRMADO',
+        metadata: {
+          cliente_legacy_uid: payload.clienteId,
+          metodo_pago: payload.metodoPago,
+          referencia: payload.referencia || null,
+        },
+        categoria_id: cfId,
+      });
+
+    if (fcmError) throw fcmError;
+
+    // 7. Create cheque in tesoreria_cheques if method is cheque
+    if (payload.metodoPago === 'cheque' && payload.cheque) {
+      const chequeLegacyUid = `ch-recibido-${Math.floor(Math.random() * 1000000)}`;
+      const { error: chequeError } = await supabaseClient
+        .from('tesoreria_cheques')
+        .insert({
+          legacy_uid: chequeLegacyUid,
+          numero: payload.cheque.numero,
+          tipo: 'RECIBIDO',
+          tercero: clientName,
+          importe: payload.monto,
+          fecha_emision: payload.cheque.fechaEmision,
+          fecha_vencimiento: payload.cheque.fechaVencimiento,
+          estado: 'PENDIENTE',
+          cliente_id: clienteDbId,
+          cliente_nombre: clientName,
+        });
+
+      if (chequeError) throw chequeError;
+    }
   },
 };

@@ -217,7 +217,7 @@ const resetMockStockPTState = () => {
   cuentaCorrienteMock = movimientosMock
     .filter((movimiento) => movimiento.tipo === 'SALIDA' && Boolean(movimiento.cliente_id) && Number(movimiento.valor_total ?? 0) > 0)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .map(buildCuentaCorrienteRow);
+    .map((m) => buildCuentaCorrienteRow(m));
   nextUid = seedStockPT.length + 1;
   nextMovimiento = movimientosMock.length + 1;
 };
@@ -277,6 +277,9 @@ export const resetMockStockPTService = resetMockStockPTState;
 
 export const getMockStockPTRows = () => structuredClone(stockPTMock);
 export const getMockCuentaCorrienteRows = () => structuredClone(cuentaCorrienteMock);
+export const setMockCuentaCorrienteRows = (rows: MockCuentaCorrienteRow[]) => {
+  cuentaCorrienteMock = rows;
+};
 
 export const mockStockPTService = {
   getAll: async (): Promise<StockProductoTerminado[]> => mockApiCall([...stockPTMock], 450),

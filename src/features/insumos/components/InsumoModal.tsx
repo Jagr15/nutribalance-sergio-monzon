@@ -51,7 +51,7 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
   const costoValue = parseNumericInput(costo);
   const proteinaValue = parseNumericInput(proteinaBruta);
   const isUmbralInvalid = umbralValue === null || umbralValue <= 0;
-  const isProteinaInvalid = proteinaBruta.trim() !== '' && (proteinaValue === null || proteinaValue < 0 || proteinaValue > 100);
+  const isProteinaInvalid = proteinaBruta.trim() !== '' && (proteinaValue === null || proteinaValue < 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +72,7 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
       return;
     }
     if (isProteinaInvalid) {
-      setSubmitError('La proteína bruta debe estar entre 0 y 100.');
+      setSubmitError('La proteína bruta debe ser mayor o igual a 0.');
       return;
     }
     const duplicated = existingInsumos.some(
@@ -252,7 +252,6 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
               <input
                 type="number"
                 min="0"
-                max="100"
                 step="0.0001"
                 value={proteinaBruta}
                 onChange={(e) => setProteinaBruta(e.target.value)}
@@ -264,7 +263,7 @@ const InsumoModal: React.FC<InsumoModalProps> = ({ insumo, existingInsumos, onCl
               </p>
               {isProteinaInvalid ? (
                 <p className="text-[9px] text-red-500 font-bold ml-1 uppercase tracking-tighter italic">
-                  * La proteína bruta debe estar entre 0 y 100
+                  * La proteína bruta debe ser mayor o igual a 0
                 </p>
               ) : null}
             </div>

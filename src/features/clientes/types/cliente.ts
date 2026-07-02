@@ -46,3 +46,19 @@ export interface ClienteEstadoCuentaItem {
 
 export type ClienteCreatePayload = Omit<Cliente, 'uid' | 'createdAt' | 'updatedAt'>;
 export type ClienteUpdatePayload = Partial<Omit<Cliente, 'uid'>>;
+
+export interface ClientePagoPayload {
+  clienteId: string; // legacy_uid del cliente
+  monto: number;
+  fechaPago: string;
+  metodoPago: 'efectivo' | 'transferencia' | 'cheque' | 'otro';
+  referencia?: string;
+  observaciones?: string;
+  comprobanteId?: string; // legacy_uid de la factura específica
+  cheque?: {
+    numero: string;
+    banco: string;
+    fechaEmision: string;
+    fechaVencimiento: string;
+  };
+}

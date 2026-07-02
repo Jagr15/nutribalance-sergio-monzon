@@ -1,5 +1,5 @@
 import { ApiService } from '../../../infrastructure/api';
-import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload } from '../types/cliente';
+import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload, ClientePagoPayload } from '../types/cliente';
 
 export const clienteService = {
   findAll: (): Promise<Cliente[]> => ApiService.clientes.getAll(),
@@ -14,4 +14,6 @@ export const clienteService = {
   update: (uid: string, data: ClienteUpdatePayload): Promise<Cliente> => ApiService.clientes.update(uid, data),
 
   delete: (uid: string): Promise<boolean> => ApiService.clientes.delete(uid),
+
+  registrarPago: (payload: ClientePagoPayload): Promise<void> => ApiService.clientes.registrarPago(payload),
 };

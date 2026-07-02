@@ -103,4 +103,14 @@ describe('calculateFormulaNutrition', () => {
 
     expect(result.totals.proteina_bruta_pct).toBeCloseTo(32.1666785, 6);
   });
+
+  it('permite valores de proteína bruta mayores a 100 sin limitar el cálculo', () => {
+    const insumosConPBAlta: Insumo[] = [
+      { ...insumosBase[0], proteina_bruta_pct: 200 },
+      insumosBase[1]
+    ];
+    const result = calculateFormulaNutrition(ingredientesBase, insumosConPBAlta);
+    // 60% * 200 + 40% * 44 = 120 + 17.6 = 137.6
+    expect(result.totals.proteina_bruta_pct).toBeCloseTo(137.6, 6);
+  });
 });

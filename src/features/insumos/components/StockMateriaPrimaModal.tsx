@@ -64,6 +64,14 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
 
   const silosMateriaPrima = useMemo(() => getMateriaPrimaSilos(silos), [silos]);
   const selectedInsumo = useMemo(() => insumos.find((insumo) => insumo.uid === formData.id_insumo) ?? null, [formData.id_insumo, insumos]);
+  const refCost = useMemo(() => {
+    if (!selectedInsumo) return null;
+    return selectedInsumo.costo_por_kg ?? selectedInsumo.ref_costo_unitario ?? selectedInsumo.costo ?? null;
+  }, [selectedInsumo]);
+
+  const hasNoCostoReferencia = useMemo(() => {
+    return selectedInsumo !== null && (refCost === null || refCost <= 0);
+  }, [selectedInsumo, refCost]);
   const costoPreview = useMemo(() => {
     const cantidad = parseNumericInput(String(formData.cantidad));
     const costoUnitario = parseNumericInput(String(formData.costo_unitario));
@@ -98,6 +106,10 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     const cantidad = parseNumericInput(String(formData.cantidad));
     if (cantidad === null || cantidad <= 0) {
       setSubmitError('La cantidad debe ser mayor a 0.');
+      return;
+    }
+    if (hasNoCostoReferencia) {
+      setSubmitError('Este insumo no tiene costo de referencia configurado. Configúralo en Maestro de Insumos antes de registrar el ingreso.');
       return;
     }
     const costoUnitarioManual = parseNumericInput(String(formData.costo_unitario));
@@ -169,13 +181,22 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                 onFocus={() => setActiveDropdown('insumo')}
                 onChange={(e) => {
                   setSearchs({ ...searchs, insumo: e.target.value });
-                  if(formData.nombre_insumo) setFormData({...formData, nombre_insumo: '', id_insumo: ''});
+                  if(formData.nombre_insumo) setFormData({...formData, nombre_insumo: '', id_insumo: '', costo_unitario: ''});
                 }}
               />
               {activeDropdown === 'insumo' && (
                 <div className="absolute top-full left-0 w-full bg-white border border-slate-200 rounded-xl z-50 max-h-40 overflow-y-auto shadow-xl mt-1">
                   {insumos.filter(i => i.nombre.toLowerCase().includes(searchs.insumo.toLowerCase())).map(i => (
-                    <div key={i.uid} onClick={() => { setFormData({ ...formData, id_insumo: i.uid, nombre_insumo: i.nombre }); setActiveDropdown(null); }}
+                    <div key={i.uid} onClick={() => {
+                      const refCostVal = i.costo_por_kg ?? i.ref_costo_unitario ?? i.costo ?? null;
+                      setFormData({
+                        ...formData,
+                        id_insumo: i.uid,
+                        nombre_insumo: i.nombre,
+                        costo_unitario: refCostVal !== null ? String(refCostVal) : ''
+                      });
+                      setActiveDropdown(null);
+                    }}
                       className="px-4 py-2 text-[11px] text-slate-600 hover:bg-blue-50 hover:text-blue-700 cursor-pointer transition-colors">{i.nombre}</div>
                   ))}
                 </div>
@@ -263,32 +284,33 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
               </p>
             </div>
             <div className="space-y-1">
-              <label className={labelStyles}>Costo unitario <span className="normal-case font-medium text-slate-400">(ARS / kg, opcional)</span></label>
+              <label className={labelStyles}>
+                Costo de referencia{' '}
+                <span className="normal-case font-medium text-slate-400">
+                  (ARS / {selectedInsumo?.unidad_medida?.toLowerCase() ?? 'kg'})
+                </span>
+              </label>
               <input
-                type="number"
-                step="any"
-                className={inputStyles}
+                type="text"
+                disabled
+                className={`${inputStyles} bg-slate-100 cursor-not-allowed font-mono`}
                 placeholder="0.00"
-                value={formData.costo_unitario}
-                onChange={(e) => setFormData({ ...formData, costo_unitario: normalizeNumericInputChange(e.target.value) })}
+                value={
+                  selectedInsumo && refCost !== null
+                    ? refCost.toFixed(2)
+                    : '0.00'
+                }
               />
-              {selectedInsumo ? (
+              {selectedInsumo && !hasNoCostoReferencia ? (
                 <p className="text-[11px] text-slate-500 px-1">
-                  {typeof selectedInsumo.costo_por_kg === 'number' && selectedInsumo.costo_por_kg > 0
-                    ? `Usando costo de referencia del insumo: ARS ${selectedInsumo.costo_por_kg.toFixed(2)} / kg`
-                    : typeof selectedInsumo.ref_costo_unitario === 'number' && selectedInsumo.ref_costo_unitario > 0
-                      ? `Usando costo de referencia del insumo: ARS ${selectedInsumo.ref_costo_unitario.toFixed(2)} / kg`
-                      : typeof selectedInsumo.costo === 'number' && selectedInsumo.costo > 0
-                        ? `Usando costo de referencia del insumo: ARS ${selectedInsumo.costo.toFixed(2)} / kg`
-                        : 'No hay costo de referencia en el catálogo de insumos.'
-                  }
+                  Costo tomado del insumo: ARS {refCost?.toFixed(2)} / {selectedInsumo.unidad_medida?.toLowerCase() ?? 'kg'}
                 </p>
               ) : null}
-              {costoPreview?.advertencia ? (
-                <p className={`text-[11px] px-1 ${costoPreview.fuente_costo === 'sin_costo' ? 'text-amber-600' : 'text-blue-600'}`}>
-                  {costoPreview.advertencia}
+              {hasNoCostoReferencia && (
+                <p className="text-[11px] text-red-500 font-bold px-1">
+                  Este insumo no tiene costo de referencia configurado. Configúralo en Maestro de Insumos antes de registrar el ingreso.
                 </p>
-              ) : null}
+              )}
             </div>
             <div className="space-y-1">
               <label className={labelStyles}><FiCalendar /> Fecha Ingreso</label>
@@ -300,7 +322,7 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             <button type="button" onClick={onClose} className="px-8 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-100 hover:bg-red-50 hover:text-red-500 transition-all duration-200 ease-out">
               Cancelar
             </button>
-            <button type="submit" disabled={isLoading || isSubmitting} className="flex-1 h-12 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all duration-200 ease-out disabled:opacity-30">
+            <button type="submit" disabled={isLoading || isSubmitting || hasNoCostoReferencia} className="flex-1 h-12 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all duration-200 ease-out disabled:opacity-30">
               <FiSave size={14} /> {isLoading || isSubmitting ? 'Procesando Registro...' : 'Confirmar Ingreso a Almacén'}
             </button>
           </footer>

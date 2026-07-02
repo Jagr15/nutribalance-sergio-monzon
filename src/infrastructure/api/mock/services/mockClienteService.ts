@@ -1,6 +1,8 @@
-import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload } from '../../../../features/clientes/types/cliente';
+import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload, ClientePagoPayload } from '../../../../features/clientes/types/cliente';
 import { mockApiCall } from '../mockClient';
-import { getMockCuentaCorrienteRows } from './mockStockPTService';
+import { getMockCuentaCorrienteRows, setMockCuentaCorrienteRows } from './mockStockPTService';
+import { contabilidadOperativaService } from '../../../../features/finanzas/services/contabilidadOperativaService';
+import { tesoreriaService } from '../../../../features/tesoreria/services/tesoreriaService';
 
 let mockClientes: Cliente[] = [
   {
@@ -118,5 +120,93 @@ export const mockClienteService = {
       cliente.uid === uid ? { ...cliente, estaActivo: false, estado: 'Suspendido' } : cliente
     );
     return mockApiCall(true);
+  },
+
+  registrarPago: async (payload: ClientePagoPayload): Promise<void> => {
+    // 1. Find client
+    const client = mockClientes.find((c) => c.uid === payload.clienteId);
+    if (!client) throw new Error('Cliente no encontrado');
+
+    // 2. Fetch outstanding cuenta corriente rows for this client
+    let rows = getMockCuentaCorrienteRows().filter((row) => row.cliente_id === payload.clienteId && row.saldo > 0);
+
+    const totalOutstanding = rows.reduce((acc, r) => acc + r.saldo, 0);
+    if (payload.monto > totalOutstanding) {
+      throw new Error(`El monto del pago (${payload.monto}) no puede superar el saldo pendiente del cliente (${totalOutstanding}).`);
+    }
+
+    if (payload.comprobanteId) {
+      rows = rows.filter((row) => row.id === payload.comprobanteId);
+    } else {
+      // Sort oldest first
+      rows.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+    }
+
+    let remainingAmount = payload.monto;
+    const updatedCcRows = getMockCuentaCorrienteRows().map((row) => {
+      const isTarget = rows.some((r) => r.id === row.id);
+      if (isTarget && remainingAmount > 0) {
+        const applied = Math.min(remainingAmount, row.saldo);
+        const newSaldo = Number((row.saldo - applied).toFixed(2));
+        remainingAmount = Number((remainingAmount - applied).toFixed(2));
+        return {
+          ...row,
+          saldo: newSaldo,
+          estado: newSaldo <= 0 ? 'PAGADO' : row.estado,
+        };
+      }
+      return row;
+    });
+
+    // Write back updated rows
+    setMockCuentaCorrienteRows(updatedCcRows);
+
+    // Append receipt row
+    const receiptRow = {
+      cliente_id: payload.clienteId,
+      id: `cxc-recibo-${Math.floor(Math.random() * 1000000)}`,
+      fecha: payload.fechaPago,
+      producto: 'PAGO CLIENTE',
+      cantidad: null,
+      importe: payload.monto,
+      saldo: 0,
+      referencia: payload.referencia || null,
+      estado: 'PAGADO',
+      comprobanteNumero: payload.referencia || null,
+    };
+    setMockCuentaCorrienteRows([receiptRow, ...getMockCuentaCorrienteRows()]);
+
+    // Create flow movement
+    const movementLegacyUid = `fcm-pago-cliente-mock-${receiptRow.id}`;
+    await contabilidadOperativaService.ensureMovimiento({
+      legacy_uid: movementLegacyUid,
+      fecha: payload.fechaPago,
+      tipo: 'INGRESO',
+      origen_operativo: 'COBRANZA',
+      descripcion: payload.observaciones?.trim() || `Cobro cliente - Ref: ${payload.referencia || 'S/R'}`,
+      monto: payload.monto,
+      comprobante_id: receiptRow.id,
+      estado: payload.metodoPago === 'cheque' ? 'PENDIENTE' : 'CONFIRMADO',
+      metadata: {
+        cliente_legacy_uid: payload.clienteId,
+        metodo_pago: payload.metodoPago,
+        referencia: payload.referencia || null,
+      },
+    });
+
+    // Create cheque if method is cheque
+    if (payload.metodoPago === 'cheque' && payload.cheque) {
+      await tesoreriaService.createCheque({
+        numero: payload.cheque.numero,
+        tipo: 'RECIBIDO',
+        tercero: client.nombre,
+        importe: payload.monto,
+        fecha_emision: payload.cheque.fechaEmision,
+        fecha_vencimiento: payload.cheque.fechaVencimiento,
+        estado: 'PENDIENTE',
+        cliente_id: client.uid,
+        cliente_nombre: client.nombre,
+      });
+    }
   },
 };

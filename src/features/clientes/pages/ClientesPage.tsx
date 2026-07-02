@@ -497,7 +497,7 @@ const openNuevoCliente = (onCreate: (payload: ClienteFormPayload) => Promise<voi
 
 const buildDetalleHtml = (cliente: Cliente) => `
   <div style="text-align:left; color:#0f172a; font-size:14px;">
-    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:18px 20px; border-radius:20px; background:linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%); color:#fff; margin-bottom:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px 20px; border-radius:20px; background:linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%); color:#fff; margin-bottom:16px;">
       <div style="min-width:0;">
         <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
           <h2 style="margin:0; font-size:22px; line-height:1.1; font-weight:800;">${normalizeText(cliente.nombre)}</h2>
@@ -505,6 +505,11 @@ const buildDetalleHtml = (cliente: Cliente) => `
         </div>
         <p style="margin:8px 0 0; color:rgba(255,255,255,0.82); font-size:13px; font-weight:600;">${normalizeText(cliente.segmento)}</p>
       </div>
+      ${cliente.saldoPendienteArs > 0 ? `
+        <button id="btn-registrar-pago-detalle" style="flex-shrink:0; background:#22c55e; color:#fff; border:none; padding:10px 16px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(34,197,94,0.3); transition:background .15s;">
+          Registrar Pago
+        </button>
+      ` : ''}
     </div>
 
     <div style="display:grid; gap:14px;">
@@ -670,6 +675,255 @@ const ClientesPage = () => {
     }
   };
 
+  const openRegistrarPago = (cliente: Cliente, targetComprobanteId?: string) => {
+    if (cliente.saldoPendienteArs <= 0) {
+      void Swal.fire({
+        icon: "info",
+        title: "Sin saldo pendiente",
+        text: "Este cliente no tiene saldo pendiente actualmente.",
+        background: "#ffffff",
+        color: "#0f172a",
+        confirmButtonColor: "#2563eb",
+      });
+      return;
+    }
+
+    void Swal.fire({
+      title: "Cargando facturas...",
+      didOpen: () => {
+        Swal.showLoading();
+      },
+      allowOutsideClick: false,
+    });
+
+    clienteService.getEstadoCuentaCliente(cliente.uid).then((rows) => {
+      const outstandingFacturas = rows.filter((r) => r.saldo > 0);
+
+      void Swal.fire({
+        title: "Registrar pago de cliente",
+        html: `
+          <div style="text-align:left; color:#0f172a; font-size:14px;">
+            <style>
+              .pago-modal-shell { display:grid; gap:16px; }
+              .pago-modal-card { padding:16px; border-radius:18px; border:1px solid #e2e8f0; background:#fff; box-shadow:0 10px 24px rgba(15, 23, 42, 0.04); }
+              .pago-modal-field { display:grid; gap:6px; margin-bottom:12px; }
+              .pago-modal-label { display:block; font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#334155; }
+              .pago-modal-input { width:100%; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; border-radius:12px; padding:10px 12px; outline:none; transition:border-color .15s ease, box-shadow .15s ease; }
+              .pago-modal-input:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+              .cheque-fields-container { display:none; border:1px dashed #cbd5e1; border-radius:16px; padding:14px; background:#f8fafc; margin-top:10px; }
+            </style>
+            <div class="pago-modal-shell">
+              <div class="pago-modal-card">
+                <div class="pago-modal-field">
+                  <label class="pago-modal-label">Cliente</label>
+                  <input class="pago-modal-input" value="${cliente.nombre}" readonly style="background:#f1f5f9; color:#64748b;" />
+                </div>
+                <div class="pago-modal-field">
+                  <label class="pago-modal-label">Saldo pendiente actual</label>
+                  <input class="pago-modal-input" value="${formatCurrency(cliente.saldoPendienteArs)}" readonly style="background:#f8fafc; font-weight:700; color:#1d4ed8;" />
+                </div>
+                <div class="pago-modal-field">
+                  <label for="pago-factura" class="pago-modal-label">Aplicar a Factura Específica</label>
+                  <select id="pago-factura" class="pago-modal-input">
+                    <option value="">-- Aplicar automáticamente al saldo más antiguo --</option>
+                    ${outstandingFacturas.map((f) => `
+                      <option value="${f.id}" ${targetComprobanteId === f.id ? "selected" : ""}>
+                        Factura ${f.comprobanteNumero || f.id} (Saldo: ${formatCurrency(f.saldo)})
+                      </option>
+                    `).join("")}
+                  </select>
+                </div>
+                <div class="pago-modal-field">
+                  <label for="pago-monto" class="pago-modal-label">Monto del pago</label>
+                  <input id="pago-monto" type="number" step="any" min="0.01" class="pago-modal-input" placeholder="Monto a abonar" />
+                </div>
+                <div class="pago-modal-field">
+                  <label for="pago-fecha" class="pago-modal-label">Fecha de pago</label>
+                  <input id="pago-fecha" type="date" class="pago-modal-input" value="${new Date().toISOString().slice(0, 10)}" />
+                </div>
+                <div class="pago-modal-field">
+                  <label for="pago-metodo" class="pago-modal-label">Método de pago</label>
+                  <select id="pago-metodo" class="pago-modal-input">
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+                
+                <div id="pago-cheque-fields" class="cheque-fields-container">
+                  <p style="margin:0 0 10px; font-size:11px; font-weight:800; text-transform:uppercase; color:#64748b;">Datos del Cheque Recibido</p>
+                  <div class="pago-modal-field">
+                    <label for="ch-numero" class="pago-modal-label">Número de Cheque</label>
+                    <input id="ch-numero" class="pago-modal-input" placeholder="Ej: 11111" />
+                  </div>
+                  <div class="pago-modal-field">
+                    <label for="ch-banco" class="pago-modal-label">Banco</label>
+                    <input id="ch-banco" class="pago-modal-input" placeholder="Ej: Banco Nación" />
+                  </div>
+                  <div class="pago-modal-field">
+                    <label for="ch-fecha-emision" class="pago-modal-label">Fecha de Emisión</label>
+                    <input id="ch-fecha-emision" type="date" class="pago-modal-input" value="${new Date().toISOString().slice(0, 10)}" />
+                  </div>
+                  <div class="pago-modal-field">
+                    <label for="ch-fecha-vencimiento" class="pago-modal-label">Fecha de Depósito/Cobro</label>
+                    <input id="ch-fecha-vencimiento" type="date" class="pago-modal-input" value="${new Date().toISOString().slice(0, 10)}" />
+                  </div>
+                </div>
+
+                <div class="pago-modal-field" style="margin-top:12px;">
+                  <label for="pago-referencia" class="pago-modal-label">Referencia / Comprobante</label>
+                  <input id="pago-referencia" class="pago-modal-input" placeholder="Ej: Transferencia Nº 45398" />
+                </div>
+                <div class="pago-modal-field">
+                  <label for="pago-observaciones" class="pago-modal-label">Observaciones</label>
+                  <textarea id="pago-observaciones" rows="3" class="pago-modal-input" style="min-height:70px;" placeholder="Notas adicionales"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        `,
+        background: "#f8fafc",
+        color: "#0f172a",
+        showCancelButton: true,
+        showCloseButton: true,
+        confirmButtonColor: "#2563eb",
+        cancelButtonColor: "#334155",
+        confirmButtonText: "Registrar Pago",
+        cancelButtonText: "Cancelar",
+        width: 600,
+        didOpen: () => {
+          const metodoSelect = document.getElementById("pago-metodo") as HTMLSelectElement | null;
+          const chequeFields = document.getElementById("pago-cheque-fields") as HTMLDivElement | null;
+          if (metodoSelect && chequeFields) {
+            metodoSelect.addEventListener("change", () => {
+              if (metodoSelect.value === "cheque") {
+                chequeFields.style.display = "block";
+              } else {
+                chequeFields.style.display = "none";
+              }
+            });
+          }
+        },
+        preConfirm: () => {
+          const montoRaw = (document.getElementById("pago-monto") as HTMLInputElement | null)?.value;
+          const monto = Number(montoRaw);
+          if (!montoRaw || Number.isNaN(monto) || monto <= 0) {
+            Swal.showValidationMessage("El monto debe ser un número mayor a 0.");
+            return;
+          }
+
+          if (monto > cliente.saldoPendienteArs) {
+            Swal.showValidationMessage(`El monto del pago no puede superar el saldo pendiente ($${cliente.saldoPendienteArs.toLocaleString('es-AR')}).`);
+            return;
+          }
+
+          const fechaPago = (document.getElementById("pago-fecha") as HTMLInputElement | null)?.value;
+          if (!fechaPago) {
+            Swal.showValidationMessage("La fecha de pago es obligatoria.");
+            return;
+          }
+
+          const metodoPago = (document.getElementById("pago-metodo") as HTMLSelectElement | null)?.value as any;
+          if (!metodoPago) {
+            Swal.showValidationMessage("El método de pago es obligatorio.");
+            return;
+          }
+
+          const referencia = (document.getElementById("pago-referencia") as HTMLInputElement | null)?.value.trim() ?? "";
+          const observaciones = (document.getElementById("pago-observaciones") as HTMLTextAreaElement | null)?.value.trim() ?? "";
+          const comprobanteId = (document.getElementById("pago-factura") as HTMLSelectElement | null)?.value || undefined;
+
+          let cheque = undefined;
+          if (metodoPago === "cheque") {
+            const chNumero = (document.getElementById("ch-numero") as HTMLInputElement | null)?.value.trim() ?? "";
+            const chBanco = (document.getElementById("ch-banco") as HTMLInputElement | null)?.value.trim() ?? "";
+            const chFechaEmision = (document.getElementById("ch-fecha-emision") as HTMLInputElement | null)?.value ?? "";
+            const chFechaVencimiento = (document.getElementById("ch-fecha-vencimiento") as HTMLInputElement | null)?.value ?? "";
+
+            if (!chNumero) {
+              Swal.showValidationMessage("El número de cheque es obligatorio.");
+              return;
+            }
+            if (!chBanco) {
+              Swal.showValidationMessage("El banco del cheque es obligatorio.");
+              return;
+            }
+            if (!chFechaEmision) {
+              Swal.showValidationMessage("La fecha de emisión del cheque es obligatoria.");
+              return;
+            }
+            if (!chFechaVencimiento) {
+              Swal.showValidationMessage("La fecha de cobro/depósito del cheque es obligatoria.");
+              return;
+            }
+
+            cheque = {
+              numero: chNumero,
+              banco: chBanco,
+              fechaEmision: chFechaEmision,
+              fechaVencimiento: chFechaVencimiento,
+            };
+          }
+
+          return {
+            clienteId: cliente.uid,
+            monto,
+            fechaPago,
+            metodoPago,
+            referencia,
+            observaciones,
+            comprobanteId,
+            cheque,
+          };
+        }
+      }).then(async (result) => {
+        if (!result.isConfirmed || !result.value) return;
+
+        try {
+          Swal.fire({
+            title: "Registrando pago...",
+            didOpen: () => {
+              Swal.showLoading();
+            },
+            allowOutsideClick: false,
+          });
+
+          await clienteService.registrarPago(result.value);
+
+          await loadClientes();
+
+          void Swal.fire({
+            icon: "success",
+            title: "Pago registrado",
+            text: "El pago fue aplicado correctamente.",
+            background: "#ffffff",
+            color: "#0f172a",
+            confirmButtonColor: "#2563eb",
+          });
+        } catch (e: any) {
+          void Swal.fire({
+            icon: "error",
+            title: "Error al registrar pago",
+            text: e instanceof Error ? e.message : "Intente nuevamente más tarde.",
+            background: "#ffffff",
+            color: "#0f172a",
+            confirmButtonColor: "#2563eb",
+          });
+        }
+      });
+    }).catch(() => {
+      void Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "No se pudieron obtener las facturas pendientes.",
+        background: "#ffffff",
+        color: "#0f172a",
+        confirmButtonColor: "#2563eb",
+      });
+    });
+  };
+
   const filteredClientes = useMemo(() => {
     const query = search.trim().toLowerCase();
     const estadoNormalizado = estadoFilter.toLowerCase();
@@ -806,6 +1060,15 @@ const ClientesPage = () => {
                               confirmButtonColor: "#2563eb",
                               confirmButtonText: "Cerrar",
                               width: 700,
+                              didOpen: () => {
+                                const btn = document.getElementById("btn-registrar-pago-detalle");
+                                if (btn) {
+                                  btn.addEventListener("click", () => {
+                                    Swal.close();
+                                    openRegistrarPago(cliente);
+                                  });
+                                }
+                              }
                             })
                           }
                           className="h-8 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
@@ -830,6 +1093,13 @@ const ClientesPage = () => {
                               className="block w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50"
                             >
                               Cuenta corriente
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openRegistrarPago(cliente)}
+                              className="block w-full px-4 py-3 text-left text-sm text-emerald-600 hover:bg-emerald-50/50 font-medium"
+                            >
+                              Registrar pago
                             </button>
                             <button
                               type="button"
@@ -861,13 +1131,27 @@ const ClientesPage = () => {
                   Estado de cuenta simple basado en comprobantes y salidas registradas para este cliente.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleCloseCuentaCorriente}
-                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
-              >
-                Cerrar
-              </button>
+              <div className="flex gap-2">
+                {cuentaCliente.saldoPendienteArs > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCloseCuentaCorriente();
+                      openRegistrarPago(cuentaCliente);
+                    }}
+                    className="rounded-full bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-sm"
+                  >
+                    Registrar Pago
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCloseCuentaCorriente}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
 
             <div className="border-b border-slate-200 px-6 py-4">
@@ -901,8 +1185,8 @@ const ClientesPage = () => {
               ) : (
                 <div className="overflow-x-auto rounded-2xl border border-slate-200">
                   <table className="w-full min-w-[1080px] text-left">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                     <thead>
+                       <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-[0.22em] text-slate-500">
                         <th className="px-4 py-3">Fecha</th>
                         <th className="px-4 py-3">Producto / concepto</th>
                         <th className="px-4 py-3">Cantidad</th>
@@ -910,6 +1194,7 @@ const ClientesPage = () => {
                         <th className="px-4 py-3 text-right">Saldo pendiente</th>
                         <th className="px-4 py-3">Referencia</th>
                         <th className="px-4 py-3">Estado</th>
+                        <th className="px-4 py-3 text-right">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -928,6 +1213,20 @@ const ClientesPage = () => {
                             <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
                               {row.estado || '—'}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {row.saldo > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleCloseCuentaCorriente();
+                                  openRegistrarPago(cuentaCliente, row.id);
+                                }}
+                                className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold"
+                              >
+                                Pagar
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
