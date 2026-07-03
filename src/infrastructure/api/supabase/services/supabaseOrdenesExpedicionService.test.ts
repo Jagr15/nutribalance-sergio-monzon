@@ -48,6 +48,7 @@ describe('supabaseOrdenesExpedicionService', () => {
                 precio_unitario_venta: 150,
                 total_venta: 3750,
                 moneda: 'ARS',
+                kilos_reales_cargados: 24.8,
                 estado: 'pendiente',
                 motivo: 'Venta',
                 referencia: 'R-1',
@@ -69,6 +70,7 @@ describe('supabaseOrdenesExpedicionService', () => {
       legacy_uid: 'exp-1',
       cliente_nombre: 'Cliente Demo',
       presentacion: 'GRANEL',
+      kilos_reales_cargados: 24.8,
     });
   });
 
@@ -266,6 +268,46 @@ describe('supabaseOrdenesExpedicionService', () => {
     expect(row.cantidad_kg).toBe(1250);
   });
 
+  it('marca una orden como lista registrando los kilos reales', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        id: 'id-1',
+        legacy_uid: 'exp-1',
+        numero_expedicion: 'EXP-2026-000001',
+        stock_pt_id: 'pt-db-1',
+        producto_id: 'prod-1',
+        nombre_producto: 'Producto 1',
+        lote_pt: 'L-1',
+        cliente_id: 'cli-db-1',
+        clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
+        presentacion_key: 'GRANEL_KG',
+        presentacion: 'GRANEL',
+        cantidad: 25,
+        cantidad_original: 25,
+        unidad_cantidad: 'kg',
+        cantidad_kg: 25,
+        kilos_reales_cargados: 24.8,
+        precio_unitario_venta: 150,
+        total_venta: 3750,
+        moneda: 'ARS',
+        estado: 'lista',
+        motivo: 'Venta',
+        referencia: 'R-1',
+        created_at: '2026-06-18T10:00:00Z',
+        updated_at: '2026-06-18T10:05:00Z',
+      }],
+      error: null,
+    });
+
+    const row = await supabaseOrdenesExpedicionService.marcarLista('id-1', 24.8);
+    expect(mockRpc).toHaveBeenCalledWith('marcar_lista_orden_expedicion', {
+      p_orden_id: 'id-1',
+      p_kilos_reales_cargados: 24.8,
+    });
+    expect(row.estado).toBe('lista');
+    expect(row.kilos_reales_cargados).toBe(24.8);
+  });
+
   it('despacha una orden', async () => {
     const ordenDespachada = {
       id: 'id-1',
@@ -286,6 +328,7 @@ describe('supabaseOrdenesExpedicionService', () => {
       precio_unitario_venta: 150,
       total_venta: 3750,
       moneda: 'ARS',
+      kilos_reales_cargados: 24.8,
       estado: 'despachada',
       motivo: 'Venta',
       referencia: 'R-1',

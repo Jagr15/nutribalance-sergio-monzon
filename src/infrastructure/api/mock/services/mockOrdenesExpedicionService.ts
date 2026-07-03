@@ -44,6 +44,7 @@ const buildExpedicion = (input: {
   moneda?: string | null;
   fecha_programada?: string | null;
   cantidad_empaques?: number | null;
+  kilos_reales_cargados?: number | null;
   motivo: string | null;
   referencia: string | null;
   created_at: string;
@@ -73,6 +74,7 @@ const buildExpedicion = (input: {
   tipo_empaque: buildPresentacionPersistencia(input.presentacion_key, input.cantidad_empaques ?? 0).tipo_empaque,
   capacidad_empaque_kg: buildPresentacionPersistencia(input.presentacion_key, input.cantidad_empaques ?? 0).capacidad_empaque_kg,
   cantidad_empaques: buildPresentacionPersistencia(input.presentacion_key, input.cantidad_empaques ?? 0).cantidad_empaques,
+  kilos_reales_cargados: input.kilos_reales_cargados ?? null,
   estado: 'pendiente',
   motivo: input.motivo,
   referencia: input.referencia,
@@ -160,6 +162,7 @@ const resetMockOrdenesExpedicionState = () => {
     precio_unitario_venta: row.precio_unitario_venta ?? null,
     total_venta: row.precio_unitario_venta ? Number((row.precio_unitario_venta * row.cantidad).toFixed(2)) : null,
     cantidad_empaques: row.presentacion_key === 'BOLSA_15' ? 2 : row.presentacion_key === 'BOLSA_20' ? 2 : row.presentacion_key === 'BIG_BAG_1000' ? 2 : null,
+    kilos_reales_cargados: null,
     motivo: 'Despacho demo',
     referencia: row.referencia,
     fecha_programada: row.fecha_programada ?? null,
@@ -213,6 +216,7 @@ export const mockOrdenesExpedicionService = {
       moneda: payload.moneda ?? 'ARS',
       fecha_programada: payload.fecha_programada ?? getTodayDateInputValue(),
       cantidad_empaques: payload.cantidad_empaques ?? null,
+      kilos_reales_cargados: null,
       motivo: payload.motivo ?? null,
       referencia: payload.referencia ?? null,
       created_at: createdAt,
@@ -272,6 +276,7 @@ export const mockOrdenesExpedicionService = {
       tipo_empaque: persistencia.tipo_empaque,
       capacidad_empaque_kg: persistencia.capacidad_empaque_kg,
       cantidad_empaques: persistencia.cantidad_empaques,
+      kilos_reales_cargados: current.kilos_reales_cargados ?? null,
       updated_at: nowIso(),
     };
     expedicionesDb[index] = updated;
@@ -287,12 +292,32 @@ export const mockOrdenesExpedicionService = {
     return mockApiCall(expedicionesDb[index], 250);
   },
 
-  marcarLista: async (id: string): Promise<OrdenExpedicion> => {
+  marcarLista: async (id: string, kilosRealesCargados: number): Promise<OrdenExpedicion> => {
     const index = expedicionesDb.findIndex((item) => item.id === id);
     if (index === -1) throw new Error('No se encontró la orden de salida.');
     const current = expedicionesDb[index];
     if (current.estado !== 'preparando') throw new Error('Transición de estado inválida.');
-    expedicionesDb[index] = { ...current, estado: 'lista', updated_at: nowIso() };
+    if (!Number.isFinite(kilosRealesCargados) || kilosRealesCargados <= 0) {
+      throw new Error('Los kilos reales cargados deben ser mayores a 0.');
+    }
+    const kilosRealesNormalizados = Number(kilosRealesCargados.toFixed(3));
+
+    const stock = (await mockStockPTService.getAll()).find((item) => item.uid === current.stock_pt_id);
+    if (!stock) throw new Error('No se encontró el stock PT seleccionado.');
+    if (kilosRealesNormalizados > Number(stock.cantidad_total ?? 0)) {
+      throw new Error('No hay saldo suficiente en el lote de PT.');
+    }
+
+    applyMockSalidaAjuste({
+      stock_pt_id: stock.uid,
+      deltaKg: kilosRealesNormalizados,
+      motivo: current.motivo ?? 'Carga real para orden de expedición',
+      referencia: current.numero_expedicion,
+      cliente_id: current.cliente_id,
+      cliente_nombre: current.cliente_nombre ?? (current.cliente_id ? (clienteNombreByUid.get(current.cliente_id) ?? 'Sin cliente asociado') : null),
+    });
+
+    expedicionesDb[index] = { ...current, kilos_reales_cargados: kilosRealesNormalizados, estado: 'lista', updated_at: nowIso() };
     return mockApiCall(expedicionesDb[index], 250);
   },
 
@@ -301,21 +326,6 @@ export const mockOrdenesExpedicionService = {
     if (index === -1) throw new Error('No se encontró la orden de salida.');
     const current = expedicionesDb[index];
     if (current.estado !== 'lista') throw new Error('Transición de estado inválida.');
-
-    const stock = (await mockStockPTService.getAll()).find((item) => item.uid === current.stock_pt_id);
-    if (!stock) throw new Error('No se encontró el stock PT seleccionado.');
-    if (current.cantidad_kg > Number(stock.cantidad_total ?? 0)) {
-      throw new Error('No hay saldo suficiente en el lote de PT.');
-    }
-    await mockStockPTService.registrarSalida({
-      stock_pt_id: stock.uid,
-      cantidad: current.cantidad_kg,
-      motivo: current.motivo ?? 'Expedición de producto terminado',
-      referencia: current.numero_expedicion,
-      cliente_id: current.cliente_id,
-      cliente_nombre: current.cliente_nombre ?? 'Sin cliente asociado',
-      valor_total_venta: current.total_venta ?? Number(((current.precio_unitario_venta ?? 0) * current.cantidad_kg).toFixed(2)),
-    });
     expedicionesDb[index] = { ...current, estado: 'despachada', updated_at: nowIso() };
     return mockApiCall(expedicionesDb[index], 250);
   },
@@ -325,6 +335,19 @@ export const mockOrdenesExpedicionService = {
     if (index === -1) throw new Error('No se encontró la orden de salida.');
     const current = expedicionesDb[index];
     if (current.estado === 'cancelada') throw new Error('La orden ya fue cancelada.');
+    if (current.estado === 'lista' || current.estado === 'despachada') {
+      const kilosARevertir = Number(current.kilos_reales_cargados ?? current.cantidad_kg ?? 0);
+      if (kilosARevertir > 0) {
+        applyMockSalidaAjuste({
+          stock_pt_id: current.stock_pt_id,
+          deltaKg: -kilosARevertir,
+          motivo: `Reverso de carga de orden ${current.numero_expedicion}`,
+          referencia: current.numero_expedicion,
+          cliente_id: current.cliente_id,
+          cliente_nombre: current.cliente_nombre ?? 'Sin cliente asociado',
+        });
+      }
+    }
     expedicionesDb[index] = { ...current, estado: 'cancelada', updated_at: nowIso() };
     return mockApiCall(expedicionesDb[index], 250);
   },

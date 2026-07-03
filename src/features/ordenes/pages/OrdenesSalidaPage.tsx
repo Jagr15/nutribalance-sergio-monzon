@@ -5,12 +5,14 @@ import { Card } from '../../../shared/components/card';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import type { OrdenExpedicion } from '../types';
 import OrdenExpedicionModal from '../components/OrdenExpedicionModal';
+import MarcarListaOrdenExpedicionModal from '../components/MarcarListaOrdenExpedicionModal';
 import { cancelarOrdenExpedicionEnLista, puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
 import { openConfiguracionEmpaquesModal } from '../../productos/utils/openConfiguracionEmpaquesModal';
-import { formatCantidadVisualOrden, getPresentacionExpedicionKeyFromOrder, getPresentacionExpedicionOption } from '../utils/presentacionExpedicion';
+import { getPresentacionExpedicionKeyFromOrder, getPresentacionExpedicionOption } from '../utils/presentacionExpedicion';
 import { usePermissions } from '../../auth/usePermissions';
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
+const formatKgDiff = (value: number) => `${value > 0 ? '+' : ''}${value.toLocaleString('es-AR')} kg`;
 const formatMoney = (value: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(value);
 
@@ -37,6 +39,7 @@ const OrdenesSalidaPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [ordenEnEdicion, setOrdenEnEdicion] = useState<OrdenExpedicion | null>(null);
+  const [ordenParaLista, setOrdenParaLista] = useState<OrdenExpedicion | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const { canAccess } = usePermissions();
@@ -90,7 +93,8 @@ const OrdenesSalidaPage: React.FC = () => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
-  const totalKg = filtered.reduce((acc, item) => acc + Number(item.cantidad_kg ?? item.cantidad ?? 0), 0);
+  const totalKgSolicitados = filtered.reduce((acc, item) => acc + Number(item.cantidad_kg ?? item.cantidad ?? 0), 0);
+  const totalKgReales = filtered.reduce((acc, item) => acc + Number(item.kilos_reales_cargados ?? 0), 0);
 
   const handleDespachar = useCallback(async (ordenId: string) => {
     await ApiService.ordenesExpedicion.despachar(ordenId);
@@ -106,11 +110,6 @@ const OrdenesSalidaPage: React.FC = () => {
 
   const handlePreparar = useCallback(async (ordenId: string) => {
     await ApiService.ordenesExpedicion.iniciarPreparacion(ordenId);
-    await load();
-  }, [load]);
-
-  const handleLista = useCallback(async (ordenId: string) => {
-    await ApiService.ordenesExpedicion.marcarLista(ordenId);
     await load();
   }, [load]);
 
@@ -167,12 +166,12 @@ const OrdenesSalidaPage: React.FC = () => {
           <p className="mt-2 text-3xl font-black text-slate-900">{ordenesSalida.length}</p>
         </Card>
         <Card>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Kg filtrados</p>
-          <p className="mt-2 text-3xl font-black text-slate-900">{formatKg(totalKg)}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Kg solicitados</p>
+          <p className="mt-2 text-3xl font-black text-slate-900">{formatKg(totalKgSolicitados)}</p>
         </Card>
         <Card>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Estados</p>
-          <p className="mt-2 text-sm text-slate-700">Pendiente, preparando, lista, despachada y cancelada.</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Kg reales cargados</p>
+          <p className="mt-2 text-3xl font-black text-slate-900">{formatKg(totalKgReales)}</p>
         </Card>
       </div>
 
@@ -199,14 +198,16 @@ const OrdenesSalidaPage: React.FC = () => {
       ) : (
         <Card className="p-0">
           <div className="overflow-auto">
-            <table className={`w-full text-left ${canSeeSalePrice ? 'min-w-[1280px]' : 'min-w-[1120px]'}`}>
+            <table className={`w-full text-left ${canSeeSalePrice ? 'min-w-[1560px]' : 'min-w-[1380px]'}`}>
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-[0.24em] text-slate-500">
                   <th className="px-6 py-4">Comprobante</th>
                   <th className="px-6 py-4">Cliente</th>
                   <th className="px-6 py-4">Producto</th>
                   <th className="px-6 py-4">Lote PT</th>
-                  <th className="px-6 py-4">Cantidad</th>
+                  <th className="px-6 py-4">Kg solicitados</th>
+                  <th className="px-6 py-4">Kg reales</th>
+                  <th className="px-6 py-4">Diferencia</th>
                   {canSeeSalePrice ? <th className="px-6 py-4">Venta</th> : null}
                   <th className="px-6 py-4">Programada</th>
                   <th className="px-6 py-4">Estado</th>
@@ -225,11 +226,32 @@ const OrdenesSalidaPage: React.FC = () => {
                     <td className="px-6 py-4 text-slate-700">{orden.nombre_producto}</td>
                     <td className="px-6 py-4 text-slate-700">{orden.lote_pt}</td>
                     <td className="px-6 py-4 text-slate-700">
-                      <div>{formatCantidadVisualOrden(orden)}</div>
-                      <div className="text-xs text-slate-500">{formatKg(Number(orden.cantidad_kg ?? orden.cantidad ?? 0))}</div>
+                      <div className="font-semibold text-slate-900">{formatKg(Number(orden.cantidad_kg ?? orden.cantidad ?? 0))}</div>
                       <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">
                         {getPresentacionExpedicionOption(getPresentacionExpedicionKeyFromOrder(orden)).label}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-slate-700">
+                      {orden.kilos_reales_cargados != null ? (
+                        <div className="font-semibold text-slate-900">{formatKg(Number(orden.kilos_reales_cargados))}</div>
+                      ) : (
+                        <div className="font-medium text-slate-400">Pendiente</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {orden.kilos_reales_cargados != null ? (
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          Number(orden.kilos_reales_cargados) === Number(orden.cantidad_kg ?? orden.cantidad ?? 0)
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : Number(orden.kilos_reales_cargados) > Number(orden.cantidad_kg ?? orden.cantidad ?? 0)
+                              ? 'bg-amber-50 text-amber-700'
+                              : 'bg-rose-50 text-rose-700'
+                        }`}>
+                          {formatKgDiff(Number(orden.kilos_reales_cargados) - Number(orden.cantidad_kg ?? orden.cantidad ?? 0))}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">Sin cargar</span>
+                      )}
                     </td>
                     {canSeeSalePrice ? (
                       <td className="px-6 py-4 text-slate-700">
@@ -275,7 +297,13 @@ const OrdenesSalidaPage: React.FC = () => {
                               </button>
                             ) : null}
                             {orden.estado === 'preparando' ? (
-                              <button type="button" onClick={() => void handleLista(orden.id)} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-500">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOrdenParaLista(orden);
+                                }}
+                                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-500"
+                              >
                                 <FiCheckCircle size={12} />
                                 Marcar lista
                               </button>
@@ -335,6 +363,14 @@ const OrdenesSalidaPage: React.FC = () => {
           onClose={() => setIsModalOpen(false)}
           onSuccess={load}
           orden={ordenEnEdicion}
+        />
+      ) : null}
+
+      {ordenParaLista ? (
+        <MarcarListaOrdenExpedicionModal
+          orden={ordenParaLista}
+          onClose={() => setOrdenParaLista(null)}
+          onSuccess={load}
         />
       ) : null}
     </div>

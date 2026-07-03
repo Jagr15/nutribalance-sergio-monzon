@@ -364,6 +364,8 @@ export const applyMockSalidaAjuste = (payload: {
     updateAt: nowIso(),
   };
   stockPTMock[index] = nextStock;
+  const esSalida = payload.deltaKg >= 0;
+  const cantidadMovimiento = Math.abs(payload.deltaKg);
   pushMovimiento({
     stock_pt_id: nextStock.uid,
     producto_id: nextStock.id_formula ?? nextStock.nombre_producto,
@@ -371,11 +373,11 @@ export const applyMockSalidaAjuste = (payload: {
     lote: nextStock.lote,
     numero_orden: nextStock.numero_orden,
     silo: nextStock.nombre_silo,
-    tipo: 'SALIDA',
-    cantidad: payload.deltaKg,
+    tipo: esSalida ? 'SALIDA' : 'AJUSTE',
+    cantidad: cantidadMovimiento,
     unidad: nextStock.unidad_medida,
     costo_unitario: nextStock.costo_unitario_estimado ?? null,
-    valor_total: Number((payload.deltaKg * Number(nextStock.costo_unitario_estimado ?? 0)).toFixed(6)),
+    valor_total: esSalida ? Number((cantidadMovimiento * Number(nextStock.costo_unitario_estimado ?? 0)).toFixed(6)) : 0,
     motivo: payload.motivo,
     referencia: payload.referencia ?? null,
     cliente_id: payload.cliente_id ?? null,

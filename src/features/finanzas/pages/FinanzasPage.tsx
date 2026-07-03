@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FiEdit2, FiPlus, FiPower, FiRotateCcw, FiX } from 'react-icons/fi';
+import { FiEdit2, FiPlus, FiPower, FiRotateCcw, FiTrendingUp, FiX } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../../shared/components/card';
 import { useFinanzas } from '../hooks/useFinanzas';
@@ -604,6 +604,16 @@ const FinanzasPage = () => {
         <p className="mt-2 max-w-3xl text-sm text-slate-300">
           Control de presupuesto, gastos reales, ventas y rentabilidad.
         </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.PROYECCION_CAJA)}
+            className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+          >
+            <FiTrendingUp size={14} />
+            Ver proyección de caja
+          </button>
+        </div>
       </section>
 
       {loadError ? (

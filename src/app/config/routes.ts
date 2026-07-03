@@ -10,6 +10,7 @@ export const ROUTES = {
   MOVIMIENTOS_FINANCIEROS: '/costos/movimientos',
   PRESUPUESTOS: '/presupuestos',
   ESTADOS_FINANCIEROS: '/estados-financieros',
+  PROYECCION_CAJA: '/finanzas/proyeccion-caja',
   TESORERIA: '/tesoreria',
   INSUMOS: '/insumos',
   FORMULAS: '/formulas',

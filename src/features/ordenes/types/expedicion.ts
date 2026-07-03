@@ -52,6 +52,7 @@ export interface OrdenExpedicion {
   capacidad_empaque_kg?: number | null;
   cantidad_empaques?: number | null;
   sobrante_kg?: number | null;
+  kilos_reales_cargados?: number | null;
   estado: EstadoExpedicion;
   motivo: string | null;
   referencia: string | null;
@@ -78,6 +79,7 @@ export interface RegistrarOrdenExpedicionPayload {
   motivo?: string | null;
   referencia?: string | null;
   fecha_programada?: string | null;
+  kilos_reales_cargados?: number | null;
 }
 
 export type ActualizarOrdenExpedicionPayload = Partial<RegistrarOrdenExpedicionPayload>;

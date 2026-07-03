@@ -33,6 +33,7 @@ interface OrdenExpedicionRow {
   capacidad_empaque_kg: number | null;
   cantidad_empaques: number | null;
   sobrante_kg: number | null;
+  kilos_reales_cargados: number | null;
   unidad_cantidad: string | null;
   estado: string;
   motivo: string | null;
@@ -68,6 +69,7 @@ const mapRow = (row: OrdenExpedicionRow): OrdenExpedicion => ({
   capacidad_empaque_kg: row.capacidad_empaque_kg,
   cantidad_empaques: row.cantidad_empaques,
   sobrante_kg: row.sobrante_kg,
+  kilos_reales_cargados: row.kilos_reales_cargados == null ? null : Number(row.kilos_reales_cargados),
   estado: row.estado as OrdenExpedicion['estado'],
   motivo: row.motivo,
   referencia: row.referencia,
@@ -120,7 +122,7 @@ const ensureState = async (id: string, allowed: string[], nextState: string) => 
     .from('ordenes_expedicion')
     .update({ estado: nextState })
     .eq('id', id)
-      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_cantidad,cantidad_kg,precio_unitario_venta,total_venta,moneda,fecha_programada,estado,motivo,referencia,created_at,updated_at')
+    .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_cantidad,cantidad_kg,precio_unitario_venta,total_venta,moneda,fecha_programada,estado,motivo,referencia,kilos_reales_cargados,created_at,updated_at')
     .maybeSingle<OrdenExpedicionRow>();
   if (updateError) throw updateError;
   if (!updatedData) throw new Error('No se pudo actualizar el estado de la orden.');
@@ -131,7 +133,7 @@ export const supabaseOrdenesExpedicionService = {
   async getAll(): Promise<OrdenExpedicion[]> {
     const { data, error } = await supabaseClient
       .from('ordenes_expedicion')
-      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_original,cantidad_kg,precio_unitario_venta,total_venta,moneda,modo_calculo,empaque_id,tipo_empaque,capacidad_empaque_kg,cantidad_empaques,sobrante_kg,unidad_cantidad,estado,motivo,referencia,created_at,updated_at')
+      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_original,cantidad_kg,precio_unitario_venta,total_venta,moneda,modo_calculo,empaque_id,tipo_empaque,capacidad_empaque_kg,cantidad_empaques,sobrante_kg,kilos_reales_cargados,unidad_cantidad,estado,motivo,referencia,created_at,updated_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -182,7 +184,7 @@ export const supabaseOrdenesExpedicionService = {
 
       if (error) throw error;
       const updated = Array.isArray(data) ? data[0] : data;
-    if (!updated) throw new Error('No se pudo registrar la orden de expedición.');
+      if (!updated) throw new Error('No se pudo registrar la orden de expedición.');
       return mapRow(updated as unknown as OrdenExpedicionRow);
     } catch (error) {
       const message = formatRpcError(error, 'No se pudo registrar la orden de expedición.');
@@ -257,12 +259,21 @@ export const supabaseOrdenesExpedicionService = {
     return ensureState(id, ['pendiente'], 'preparando');
   },
 
-  async marcarLista(id: string): Promise<OrdenExpedicion> {
-    return ensureState(id, ['preparando'], 'lista');
+  async marcarLista(id: string, kilosRealesCargados: number): Promise<OrdenExpedicion> {
+    if (!Number.isFinite(Number(kilosRealesCargados)) || Number(kilosRealesCargados) <= 0) {
+      throw new Error('Los kilos reales cargados deben ser mayores a cero.');
+    }
+    const { data, error } = await supabaseClient.rpc('marcar_lista_orden_expedicion', {
+      p_orden_id: id,
+      p_kilos_reales_cargados: Number(kilosRealesCargados),
+    });
+    if (error) throw error;
+    const updated = Array.isArray(data) ? data[0] : data;
+    if (!updated) throw new Error('No se pudo marcar la orden como lista.');
+    return mapRow(updated as unknown as OrdenExpedicionRow);
   },
 
   async despachar(id: string): Promise<OrdenExpedicion> {
-    await ensureState(id, ['lista'], 'lista');
     const { data, error } = await supabaseClient.rpc('despachar_orden_expedicion', { p_orden_id: id });
     if (error) throw error;
     const updated = Array.isArray(data) ? data[0] : data;

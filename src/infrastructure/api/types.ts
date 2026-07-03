@@ -129,7 +129,7 @@ export interface OrdenesExpedicionService {
   create: (data: RegistrarOrdenExpedicionPayload) => Promise<OrdenExpedicion>;
   update: (id: string, data: ActualizarOrdenExpedicionPayload) => Promise<OrdenExpedicion>;
   iniciarPreparacion: (id: string) => Promise<OrdenExpedicion>;
-  marcarLista: (id: string) => Promise<OrdenExpedicion>;
+  marcarLista: (id: string, kilosRealesCargados: number) => Promise<OrdenExpedicion>;
   despachar: (id: string) => Promise<OrdenExpedicion>;
   cancelar: (id: string) => Promise<OrdenExpedicion>;
 }
