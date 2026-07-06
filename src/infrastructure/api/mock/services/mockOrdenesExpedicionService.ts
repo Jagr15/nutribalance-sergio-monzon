@@ -13,6 +13,7 @@ import { getTodayDateInputValue } from '../../../../shared/utils/formatters';
 import { mockStockPTService } from './mockStockPTService';
 import { applyMockSalidaAjuste } from './mockStockPTService';
 import { mockApiCall } from '../mockClient';
+import { contabilidadOperativaService } from '../../../../features/finanzas/services/contabilidadOperativaService';
 
 const nowIso = () => new Date().toISOString();
 
@@ -331,8 +332,31 @@ export const mockOrdenesExpedicionService = {
     if (index === -1) throw new Error('No se encontró la orden de salida.');
     const current = expedicionesDb[index];
     if (current.estado !== 'lista') throw new Error('Transición de estado inválida.');
-    expedicionesDb[index] = { ...current, estado: 'despachada', updated_at: nowIso() };
-    return mockApiCall(expedicionesDb[index], 250);
+    
+    const updatedOrder: OrdenExpedicion = { ...current, estado: 'despachada', updated_at: nowIso() };
+    expedicionesDb[index] = updatedOrder;
+
+    if (updatedOrder.cliente_id) {
+      const totalVenta = Number(updatedOrder.total_venta ?? 0) > 0
+        ? Number(updatedOrder.total_venta)
+        : Number(updatedOrder.kilos_reales_cargados ?? updatedOrder.cantidad_kg ?? 0) * Number(updatedOrder.precio_unitario_venta ?? 0);
+
+      if (totalVenta > 0) {
+        await contabilidadOperativaService.registrarVentaPtDesdeSalida({
+          stock_pt_legacy_uid: updatedOrder.stock_pt_id,
+          comprobante_legacy_uid: `cxc-expedicion-${updatedOrder.legacy_uid || updatedOrder.id}`,
+          fecha: updatedOrder.updated_at.slice(0, 10),
+          numero: updatedOrder.numero_expedicion,
+          nombre_producto: updatedOrder.nombre_producto,
+          cliente: updatedOrder.cliente_nombre || 'Cliente',
+          cliente_id: updatedOrder.cliente_id,
+          monto: totalVenta,
+          referencia: updatedOrder.referencia,
+        });
+      }
+    }
+
+    return mockApiCall(updatedOrder, 250);
   },
 
   cancelar: async (id: string): Promise<OrdenExpedicion> => {

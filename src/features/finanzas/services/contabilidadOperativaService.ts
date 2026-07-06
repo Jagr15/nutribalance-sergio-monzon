@@ -166,6 +166,7 @@ export const contabilidadOperativaService = {
     numero: string;
     nombre_producto: string;
     cliente: string;
+    cliente_id?: string | null;
     monto: number;
     referencia?: string | null;
   }): Promise<void> {
@@ -187,6 +188,8 @@ export const contabilidadOperativaService = {
         numero: payload.numero,
         nombre_producto: payload.nombre_producto,
         cliente: payload.cliente,
+        cliente_id: payload.cliente_id ?? null,
+        cliente_legacy_uid: payload.cliente_id ?? null,
       },
     });
   },
