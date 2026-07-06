@@ -33,7 +33,7 @@ describe('estadosFinancieros', () => {
         presupuestoVsReal: [],
         gastosPorRubro: [],
         variacionesPorRubro: [],
-        carteraClientes: [],
+        carteraClientes: [{ cliente_id: 'cli-1', cliente_nombre: 'Cliente demo', saldo_pendiente: 300, ultima_compra: null, dias_atraso: null, proximo_vencimiento: null }],
         chequesEmitidos: [],
         chequesRecibidos: [],
         proyeccionFlujo: [],
@@ -83,6 +83,8 @@ describe('estadosFinancieros', () => {
 
     expect(result.estadoResultados.utilidadNeta).toBe(3000);
     expect(result.balanceGeneral.activos.find((row) => row.label === 'Caja y bancos')?.amount).toBe(1000);
+    expect(result.balanceGeneral.activos.find((row) => row.label === 'Cuentas por cobrar')?.amount).toBe(300);
+    expect(result.balanceGeneral.pasivos.find((row) => row.label === 'Cuentas por pagar')?.amount).toBe(200);
     expect(result.libros.libroMayor).toHaveLength(2);
     expect(result.libros.auxiliarIngresos[0]).toMatchObject({ label: 'COBRANZA', amount: 5000 });
   });
@@ -114,7 +116,7 @@ describe('estadosFinancieros', () => {
         presupuestoVsReal: [],
         gastosPorRubro: [],
         variacionesPorRubro: [],
-        carteraClientes: [],
+        carteraClientes: [{ cliente_id: 'cli-1', cliente_nombre: 'Cliente demo', saldo_pendiente: 300, ultima_compra: null, dias_atraso: null, proximo_vencimiento: null }],
         chequesEmitidos: [],
         chequesRecibidos: [],
         proyeccionFlujo: [],

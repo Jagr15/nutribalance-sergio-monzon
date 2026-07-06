@@ -8,8 +8,8 @@ const { mockFrom, mockApiService } = vi.hoisted(() => ({
     return {
       stockMP: {
         getAllLotes: vi.fn().mockResolvedValue([
-          { id_insumo: 'i-1', cantidad_actual: 10 },
-          { id_insumo: 'i-2', cantidad_actual: 5 },
+          { id_insumo: 'i-1', cantidad_actual: 10, costo_unitario: 2 },
+          { id_insumo: 'i-2', cantidad_actual: 5, costo_unitario: 4 },
         ]),
       },
       insumos: {

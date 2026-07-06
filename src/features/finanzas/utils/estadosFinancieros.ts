@@ -1,5 +1,4 @@
 import type { FinanzasInventarioResumen, FinanzasKPIs, FinanzasTesoreriaInsights, MovimientoFinanciero } from '../types';
-import { calcularCuentasPorCobrar, calcularCuentasPorPagar, obtenerMontoPendiente } from './finanzasCalculations';
 
 export type PeriodoFiltro = 'MES_ACTUAL' | 'TRIMESTRE_ACTUAL' | 'ANIO_ACTUAL' | 'TODO' | 'RANGO';
 
@@ -146,16 +145,16 @@ export const buildEstadosFinancieros = (params: {
   const gastos = egresos.reduce((acc, row) => acc + num(row.monto), 0);
   const utilidadNeta = Number((ventas - gastos).toFixed(2));
 
-  const ctasCobrarFiltradas = calcularCuentasPorCobrar(movimientos);
-  const ctasPagarFiltradas = calcularCuentasPorPagar(movimientos);
-
-  const totalCuentasPorCobrar = ctasCobrarFiltradas.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0);
-  const totalCuentasPorPagar = ctasPagarFiltradas.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0);
+  const totalCuentasPorCobrar = params.tesoreria.carteraClientes.length > 0
+    ? params.tesoreria.carteraClientes.reduce((acc, row) => acc + num(row.saldo_pendiente), 0)
+    : num(params.kpis.cuentas_por_cobrar);
+  const totalCuentasPorPagar = num(params.kpis.cuentas_por_pagar);
+  const totalInventario = num(params.kpis.valorizacion_inventario) || num(params.inventario.valor_inventario_total);
 
   const activos = [
     { label: 'Caja y bancos', amount: Number(params.kpis.saldo_actual.toFixed(2)) },
     { label: 'Cuentas por cobrar', amount: Number(totalCuentasPorCobrar.toFixed(2)) },
-    { label: 'Inventario total', amount: Number(params.inventario.valor_inventario_total.toFixed(2)) },
+    { label: 'Inventario total', amount: Number(totalInventario.toFixed(2)) },
   ].filter((row) => row.amount !== 0);
   const pasivos = [
     { label: 'Cuentas por pagar', amount: Number(totalCuentasPorPagar.toFixed(2)) },

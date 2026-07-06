@@ -494,9 +494,7 @@ export const finanzasService = {
       ApiService.stockPT.getResumen(),
     ]);
 
-    const insumos = await ApiService.insumos.getAllInsumos();
-    const costoByInsumo = new Map(insumos.map((insumo) => [insumo.uid, Number(insumo.costo_por_kg ?? insumo.ref_costo_unitario ?? 0)]));
-    const valorStockMp = sum(lotesMp.map((lote) => Number(lote.cantidad_actual ?? 0) * Number(costoByInsumo.get(lote.id_insumo) ?? 0)));
+    const valorStockMp = sum(lotesMp.map((lote) => Number(lote.cantidad_actual ?? 0) * Number(lote.costo_unitario ?? 0)));
     const valorStockPt = sum(resumenPt.map((item) => Number(item.valor_monetario ?? 0)));
     return {
       valor_stock_mp: valorStockMp,
