@@ -48,6 +48,7 @@ const buildExpedicion = (input: {
   motivo: string | null;
   referencia: string | null;
   created_at: string;
+  estado?: OrdenExpedicion['estado'];
 }): OrdenExpedicion => ({
   id: input.uid,
   legacy_uid: input.uid,
@@ -75,7 +76,7 @@ const buildExpedicion = (input: {
   capacidad_empaque_kg: buildPresentacionPersistencia(input.presentacion_key, input.cantidad_empaques ?? 0).capacidad_empaque_kg,
   cantidad_empaques: buildPresentacionPersistencia(input.presentacion_key, input.cantidad_empaques ?? 0).cantidad_empaques,
   kilos_reales_cargados: input.kilos_reales_cargados ?? null,
-  estado: 'pendiente',
+  estado: input.estado ?? 'pendiente',
   motivo: input.motivo,
   referencia: input.referencia,
   created_at: input.created_at,
@@ -146,28 +147,32 @@ const resetMockOrdenesExpedicionState = () => {
     },
   ];
 
-  expedicionesDb = seedRows.map((row, idx) => buildExpedicion({
-    uid: `exp-${String(idx + 1).padStart(4, '0')}`,
-    numero: `EXP-2026-${String(idx + 1).padStart(6, '0')}`,
-    stock_pt_id: row.stock_pt_id,
-    producto_id: row.producto_id,
-    nombre_producto: row.nombre_producto,
-    lote_pt: row.lote_pt,
-    cliente_id: row.cliente_id,
-    presentacion_key: row.presentacion_key,
-    cantidad: row.cantidad,
-    cantidad_original: row.cantidad,
-    unidad_cantidad: 'kg',
-    cantidad_kg: row.cantidad,
-    precio_unitario_venta: row.precio_unitario_venta ?? null,
-    total_venta: row.precio_unitario_venta ? Number((row.precio_unitario_venta * row.cantidad).toFixed(2)) : null,
-    cantidad_empaques: row.presentacion_key === 'BOLSA_15' ? 2 : row.presentacion_key === 'BOLSA_20' ? 2 : row.presentacion_key === 'BIG_BAG_1000' ? 2 : null,
-    kilos_reales_cargados: null,
-    motivo: 'Despacho demo',
-    referencia: row.referencia,
-    fecha_programada: row.fecha_programada ?? null,
-    created_at: new Date(Date.now() - (idx + 1) * 3600_000).toISOString(),
-  }));
+  expedicionesDb = seedRows.map((row, idx) => {
+    const isDespachada = idx === 0 || idx === 2 || idx === 4;
+    return buildExpedicion({
+      uid: `exp-${String(idx + 1).padStart(4, '0')}`,
+      numero: `EXP-2026-${String(idx + 1).padStart(6, '0')}`,
+      stock_pt_id: row.stock_pt_id,
+      producto_id: row.producto_id,
+      nombre_producto: row.nombre_producto,
+      lote_pt: row.lote_pt,
+      cliente_id: row.cliente_id,
+      presentacion_key: row.presentacion_key,
+      cantidad: row.cantidad,
+      cantidad_original: row.cantidad,
+      unidad_cantidad: 'kg',
+      cantidad_kg: row.cantidad,
+      precio_unitario_venta: row.precio_unitario_venta ?? null,
+      total_venta: row.precio_unitario_venta ? Number((row.precio_unitario_venta * row.cantidad).toFixed(2)) : null,
+      cantidad_empaques: row.presentacion_key === 'BOLSA_15' ? 2 : row.presentacion_key === 'BOLSA_20' ? 2 : row.presentacion_key === 'BIG_BAG_1000' ? 2 : null,
+      kilos_reales_cargados: isDespachada ? row.cantidad : null,
+      estado: isDespachada ? 'despachada' : 'pendiente',
+      motivo: 'Despacho demo',
+      referencia: row.referencia,
+      fecha_programada: row.fecha_programada ?? null,
+      created_at: new Date(Date.now() - (idx + 1) * 3600_000).toISOString(),
+    });
+  });
 
   nextExpedition = expedicionesDb.length + 1;
 };

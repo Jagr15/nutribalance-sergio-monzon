@@ -1,6 +1,6 @@
 import type { Cliente, ClienteCreatePayload, ClienteEstadoCuentaItem, ClienteUpdatePayload, ClientePagoPayload, ClientePagoHistorial } from '../../../../features/clientes/types/cliente';
 import { mockApiCall } from '../mockClient';
-import { getMockCuentaCorrienteRows, setMockCuentaCorrienteRows } from './mockStockPTService';
+import { mockOrdenesExpedicionService } from './mockOrdenesExpedicionService';
 import { contabilidadOperativaService } from '../../../../features/finanzas/services/contabilidadOperativaService';
 import { tesoreriaService } from '../../../../features/tesoreria/services/tesoreriaService';
 
@@ -49,39 +49,63 @@ let mockClientes: Cliente[] = [
   },
 ];
 
-const getClienteFinancialSummary = (clienteId: string) => {
-  const rows = getMockCuentaCorrienteRows().filter((row) => row.cliente_id === clienteId);
-  if (rows.length === 0) {
-    return null;
-  }
+const getMetadataString = (meta: unknown, key: string): string | undefined => {
+  if (!meta || typeof meta !== 'object') return undefined;
+  const val = (meta as Record<string, unknown>)[key];
+  return typeof val === 'string' ? val : undefined;
+};
 
-  const saldoPendienteArs = rows.reduce((acc, row) => acc + Number(row.saldo ?? 0), 0);
-  const latest = rows.reduce<{ score: number; value: string | null } | null>((current, row) => {
-    const score = new Date(row.fecha).getTime();
-    if (!Number.isFinite(score)) return current;
-    if (!current || score > current.score) {
-      return { score, value: row.fecha };
+const getClienteFinancialSummary = async (clienteId: string) => {
+  const allExpediciones = await mockOrdenesExpedicionService.getAll();
+  const despachadas = allExpediciones.filter(
+    (o) => o.cliente_id === clienteId && o.estado === 'despachada'
+  );
+
+  const totalInvoiced = despachadas.reduce((acc, o) => {
+    const total = Number(o.total_venta ?? 0) > 0
+      ? Number(o.total_venta)
+      : Number(o.kilos_reales_cargados ?? o.cantidad_kg ?? 0) * Number(o.precio_unitario_venta ?? 0);
+    return acc + total;
+  }, 0);
+
+  const mockMovs = contabilidadOperativaService.getMovimientosMock();
+  const totalPaid = mockMovs
+    .filter(
+      (m) =>
+        m.tipo === 'INGRESO' &&
+        (m.origen_operativo === 'COBRANZA' || m.origen_operativo === 'COBRANZA_MANUAL') &&
+        (getMetadataString(m.metadata, 'cliente_legacy_uid') === clienteId || getMetadataString(m.metadata, 'cliente_id') === clienteId) &&
+        m.estado === 'CONFIRMADO'
+    )
+    .reduce((acc, m) => acc + Number(m.monto ?? 0), 0);
+
+  const saldoPendienteArs = Math.max(0, Number((totalInvoiced - totalPaid).toFixed(2)));
+
+  const latestDate = despachadas.reduce<string | null>((latest, o) => {
+    if (!latest || new Date(o.created_at).getTime() > new Date(latest).getTime()) {
+      return o.created_at;
     }
-    return current;
+    return latest;
   }, null);
 
   return {
     saldoPendienteArs,
-    ultimaCompra: latest?.value ? latest.value.slice(0, 10) : null,
+    ultimaCompra: latestDate ? latestDate.slice(0, 10) : null,
   };
 };
 
 export const mockClienteService = {
   getAll: async (): Promise<Cliente[]> => {
-    const rows = mockClientes.map((cliente) => {
-      const summary = getClienteFinancialSummary(cliente.uid);
-      if (!summary) return cliente;
-      return {
-        ...cliente,
-        saldoPendienteArs: summary.saldoPendienteArs,
-        ultimaCompra: summary.ultimaCompra ?? undefined,
-      };
-    });
+    const rows = await Promise.all(
+      mockClientes.map(async (cliente) => {
+        const summary = await getClienteFinancialSummary(cliente.uid);
+        return {
+          ...cliente,
+          saldoPendienteArs: summary.saldoPendienteArs,
+          ultimaCompra: summary.ultimaCompra ?? undefined,
+        };
+      })
+    );
 
     return mockApiCall(rows);
   },
@@ -89,12 +113,84 @@ export const mockClienteService = {
   getById: async (uid: string): Promise<Cliente | undefined> => mockApiCall(mockClientes.find((cliente) => cliente.uid === uid)),
 
   getEstadoCuentaCliente: async (clienteId: string): Promise<ClienteEstadoCuentaItem[]> => {
-    const rows = (await getMockCuentaCorrienteRows())
-      .filter((row) => row.cliente_id === clienteId)
-      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
-      .map(({ cliente_id: _clienteId, ...row }) => row);
+    const allExpediciones = await mockOrdenesExpedicionService.getAll();
+    const despachadas = allExpediciones.filter(
+      (o) => o.cliente_id === clienteId && o.estado === 'despachada'
+    );
 
-    return mockApiCall(rows);
+    const mockMovs = contabilidadOperativaService.getMovimientosMock();
+    const payments = mockMovs.filter(
+      (m) =>
+        m.tipo === 'INGRESO' &&
+        (m.origen_operativo === 'COBRANZA' || m.origen_operativo === 'COBRANZA_MANUAL') &&
+        (getMetadataString(m.metadata, 'cliente_legacy_uid') === clienteId || getMetadataString(m.metadata, 'cliente_id') === clienteId) &&
+        m.estado === 'CONFIRMADO'
+    );
+
+    const targetedPayments = new Map<string, number>();
+    let generalPaymentsAmount = 0;
+
+    payments.forEach((m) => {
+      const targetId = (m.comprobante_id || getMetadataString(m.metadata, 'comprobante_id')) as string | undefined;
+      if (targetId) {
+        targetedPayments.set(targetId, (targetedPayments.get(targetId) ?? 0) + Number(m.monto ?? 0));
+      } else {
+        generalPaymentsAmount += Number(m.monto ?? 0);
+      }
+    });
+
+    const sortedExpediciones = [...despachadas].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    const expedicionesRows = sortedExpediciones.map((orden) => {
+      const total = Number(orden.total_venta ?? 0) > 0
+        ? Number(orden.total_venta)
+        : Number(orden.kilos_reales_cargados ?? orden.cantidad_kg ?? 0) * Number(orden.precio_unitario_venta ?? 0);
+
+      const targetedPaid = targetedPayments.get(orden.id) ?? 0;
+      let remainingToPay = Math.max(0, total - targetedPaid);
+
+      let fifoPaid = 0;
+      if (generalPaymentsAmount > 0 && remainingToPay > 0) {
+        fifoPaid = Math.min(generalPaymentsAmount, remainingToPay);
+        generalPaymentsAmount = Number((generalPaymentsAmount - fifoPaid).toFixed(2));
+        remainingToPay = Number((remainingToPay - fifoPaid).toFixed(2));
+      }
+
+      const totalPaid = Number((targetedPaid + fifoPaid).toFixed(2));
+      const saldo = Number((total - totalPaid).toFixed(2));
+
+      return {
+        id: orden.id,
+        fecha: orden.created_at,
+        producto: orden.nombre_producto,
+        cantidad: orden.kilos_reales_cargados ?? orden.cantidad_kg,
+        unidad: orden.unidad_cantidad,
+        importe: total,
+        saldo,
+        referencia: orden.referencia || orden.numero_expedicion,
+        estado: saldo <= 0 ? 'PAGADO' : 'PENDIENTE',
+        comprobanteNumero: orden.numero_expedicion,
+      };
+    });
+
+    const paymentRows = payments.map((m) => ({
+      id: (m.legacy_uid || m.id || '') as string,
+      fecha: m.fecha,
+      producto: 'PAGO CLIENTE',
+      cantidad: null,
+      unidad: null,
+      importe: Number(m.monto ?? 0),
+      saldo: 0,
+      referencia: (getMetadataString(m.metadata, 'referencia') || m.descripcion || null) as string | null,
+      estado: 'PAGADO',
+      comprobanteNumero: (getMetadataString(m.metadata, 'referencia') || null) as string | null,
+    }));
+
+    return [...expedicionesRows, ...paymentRows].sort(
+      (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    );
   },
 
   create: async (data: ClienteCreatePayload): Promise<Cliente> => {
@@ -123,61 +219,20 @@ export const mockClienteService = {
   },
 
   registrarPago: async (payload: ClientePagoPayload): Promise<void> => {
-    // 1. Find client
     const client = mockClientes.find((c) => c.uid === payload.clienteId);
     if (!client) throw new Error('Cliente no encontrado');
 
-    // 2. Fetch outstanding cuenta corriente rows for this client
-    let rows = getMockCuentaCorrienteRows().filter((row) => row.cliente_id === payload.clienteId && row.saldo > 0);
+    const allRows = await mockClienteService.getEstadoCuentaCliente(payload.clienteId);
+    let outstandingInvoices = allRows.filter((r) => r.saldo > 0 && r.producto !== 'PAGO CLIENTE');
 
-    const totalOutstanding = rows.reduce((acc, r) => acc + r.saldo, 0);
+    const totalOutstanding = outstandingInvoices.reduce((acc, r) => acc + r.saldo, 0);
     if (payload.monto > totalOutstanding) {
       throw new Error(`El monto del pago (${payload.monto}) no puede superar el saldo pendiente del cliente (${totalOutstanding}).`);
     }
 
-    if (payload.comprobanteId) {
-      rows = rows.filter((row) => row.id === payload.comprobanteId);
-    } else {
-      // Sort oldest first
-      rows.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
-    }
+    const receiptRowId = `cxc-recibo-${Math.floor(Math.random() * 1000000)}`;
+    const movementLegacyUid = `fcm-pago-cliente-mock-${receiptRowId}`;
 
-    let remainingAmount = payload.monto;
-    const updatedCcRows = getMockCuentaCorrienteRows().map((row) => {
-      const isTarget = rows.some((r) => r.id === row.id);
-      if (isTarget && remainingAmount > 0) {
-        const applied = Math.min(remainingAmount, row.saldo);
-        const newSaldo = Number((row.saldo - applied).toFixed(2));
-        remainingAmount = Number((remainingAmount - applied).toFixed(2));
-        return {
-          ...row,
-          saldo: newSaldo,
-          estado: newSaldo <= 0 ? 'PAGADO' : row.estado,
-        };
-      }
-      return row;
-    });
-
-    // Write back updated rows
-    setMockCuentaCorrienteRows(updatedCcRows);
-
-    // Append receipt row
-    const receiptRow = {
-      cliente_id: payload.clienteId,
-      id: `cxc-recibo-${Math.floor(Math.random() * 1000000)}`,
-      fecha: payload.fechaPago,
-      producto: 'PAGO CLIENTE',
-      cantidad: null,
-      importe: payload.monto,
-      saldo: 0,
-      referencia: payload.referencia || null,
-      estado: 'PAGADO',
-      comprobanteNumero: payload.referencia || null,
-    };
-    setMockCuentaCorrienteRows([receiptRow, ...getMockCuentaCorrienteRows()]);
-
-    // Create flow movement
-    const movementLegacyUid = `fcm-pago-cliente-mock-${receiptRow.id}`;
     await contabilidadOperativaService.ensureMovimiento({
       legacy_uid: movementLegacyUid,
       fecha: payload.fechaPago,
@@ -185,16 +240,17 @@ export const mockClienteService = {
       origen_operativo: 'COBRANZA',
       descripcion: payload.observaciones?.trim() || `Cobro cliente - Ref: ${payload.referencia || 'S/R'}`,
       monto: payload.monto,
-      comprobante_id: receiptRow.id,
+      comprobante_id: payload.comprobanteId || undefined,
       estado: payload.metodoPago === 'cheque' ? 'PENDIENTE' : 'CONFIRMADO',
       metadata: {
         cliente_legacy_uid: payload.clienteId,
+        cliente_id: payload.clienteId,
         metodo_pago: payload.metodoPago,
         referencia: payload.referencia || null,
+        comprobante_id: payload.comprobanteId || null,
       },
     });
 
-    // Create cheque if method is cheque
     if (payload.metodoPago === 'cheque' && payload.cheque) {
       await tesoreriaService.createCheque({
         numero: payload.cheque.numero,

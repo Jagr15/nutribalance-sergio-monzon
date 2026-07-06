@@ -1336,7 +1336,7 @@ const ClientesPage = () => {
                 <p className="text-[10px] font-black uppercase tracking-[0.35em] text-cyan-500">Cuenta corriente</p>
                 <h3 className="mt-1 text-2xl font-black text-slate-900">{cuentaCliente.nombre}</h3>
                 <p className="mt-1 text-sm text-slate-600">
-                  Estado de cuenta simple basado en comprobantes y salidas registradas para este cliente.
+                  Estado de cuenta basado en movimientos financieros confirmados del cliente.
                 </p>
               </div>
               <div className="flex gap-2">

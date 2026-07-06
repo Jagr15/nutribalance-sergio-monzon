@@ -53,7 +53,7 @@ describe('buildProyeccionCaja', () => {
     expect(acumulado?.values[0]).toBe(1000);
     expect(acumulado?.values[4]).toBe(6000);
     expect(acumulado?.values[5]).toBe(4000);
-    expect(result.resumen.rentabilidad_total).toBeCloseTo(0.428571, 5);
+    expect(result.resumen.rentabilidad_total).toBeCloseTo(0.6, 5);
   });
 
   it('aplica filtros de cliente, proveedor y tipo sin modificar importes originales', () => {

@@ -640,7 +640,24 @@ export const finanzasService = {
       ApiService.clientes.getAll(),
     ]);
 
-    const ventasPt = movimientosPt.filter((movimiento) => movimiento.tipo === 'SALIDA' && Boolean(movimiento.cliente_id));
+    const expediciones = ApiService.ordenesExpedicion?.getAll
+      ? await ApiService.ordenesExpedicion.getAll().catch(() => [])
+      : [];
+    const despachadasIds = new Set(
+      expediciones
+        .filter((o: any) => o.estado === 'despachada')
+        .map((o: any) => o.numero_expedicion)
+    );
+
+    const ventasPt = movimientosPt.filter((movimiento) => {
+      if (movimiento.tipo !== 'SALIDA' || !movimiento.cliente_id) {
+        return false;
+      }
+      if (expediciones.length > 0) {
+        return despachadasIds.has(movimiento.referencia || '');
+      }
+      return true;
+    });
     const ventasFinancieras = ventasPt
       .map((movimiento) => {
         const monto = Number(movimiento.valor_total ?? 0) > 0
