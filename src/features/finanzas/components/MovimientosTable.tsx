@@ -9,6 +9,44 @@ import { FiX, FiEdit } from 'react-icons/fi';
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
 
+const asRecord = (value: unknown): Record<string, unknown> | null => (
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+);
+
+const toDisplayText = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return null;
+};
+
+const readMetadataText = (metadata: unknown, keys: string[]) => {
+  const record = asRecord(metadata);
+  if (!record) return null;
+  for (const key of keys) {
+    const directValue = toDisplayText(record[key]);
+    if (directValue) return directValue;
+  }
+  for (const nestedKey of ['comprobante', 'comprobante_relacionado', 'factura']) {
+    const nested = asRecord(record[nestedKey]);
+    if (!nested) continue;
+    for (const key of keys) {
+      const nestedValue = toDisplayText(nested[key]);
+      if (nestedValue) return nestedValue;
+    }
+  }
+  return null;
+};
+
+export const getMovimientoResponsable = (movimiento: MovimientoFinanciero) =>
+  toDisplayText(movimiento.cliente)
+  ?? readMetadataText(movimiento.metadata, ['cliente', 'cliente_nombre', 'nombre_cliente'])
+  ?? toDisplayText(movimiento.proveedor)
+  ?? readMetadataText(movimiento.metadata, ['proveedor', 'proveedor_nombre', 'nombre_proveedor'])
+  ?? toDisplayText(movimiento.tercero)
+  ?? readMetadataText(movimiento.metadata, ['tercero', 'tercero_nombre', 'razon_social'])
+  ?? '-';
+
 const getDiasVencimientoLabel = (fechaVencimiento: string | null | undefined) => {
   if (!fechaVencimiento) return '-';
   const today = new Date();
@@ -33,6 +71,8 @@ export const MovimientosTable = ({
   limit = 20,
   onRefresh,
   showDiasVencimiento = false,
+  showEstadoFinanciero = true,
+  showActions = true,
   title,
   subtitle,
 }: {
@@ -41,11 +81,18 @@ export const MovimientosTable = ({
   limit?: number;
   onRefresh?: () => void | Promise<void>;
   showDiasVencimiento?: boolean;
+  showEstadoFinanciero?: boolean;
+  showActions?: boolean;
   title?: string;
   subtitle?: string;
 }) => {
   const visibleMovimientos = movimientos.slice(0, limit);
-  const colSpan = showDiasVencimiento ? 10 : (showOrigenAndCentroCosto ? 11 : 9);
+  const showOrigenColumns = showOrigenAndCentroCosto && !showDiasVencimiento;
+  const colSpan = 8
+    + (showEstadoFinanciero ? 1 : 0)
+    + (showDiasVencimiento ? 1 : 0)
+    + (showOrigenColumns ? 2 : 0)
+    + (showActions ? 1 : 0);
 
   const [rubros, setRubros] = useState<RubroFinancieroCatalogo[]>([]);
   const [editingMov, setEditingMov] = useState<MovimientoFinanciero | null>(null);
@@ -61,6 +108,7 @@ export const MovimientosTable = ({
   const [estadoFinanciero, setEstadoFinanciero] = useState('');
 
   useEffect(() => {
+    if (!showActions) return undefined;
     let active = true;
     void finanzasService.getRubrosFinancieros().then((data) => {
       if (active) setRubros(data.filter((r) => r.activo));
@@ -68,7 +116,7 @@ export const MovimientosTable = ({
     return () => {
       active = false;
     };
-  }, []);
+  }, [showActions]);
 
   const openEditModal = (m: MovimientoFinanciero) => {
     setEditingMov(m);
@@ -142,21 +190,23 @@ export const MovimientosTable = ({
             <TableCell header className="text-slate-600">Fecha</TableCell>
             <TableCell header className="text-slate-600">Fecha Venc.</TableCell>
             <TableCell header className="text-slate-600">Tipo</TableCell>
+            <TableCell header className="text-slate-600">Cliente / Proveedor</TableCell>
             <TableCell header className="text-slate-600">Descripción</TableCell>
             <TableCell header className="text-slate-600">Categoría</TableCell>
             <TableCell header className="text-right text-slate-600">Monto</TableCell>
             <TableCell header className="text-slate-600">Estado</TableCell>
-            <TableCell header className="text-slate-600">Est. Fin.</TableCell>
+            {showEstadoFinanciero ? <TableCell header className="text-slate-600">Est. Fin.</TableCell> : null}
             {showDiasVencimiento ? <TableCell header className="text-slate-600">Vencimiento</TableCell> : null}
-            {showOrigenAndCentroCosto && !showDiasVencimiento ? <TableCell header className="text-slate-600">Origen</TableCell> : null}
-            {showOrigenAndCentroCosto && !showDiasVencimiento ? <TableCell header className="text-slate-600">Centro costo</TableCell> : null}
-            <TableCell header className="text-slate-600">Acciones</TableCell>
+            {showOrigenColumns ? <TableCell header className="text-slate-600">Origen</TableCell> : null}
+            {showOrigenColumns ? <TableCell header className="text-slate-600">Centro costo</TableCell> : null}
+            {showActions ? <TableCell header className="text-slate-600">Acciones</TableCell> : null}
           </tr>
         </TableHeader>
         <TableBody>
           {visibleMovimientos.map((m, index) => {
             const isPending = m.estado === 'PENDIENTE';
             const isVencido = m.fecha_vencimiento && new Date(m.fecha_vencimiento).getTime() < new Date().setHours(0,0,0,0);
+            const responsable = getMovimientoResponsable(m);
             return (
               <TableRow key={m.uid || `${m.fecha}-${m.descripcion}-${index}`}>
                 <TableCell className="whitespace-nowrap text-slate-600">
@@ -166,55 +216,64 @@ export const MovimientosTable = ({
                   {m.fecha_vencimiento ? formatDateDDMMYYYY(m.fecha_vencimiento) : '-'}
                 </TableCell>
                 <TableCell><StatusBadge value={m.tipo} /></TableCell>
+                <TableCell className="max-w-[190px] text-slate-700">
+                  <span title={responsable === '-' ? undefined : responsable} className="block max-w-[190px] truncate font-medium">
+                    {responsable}
+                  </span>
+                </TableCell>
                 <TableCell className="max-w-[320px] whitespace-normal break-words text-slate-900">{m.descripcion}</TableCell>
                 <TableCell className="max-w-[220px] whitespace-normal break-words text-slate-500">{m.categoria || '-'}</TableCell>
                 <TableCell className="whitespace-nowrap text-right font-semibold text-slate-900">{formatCurrency(m.monto)}</TableCell>
                 <TableCell><StatusBadge value={m.estado} /></TableCell>
-                <TableCell>
-                  {m.estado_financiero ? (
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      (isVencido && isPending)
-                        ? 'bg-red-100 text-red-800'
-                        : ['COBRADO', 'PAGADO'].includes(m.estado_financiero)
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {(isVencido && isPending) ? 'VENCIDO' : m.estado_financiero.replace('_', ' ')}
-                    </span>
-                  ) : '-'}
-                </TableCell>
+                {showEstadoFinanciero ? (
+                  <TableCell>
+                    {m.estado_financiero ? (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        (isVencido && isPending)
+                          ? 'bg-red-100 text-red-800'
+                          : ['COBRADO', 'PAGADO'].includes(m.estado_financiero)
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {(isVencido && isPending) ? 'VENCIDO' : m.estado_financiero.replace('_', ' ')}
+                      </span>
+                    ) : '-'}
+                  </TableCell>
+                ) : null}
                 {showDiasVencimiento ? (
                   <TableCell>
                     {getDiasVencimientoLabel(m.fecha_vencimiento)}
                   </TableCell>
                 ) : null}
-                {showOrigenAndCentroCosto && !showDiasVencimiento ? <TableCell className="max-w-[200px] whitespace-normal break-words text-slate-500">{m.origen_operativo || '-'}</TableCell> : null}
-                {showOrigenAndCentroCosto && !showDiasVencimiento ? <TableCell className="max-w-[200px] whitespace-normal break-words text-slate-500">{m.centro_costo || '-'}</TableCell> : null}
-                <TableCell>
-                  <div className="flex gap-2">
-                    {isPending ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleConfirmar(m.uid)}
-                          className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-1 px-2.5 rounded-lg transition"
-                        >
-                          {m.tipo === 'INGRESO' ? 'Cobrar' : 'Pagar'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(m)}
-                          className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-1 px-2.5 rounded-lg transition inline-flex items-center gap-1"
-                        >
-                          <FiEdit size={12} />
-                          Editar
-                        </button>
-                      </>
-                    ) : (
-                      <span className="text-xs text-slate-400 font-semibold">-</span>
-                    )}
-                  </div>
-                </TableCell>
+                {showOrigenColumns ? <TableCell className="max-w-[200px] whitespace-normal break-words text-slate-500">{m.origen_operativo || '-'}</TableCell> : null}
+                {showOrigenColumns ? <TableCell className="max-w-[200px] whitespace-normal break-words text-slate-500">{m.centro_costo || '-'}</TableCell> : null}
+                {showActions ? (
+                  <TableCell>
+                    <div className="flex gap-2">
+                      {isPending ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmar(m.uid)}
+                            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-1 px-2.5 rounded-lg transition"
+                          >
+                            {m.tipo === 'INGRESO' ? 'Cobrar' : 'Pagar'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(m)}
+                            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-1 px-2.5 rounded-lg transition inline-flex items-center gap-1"
+                          >
+                            <FiEdit size={12} />
+                            Editar
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-slate-400 font-semibold">-</span>
+                      )}
+                    </div>
+                  </TableCell>
+                ) : null}
               </TableRow>
             );
           })}

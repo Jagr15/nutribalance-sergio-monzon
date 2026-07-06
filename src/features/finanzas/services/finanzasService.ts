@@ -37,6 +37,7 @@ export interface CrearMovimientoPayload {
 type FinanzasReportesRow = { payload?: Record<string, unknown> };
 type CategoriaNested = { nombre?: string } | null;
 type CentroCostoNested = { nombre?: string } | null;
+type ComprobanteNested = { legacy_uid?: string | null; numero?: string | null; tercero?: string | null; tipo?: string | null } | null;
 type FlujoCajaMovimientoRow = {
   legacy_uid?: string | null;
   fecha: string;
@@ -48,11 +49,14 @@ type FlujoCajaMovimientoRow = {
   monto?: number | string | null;
   categorias_financieras?: CategoriaNested;
   centros_costo?: CentroCostoNested;
+  comprobantes?: ComprobanteNested;
   estado: MovimientoFinanciero['estado'];
   fecha_operacion?: string | null;
   fecha_vencimiento?: string | null;
   estado_financiero?: string | null;
   fecha_cobro_pago?: string | null;
+  metadata?: any;
+  created_at?: string | null;
 };
 type CostosFormulaVsRealRow = {
   producto_formula_id: string | null;
@@ -144,6 +148,14 @@ const num = (value: unknown) => Number(value ?? 0);
 const rubrosStorageKey = 'nutribalance_categorias_financieras_v1';
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 const allowedTipoMovimientos = new Set(['INGRESO', 'EGRESO']);
+const readMetadataText = (metadata: unknown, key: string): string | undefined => {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  const value = (metadata as Record<string, unknown>)[key];
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'string') return value.trim() || undefined;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return undefined;
+};
 const hashText = (value: string) => {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
@@ -422,8 +434,9 @@ export const finanzasService = {
   async getMovimientos(): Promise<MovimientoFinanciero[]> {
     const { data, error } = await supabaseClient
       .from('flujo_caja_movimientos')
-      .select('legacy_uid,fecha,tipo,origen_operativo,origen_modulo,origen_id,descripcion,monto,estado,categorias_financieras(nombre),centros_costo(nombre),fecha_operacion,fecha_vencimiento,estado_financiero,fecha_cobro_pago')
+      .select('legacy_uid,fecha,tipo,origen_operativo,origen_modulo,origen_id,descripcion,monto,estado,categorias_financieras(nombre),centros_costo(nombre),comprobantes(legacy_uid,numero,tercero,tipo),fecha_operacion,fecha_vencimiento,estado_financiero,fecha_cobro_pago,metadata,created_at')
       .is('deleted_at', null)
+      .order('created_at', { ascending: false, nullsFirst: false })
       .order('fecha', { ascending: false });
 
     if (error) throw error;
@@ -438,11 +451,18 @@ export const finanzasService = {
       monto: Number(row.monto ?? 0),
       categoria: row.categorias_financieras?.nombre,
       centro_costo: row.centros_costo?.nombre,
+      tercero: readMetadataText(row.metadata, 'tercero') ?? row.comprobantes?.tercero ?? undefined,
+      cliente: readMetadataText(row.metadata, 'cliente') ?? (row.comprobantes?.tipo === 'FACTURA_VENTA' ? row.comprobantes?.tercero ?? undefined : undefined),
+      proveedor: readMetadataText(row.metadata, 'proveedor') ?? (row.comprobantes?.tipo === 'FACTURA_COMPRA' ? row.comprobantes?.tercero ?? undefined : undefined),
+      comprobante: row.comprobantes?.numero ?? readMetadataText(row.metadata, 'comprobante') ?? readMetadataText(row.metadata, 'comprobante_legacy_uid') ?? row.comprobantes?.legacy_uid ?? undefined,
+      referencia: readMetadataText(row.metadata, 'referencia') ?? readMetadataText(row.metadata, 'numero') ?? readMetadataText(row.metadata, 'remito') ?? undefined,
       estado: row.estado,
       fecha_operacion: row.fecha_operacion ?? undefined,
       fecha_vencimiento: row.fecha_vencimiento ?? undefined,
       estado_financiero: row.estado_financiero ?? undefined,
       fecha_cobro_pago: row.fecha_cobro_pago ?? undefined,
+      metadata: row.metadata ?? undefined,
+      created_at: row.created_at ?? undefined,
     }));
   },
 
@@ -793,6 +813,9 @@ export const finanzasService = {
         monto: Number(comp.saldo ?? 0),
         categoria: isIngreso ? 'Ventas PT' : 'Materia Prima',
         centro_costo: 'Planta',
+        tercero: comp.tercero ?? undefined,
+        cliente: isIngreso ? comp.tercero ?? undefined : undefined,
+        proveedor: isIngreso ? undefined : comp.tercero ?? undefined,
         estado: comp.estado as any,
         fecha_vencimiento: comp.fecha_vencimiento || undefined,
         estado_financiero: isIngreso ? 'PENDIENTE_COBRO' : 'PENDIENTE_PAGO',
@@ -809,10 +832,17 @@ export const finanzasService = {
       descripcion: row.descripcion,
       monto: Number(row.monto ?? 0),
       estado: row.estado || 'CONFIRMADO',
+      tercero: readMetadataText(row.metadata, 'tercero'),
+      cliente: readMetadataText(row.metadata, 'cliente'),
+      proveedor: readMetadataText(row.metadata, 'proveedor'),
+      comprobante: readMetadataText(row.metadata, 'comprobante') ?? readMetadataText(row.metadata, 'comprobante_legacy_uid'),
+      referencia: readMetadataText(row.metadata, 'referencia') ?? readMetadataText(row.metadata, 'numero') ?? readMetadataText(row.metadata, 'remito'),
       fecha_operacion: row.fecha_operacion || undefined,
       fecha_vencimiento: row.fecha_vencimiento || undefined,
       estado_financiero: row.estado_financiero || undefined,
       fecha_cobro_pago: row.fecha_cobro_pago || undefined,
+      metadata: row.metadata || undefined,
+      created_at: row.created_at || undefined,
     }));
 
     const movimientosFinancierosUi: MovimientoFinanciero[] = [

@@ -11,11 +11,18 @@ export interface MovimientoFinanciero {
   monto: number;
   categoria?: string;
   centro_costo?: string;
+  tercero?: string;
+  cliente?: string;
+  proveedor?: string;
+  comprobante?: string;
+  referencia?: string;
   estado: 'PENDIENTE' | 'CONFIRMADO' | 'ANULADO';
   fecha_operacion?: string;
   fecha_vencimiento?: string;
   estado_financiero?: string;
   fecha_cobro_pago?: string;
+  metadata?: any;
+  created_at?: string;
 }
 
 export interface FinanzasKPIs {

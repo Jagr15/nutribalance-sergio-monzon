@@ -24,6 +24,7 @@ import {
 } from '../utils/finanzasDashboard';
 import { finanzasService } from '../services/finanzasService';
 import { calcularCuentasPorCobrar, calcularCuentasPorPagar, obtenerMontoPendiente } from '../utils/finanzasCalculations';
+import type { MovimientoFinanciero } from '../types';
 
 const rubroTipoLabels: Record<RubroFinancieroTipo, string> = {
   FIJO: 'Fijo',
@@ -59,6 +60,7 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('es-AR', { style
 const formatPct = (value: number) => `${value.toFixed(1)}%`;
 const BUDGET_CONFIG_KEY = 'finanzas_control_presupuestal_v2';
 const BUDGET_CONFIG_LEGACY_KEY = 'finanzas_control_presupuestal_v1';
+const MOVIMIENTOS_HISTORY_PAGE_SIZE = 10;
 
 type MovimientosHistoryFilter = 'ALL' | 'CONFIRMADO' | 'PENDIENTE' | 'ANULADO';
 type BudgetPeriodicidad = 'semanal' | 'quincenal' | 'mensual';
@@ -75,6 +77,59 @@ const formatDate = (value?: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Sin dato';
   return formatDateDDMMYYYY(date);
+};
+
+const normalizeSearchText = (value: unknown) => String(value ?? '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase();
+
+const timestampOrNull = (value?: string | null) => {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+
+export const getMovimientoRegistroTimestamp = (movimiento: MovimientoFinanciero) =>
+  timestampOrNull(movimiento.created_at) ?? timestampOrNull(movimiento.fecha) ?? 0;
+
+export const sortMovimientosByRegistroDesc = (a: MovimientoFinanciero, b: MovimientoFinanciero) => {
+  const registroDiff = getMovimientoRegistroTimestamp(b) - getMovimientoRegistroTimestamp(a);
+  if (registroDiff !== 0) return registroDiff;
+  return (timestampOrNull(b.fecha) ?? 0) - (timestampOrNull(a.fecha) ?? 0);
+};
+
+const flattenSearchValues = (value: unknown): string[] => {
+  if (value === null || value === undefined) return [];
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return [String(value)];
+  if (Array.isArray(value)) return value.flatMap(flattenSearchValues);
+  if (typeof value === 'object') return Object.values(value as Record<string, unknown>).flatMap(flattenSearchValues);
+  return [];
+};
+
+export const getMovimientoSearchText = (movimiento: MovimientoFinanciero) => normalizeSearchText([
+  movimiento.descripcion,
+  movimiento.categoria,
+  movimiento.tipo,
+  movimiento.estado,
+  movimiento.origen_operativo,
+  movimiento.origen_modulo,
+  movimiento.origen_id,
+  movimiento.estado_financiero,
+  movimiento.cliente,
+  movimiento.proveedor,
+  movimiento.tercero,
+  movimiento.comprobante,
+  movimiento.referencia,
+  movimiento.monto,
+  formatCurrency(movimiento.monto),
+  ...flattenSearchValues(movimiento.metadata),
+].filter(Boolean).join(' '));
+
+export const movimientoMatchesSearch = (movimiento: MovimientoFinanciero, query: string) => {
+  const normalizedQuery = normalizeSearchText(query.trim());
+  if (!normalizedQuery) return true;
+  return getMovimientoSearchText(movimiento).includes(normalizedQuery);
 };
 
 const statusClassByPresupuesto = (estado: 'En control' | 'Atención' | 'Excedido') => {
@@ -142,6 +197,7 @@ const FinanzasPage = () => {
   const [variacionesSort, setVariacionesSort] = useState<(typeof variacionesSortOptions)[number]['value']>('desviacion');
   const [ingresosSort, setIngresosSort] = useState<IngresoPtSortMode>('venta_real');
   const [movimientosQuery, setMovimientosQuery] = useState('');
+  const [movimientosHistoryQuery, setMovimientosHistoryQuery] = useState('');
   const [movimientosHistoryFilter, setMovimientosHistoryFilter] = useState<MovimientosHistoryFilter>('ALL');
   const [rubrosFinancieros, setRubrosFinancieros] = useState<RubroFinancieroAdmin[]>([]);
   const [rubroForm, setRubroForm] = useState<RubroFinancieroFormValues>({ nombre: '', tipo: '', activo: true, area: RUBRO_AREA_DEFAULT });
@@ -150,6 +206,12 @@ const FinanzasPage = () => {
   const [rubrosSavedMessage, setRubrosSavedMessage] = useState<string | null>(null);
   const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false);
   const [isHistorialModalOpen, setIsHistorialModalOpen] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [movimientosHistoryFilter, movimientosHistoryQuery, isHistorialModalOpen]);
+
   const [isRubrosModalOpen, setIsRubrosModalOpen] = useState(false);
   const [isRubrosFullModalOpen, setIsRubrosFullModalOpen] = useState(false);
   const [isBudgetEditorOpen, setIsBudgetEditorOpen] = useState(false);
@@ -298,29 +360,17 @@ const FinanzasPage = () => {
     tesoreria.alertasTesoreria.length > 0;
 
   const movimientosQuick = useMemo(() => {
-    const query = movimientosQuery.trim().toLowerCase();
-    const filtered = [...movimientos].filter((row) => {
-      const haystack = `${row.descripcion} ${row.categoria ?? ''} ${row.tipo} ${row.estado}`.toLowerCase();
-      if (!query) return true;
-      return haystack.includes(query);
-    });
-
-    return filtered
-      .sort((a, b) => {
-        const aPending = a.estado === 'PENDIENTE' ? 1 : 0;
-        const bPending = b.estado === 'PENDIENTE' ? 1 : 0;
-        if (aPending !== bPending) {
-          return bPending - aPending;
-        }
-        return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
-      })
+    return [...movimientos]
+      .filter((row) => movimientoMatchesSearch(row, movimientosQuery))
+      .sort(sortMovimientosByRegistroDesc)
       .slice(0, 10);
   }, [movimientos, movimientosQuery]);
   const movimientosHistory = useMemo(() => {
     return [...movimientos]
-      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
-      .filter((row) => movimientosHistoryFilter === 'ALL' ? true : row.estado === movimientosHistoryFilter);
-  }, [movimientos, movimientosHistoryFilter]);
+      .filter((row) => movimientosHistoryFilter === 'ALL' ? true : row.estado === movimientosHistoryFilter)
+      .filter((row) => movimientoMatchesSearch(row, movimientosHistoryQuery))
+      .sort(sortMovimientosByRegistroDesc);
+  }, [movimientos, movimientosHistoryFilter, movimientosHistoryQuery]);
 
   const cuentasPorCobrar = useMemo(() => {
     return calcularCuentasPorCobrar(movimientos);
@@ -888,7 +938,7 @@ const FinanzasPage = () => {
                   value={movimientosQuery}
                   onChange={(event) => setMovimientosQuery(event.target.value)}
                   className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
-                  placeholder="Descripción, categoría, tipo o estado"
+                  placeholder="Descripción, categoría, cliente, proveedor, comprobante o monto"
                 />
               </label>
             </div>
@@ -898,7 +948,7 @@ const FinanzasPage = () => {
               </div>
             ) : null}
             <div className="mt-4">
-              <MovimientosTable movimientos={movimientosQuick} limit={10} onRefresh={refresh} />
+              <MovimientosTable movimientos={movimientosQuick} limit={10} onRefresh={refresh} showEstadoFinanciero={false} showActions={false} />
             </div>
             {budgetExceeded ? (
               <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -953,8 +1003,63 @@ const FinanzasPage = () => {
                 </button>
               </div>
             </div>
+            <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
+              <label className="block w-full sm:max-w-md">
+                <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Buscar</span>
+                <input
+                  value={movimientosHistoryQuery}
+                  onChange={(event) => setMovimientosHistoryQuery(event.target.value)}
+                  className="ui-input mt-1 w-full rounded-2xl px-4 py-3 text-sm"
+                  placeholder="Descripción, cliente, proveedor, comprobante, referencia o monto"
+                />
+              </label>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                {movimientosHistory.length} movimientos
+              </span>
+            </div>
             <div className="mt-5">
-              <MovimientosTable movimientos={movimientosHistory} limit={movimientosHistory.length} onRefresh={refresh} />
+              {(() => {
+                const totalItems = movimientosHistory.length;
+                const totalPages = Math.ceil(totalItems / MOVIMIENTOS_HISTORY_PAGE_SIZE);
+                const currentPage = Math.max(1, Math.min(historyPage, totalPages || 1));
+                const startIndex = (currentPage - 1) * MOVIMIENTOS_HISTORY_PAGE_SIZE;
+                const endIndex = Math.min(startIndex + MOVIMIENTOS_HISTORY_PAGE_SIZE, totalItems);
+                const paginatedMovimientos = movimientosHistory.slice(startIndex, endIndex);
+
+                return (
+                  <>
+                    <MovimientosTable movimientos={paginatedMovimientos} limit={paginatedMovimientos.length} onRefresh={refresh} showEstadoFinanciero={false} showActions={false} />
+                    {totalItems > 10 && (
+                      <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-4 text-sm text-slate-500">
+                        <div>
+                          Mostrando {startIndex + 1}–{endIndex} de {totalItems} movimientos
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            disabled={currentPage === 1}
+                            onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                            className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 px-4 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-transparent transition"
+                          >
+                            Anterior
+                          </button>
+                          <span className="font-semibold text-slate-900">
+                            Página {currentPage} de {totalPages}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={currentPage === totalPages}
+                            onClick={() => setHistoryPage((p) => Math.min(totalPages, p + 1))}
+                            className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 px-4 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-transparent transition"
+                          >
+                            Siguiente
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
