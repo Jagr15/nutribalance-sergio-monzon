@@ -380,4 +380,21 @@ export const mockOrdenesExpedicionService = {
     expedicionesDb[index] = { ...current, estado: 'cancelada', updated_at: nowIso() };
     return mockApiCall(expedicionesDb[index], 250);
   },
+
+  programarEntrega: async (id: string, fechaProgramada: string | null, notaProgramacion?: string | null): Promise<OrdenExpedicion> => {
+    const index = expedicionesDb.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error('No se encontró la orden de salida.');
+    const current = expedicionesDb[index];
+    if (current.estado === 'despachada' || current.estado === 'cancelada') {
+      throw new Error('No se puede programar la entrega de una orden despachada o cancelada.');
+    }
+    const updated: OrdenExpedicion = {
+      ...current,
+      fecha_programada: fechaProgramada,
+      nota_programacion: notaProgramacion ?? null,
+      updated_at: nowIso(),
+    };
+    expedicionesDb[index] = updated;
+    return mockApiCall(updated, 250);
+  },
 };

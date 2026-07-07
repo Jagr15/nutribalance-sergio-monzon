@@ -57,6 +57,7 @@ export interface OrdenExpedicion {
   motivo: string | null;
   referencia: string | null;
   fecha_programada?: string | null;
+  nota_programacion?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -79,6 +80,7 @@ export interface RegistrarOrdenExpedicionPayload {
   motivo?: string | null;
   referencia?: string | null;
   fecha_programada?: string | null;
+  nota_programacion?: string | null;
   kilos_reales_cargados?: number | null;
 }
 

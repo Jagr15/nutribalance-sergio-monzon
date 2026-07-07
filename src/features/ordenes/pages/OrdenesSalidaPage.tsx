@@ -6,6 +6,7 @@ import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import type { OrdenExpedicion } from '../types';
 import OrdenExpedicionModal from '../components/OrdenExpedicionModal';
 import MarcarListaOrdenExpedicionModal from '../components/MarcarListaOrdenExpedicionModal';
+import ProgramarEntregaModal from '../components/ProgramarEntregaModal';
 import { cancelarOrdenExpedicionEnLista, puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
 import { openConfiguracionEmpaquesModal } from '../../productos/utils/openConfiguracionEmpaquesModal';
 import { getPresentacionExpedicionKeyFromOrder, getPresentacionExpedicionOption } from '../utils/presentacionExpedicion';
@@ -32,6 +33,35 @@ const estadoLabel: Record<string, string> = {
   cancelada: 'Cancelada',
 };
 
+const formatProgramada = (fecha: string | null | undefined) => {
+  if (!fecha) return '—';
+  const hasTime = fecha.includes('T') || fecha.includes(' ') || fecha.length > 10;
+  const date = fecha.includes('T')
+    ? new Date(fecha)
+    : /^\d{4}-\d{2}-\d{2}$/.test(fecha)
+      ? new Date(`${fecha}T00:00:00`)
+      : new Date(fecha);
+
+  if (Number.isNaN(date.getTime())) return '—';
+
+  const dateFormatted = new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date);
+
+  if (hasTime) {
+    const timeFormatted = new Intl.DateTimeFormat('es-AR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date);
+    return `${dateFormatted} ${timeFormatted}`;
+  }
+
+  return dateFormatted;
+};
+
 const OrdenesSalidaPage: React.FC = () => {
   const [ordenesSalida, setOrdenesSalida] = useState<OrdenExpedicion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,6 +70,7 @@ const OrdenesSalidaPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [ordenEnEdicion, setOrdenEnEdicion] = useState<OrdenExpedicion | null>(null);
   const [ordenParaLista, setOrdenParaLista] = useState<OrdenExpedicion | null>(null);
+  const [ordenParaProgramar, setOrdenParaProgramar] = useState<OrdenExpedicion | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const { canAccess } = usePermissions();
@@ -266,7 +297,7 @@ const OrdenesSalidaPage: React.FC = () => {
                       </td>
                     ) : null}
                     <td className="px-6 py-4 text-slate-600">
-                      {orden.fecha_programada ? formatDateDDMMYYYY(orden.fecha_programada) : '—'}
+                      {formatProgramada(orden.fecha_programada)}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${estadoBadge[orden.estado] ?? 'bg-slate-100 text-slate-600'}`}>
@@ -277,16 +308,28 @@ const OrdenesSalidaPage: React.FC = () => {
                     <td className="px-6 py-4 text-right">
                       <div className="flex flex-wrap justify-end gap-2">
                         {canEditOrder ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOrdenEnEdicion(orden);
-                              setIsModalOpen(true);
-                            }}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                          >
-                            Editar
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOrdenEnEdicion(orden);
+                                setIsModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={orden.estado === 'despachada' || orden.estado === 'cancelada'}
+                              onClick={() => {
+                                setOrdenParaProgramar(orden);
+                              }}
+                              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            >
+                              {orden.fecha_programada ? 'Reprogramar' : 'Programar entrega'}
+                            </button>
+                          </>
                         ) : null}
                         {puedeMostrarAccionesOrdenSalida(orden.estado) ? (
                           <>
@@ -371,6 +414,24 @@ const OrdenesSalidaPage: React.FC = () => {
           orden={ordenParaLista}
           onClose={() => setOrdenParaLista(null)}
           onSuccess={load}
+        />
+      ) : null}
+
+      {ordenParaProgramar ? (
+        <ProgramarEntregaModal
+          orden={ordenParaProgramar}
+          onClose={() => setOrdenParaProgramar(null)}
+          onSuccess={async (updated) => {
+            setOrdenesSalida((prev) =>
+              prev.map((o) => (o.id === updated.id ? updated : o))
+            );
+            try {
+              const data = await ApiService.ordenesExpedicion.getAll();
+              setOrdenesSalida(data);
+            } catch (e) {
+              console.error('[ordenes-salida] Fallo al refrescar las órdenes en segundo plano', e);
+            }
+          }}
         />
       ) : null}
     </div>

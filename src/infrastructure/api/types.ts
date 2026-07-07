@@ -132,6 +132,7 @@ export interface OrdenesExpedicionService {
   marcarLista: (id: string, kilosRealesCargados: number) => Promise<OrdenExpedicion>;
   despachar: (id: string) => Promise<OrdenExpedicion>;
   cancelar: (id: string) => Promise<OrdenExpedicion>;
+  programarEntrega: (id: string, fechaProgramada: string | null, notaProgramacion?: string | null) => Promise<OrdenExpedicion>;
 }
 
 export interface StockPTService {

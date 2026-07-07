@@ -63,5 +63,6 @@ export const mockAdapter: ApiServices = {
     ...mockOrdenesExpedicionService,
     iniciarPreparacion: mockOrdenesExpedicionService.iniciarPreparacion,
     marcarLista: mockOrdenesExpedicionService.marcarLista,
+    programarEntrega: mockOrdenesExpedicionService.programarEntrega,
   },
 };

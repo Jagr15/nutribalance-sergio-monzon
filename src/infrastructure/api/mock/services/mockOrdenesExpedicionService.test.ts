@@ -66,4 +66,28 @@ describe('mockOrdenesExpedicionService', () => {
     expect(created.cantidad_original).toBe(1.25);
     expect(created.cantidad_kg).toBe(1250);
   });
+
+  it('programa y reprograma la entrega de una orden', async () => {
+    const expediciones = await mockOrdenesExpedicionService.getAll();
+    const orden = expediciones.find((o) => o.estado === 'pendiente')!;
+    
+    // Programar
+    const programada = await mockOrdenesExpedicionService.programarEntrega(orden.id, '2026-07-10', 'Nota de entrega');
+    expect(programada.fecha_programada).toBe('2026-07-10');
+    expect(programada.nota_programacion).toBe('Nota de entrega');
+
+    // Reprogramar
+    const reprogramada = await mockOrdenesExpedicionService.programarEntrega(orden.id, '2026-07-15', 'Nota actualizada');
+    expect(reprogramada.fecha_programada).toBe('2026-07-15');
+    expect(reprogramada.nota_programacion).toBe('Nota actualizada');
+  });
+
+  it('rechaza programar la entrega de una orden despachada o cancelada', async () => {
+    const expediciones = await mockOrdenesExpedicionService.getAll();
+    const despachada = expediciones.find((o) => o.estado === 'despachada')!;
+    
+    await expect(
+      mockOrdenesExpedicionService.programarEntrega(despachada.id, '2026-07-10')
+    ).rejects.toThrow('No se puede programar la entrega de una orden despachada o cancelada.');
+  });
 });

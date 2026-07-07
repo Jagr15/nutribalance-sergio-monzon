@@ -27,6 +27,7 @@ interface OrdenExpedicionRow {
   total_venta: number | null;
   moneda: string | null;
   fecha_programada: string | null;
+  nota_programacion?: string | null;
   modo_calculo: string | null;
   empaque_id: string | null;
   tipo_empaque: string | null;
@@ -63,6 +64,7 @@ const mapRow = (row: OrdenExpedicionRow): OrdenExpedicion => ({
   total_venta: row.total_venta == null ? null : Number(row.total_venta),
   moneda: row.moneda ?? 'ARS',
   fecha_programada: row.fecha_programada,
+  nota_programacion: row.nota_programacion ?? null,
   modo_calculo: row.modo_calculo ?? 'kg_requeridos',
   empaque_id: row.empaque_id,
   tipo_empaque: row.tipo_empaque,
@@ -122,7 +124,7 @@ const ensureState = async (id: string, allowed: string[], nextState: string) => 
     .from('ordenes_expedicion')
     .update({ estado: nextState })
     .eq('id', id)
-    .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_cantidad,cantidad_kg,precio_unitario_venta,total_venta,moneda,fecha_programada,estado,motivo,referencia,kilos_reales_cargados,created_at,updated_at')
+    .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_original,cantidad_kg,precio_unitario_venta,total_venta,moneda,modo_calculo,empaque_id,tipo_empaque,capacidad_empaque_kg,cantidad_empaques,sobrante_kg,kilos_reales_cargados,unidad_cantidad,estado,motivo,referencia,fecha_programada,created_at,updated_at')
     .maybeSingle<OrdenExpedicionRow>();
   if (updateError) throw updateError;
   if (!updatedData) throw new Error('No se pudo actualizar el estado de la orden.');
@@ -133,7 +135,7 @@ export const supabaseOrdenesExpedicionService = {
   async getAll(): Promise<OrdenExpedicion[]> {
     const { data, error } = await supabaseClient
       .from('ordenes_expedicion')
-      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_original,cantidad_kg,precio_unitario_venta,total_venta,moneda,modo_calculo,empaque_id,tipo_empaque,capacidad_empaque_kg,cantidad_empaques,sobrante_kg,kilos_reales_cargados,unidad_cantidad,estado,motivo,referencia,created_at,updated_at')
+      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_original,cantidad_kg,precio_unitario_venta,total_venta,moneda,modo_calculo,empaque_id,tipo_empaque,capacidad_empaque_kg,cantidad_empaques,sobrante_kg,kilos_reales_cargados,unidad_cantidad,estado,motivo,referencia,fecha_programada,created_at,updated_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -287,5 +289,33 @@ export const supabaseOrdenesExpedicionService = {
     const updated = Array.isArray(data) ? data[0] : data;
     if (!updated) throw new Error('No se pudo cancelar la orden de expedición.');
     return mapRow(updated as unknown as OrdenExpedicionRow);
+  },
+
+  async programarEntrega(id: string, fechaProgramada: string | null, _notaProgramacion?: string | null): Promise<OrdenExpedicion> {
+    // Check current state to prevent modifications on despachada/cancelada
+    const { data: current, error: getError } = await supabaseClient
+      .from('ordenes_expedicion')
+      .select('estado')
+      .eq('id', id)
+      .maybeSingle<{ estado: string }>();
+
+    if (getError) throw getError;
+    if (!current) throw new Error('No se encontró la orden de salida.');
+    if (current.estado === 'despachada' || current.estado === 'cancelada') {
+      throw new Error('No se puede programar la entrega de una orden despachada o cancelada.');
+    }
+
+    const { data, error } = await supabaseClient
+      .from('ordenes_expedicion')
+      .update({ 
+        fecha_programada: fechaProgramada,
+      })
+      .eq('id', id)
+      .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_original,cantidad_kg,precio_unitario_venta,total_venta,moneda,modo_calculo,empaque_id,tipo_empaque,capacidad_empaque_kg,cantidad_empaques,sobrante_kg,kilos_reales_cargados,unidad_cantidad,estado,motivo,referencia,fecha_programada,created_at,updated_at')
+      .maybeSingle<OrdenExpedicionRow>();
+
+    if (error) throw error;
+    if (!data) throw new Error('No se encontró la orden de salida.');
+    return mapRow(data);
   },
 };
