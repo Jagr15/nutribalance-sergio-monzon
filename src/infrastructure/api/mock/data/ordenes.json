@@ -187,5 +187,56 @@
         "costo_total": 6.48
       }
     ]
+  },
+  {
+    "id": "OP-PLD-001",
+    "lote": "OP-PLD-001",
+    "id_formula": "for-001",
+    "nombre_producto": "Lechera 13% PB alta energia",
+    "version_formula": 1,
+    "cantidad_objetivo": 1800,
+    "cantidad_real": 1800,
+    "merma_manual": 0,
+    "id_silo": "silo-001",
+    "destino_silo": "Silo Lechera",
+    "estado": "FINALIZADO",
+    "fecha_creacion": "2026-05-26T09:00:00Z",
+    "usuario_responsable": "Sergio Monzón",
+    "costo_total_insumos": 432.9,
+    "detalle_insumos": []
+  },
+  {
+    "id": "OP-PLD-002",
+    "lote": "OP-PLD-002",
+    "id_formula": "for-002",
+    "nombre_producto": "Lechera 18% PB",
+    "version_formula": 1,
+    "cantidad_objetivo": 1200,
+    "cantidad_real": 1200,
+    "merma_manual": 0,
+    "id_silo": "silo-002",
+    "destino_silo": "Silo Producción 2",
+    "estado": "FINALIZADO",
+    "fecha_creacion": "2026-05-27T11:30:00Z",
+    "usuario_responsable": "Operador Planta",
+    "costo_total_insumos": 333.84,
+    "detalle_insumos": []
+  },
+  {
+    "id": "OP-PLD-003",
+    "lote": "OP-PLD-003",
+    "id_formula": "for-003",
+    "nombre_producto": "Engorde Smart",
+    "version_formula": 2,
+    "cantidad_objetivo": 480,
+    "cantidad_real": 480,
+    "merma_manual": 0,
+    "id_silo": "silo-003",
+    "destino_silo": "Silo Engorde",
+    "estado": "FINALIZADO",
+    "fecha_creacion": "2026-05-28T10:00:00Z",
+    "usuario_responsable": "Sergio Monzón",
+    "costo_total_insumos": 151.56,
+    "detalle_insumos": []
   }
 ]

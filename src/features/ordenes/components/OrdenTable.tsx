@@ -65,6 +65,7 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
             <TableCell header className="text-center">Responsable</TableCell>
             <TableCell header className="text-center">Planificado</TableCell>
             <TableCell header className="text-center">Salida Real</TableCell>
+            <TableCell header className="text-center">Stock Disponible</TableCell>
             <TableCell header className="text-center">Programada</TableCell>
             <TableCell header className="text-center">Estado</TableCell>
             <TableCell header className="text-right">Acciones</TableCell>
@@ -73,6 +74,15 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
         <TableBody>
           {currentData.map((orden) => {
             const isExpanded = expandedId === orden.id;
+            console.log('ORDENES ROW STOCK FIELD', {
+              id: orden.id,
+              folio: (orden as any).folio,
+              lote: orden.lote,
+              cantidad_real: orden.cantidad_real,
+              cantidad_disponible: (orden as any).cantidad_disponible,
+              stock_disponible: (orden as any).stock_disponible,
+              raw: orden,
+            });
             return (
               <React.Fragment key={orden.id}>
                 <TableRow className={isExpanded ? 'bg-slate-50' : 'cursor-pointer'}>
@@ -94,6 +104,34 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
                   </TableCell>
                   <TableCell className="text-center font-semibold text-emerald-700">
                     {orden.cantidad_real ? `${orden.cantidad_real.toLocaleString()} kg` : '--'}
+                  </TableCell>
+                  <TableCell className="text-center font-semibold text-slate-700">
+                    {(() => {
+                      if (orden.estado !== 'FINALIZADO') {
+                        return <span className="text-slate-400">—</span>;
+                      }
+                      if (orden.stock_disponible === undefined || orden.stock_disponible === null) {
+                        return <span className="text-slate-400">—</span>;
+                      }
+                      const stockVal = Number(orden.stock_disponible);
+                      if (stockVal <= 0) {
+                        return <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">Agotado</span>;
+                      }
+                      
+                      const showBadge = orden.cantidad_real && stockVal < orden.cantidad_real;
+                      return (
+                        <div className="flex flex-col items-center">
+                          <span className={showBadge ? "text-cyan-700 font-bold" : "text-slate-900 font-medium"}>
+                            {stockVal.toLocaleString()} kg
+                          </span>
+                          {showBadge && (
+                            <span className="inline-flex items-center rounded-full bg-cyan-50 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-700 mt-0.5">
+                              disponibles
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-center text-slate-700">
                     {orden.fecha_programada ? formatDateDDMMYYYY(orden.fecha_programada) : '—'}
@@ -118,7 +156,7 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
 
                 {isExpanded ? (
                   <tr className="bg-slate-50">
-                    <td colSpan={7} className="px-6 py-5 border-l-2 border-blue-200">
+                    <td colSpan={8} className="px-6 py-5 border-l-2 border-blue-200">
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 text-blue-700 text-xs font-semibold uppercase"><FiZap size={12} /> Trazabilidad de Lotes</div>
@@ -158,7 +196,7 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
 
           {currentData.length === 0 ? (
             <EmptyState
-              colSpan={7}
+              colSpan={8}
               title="No hay órdenes para mostrar"
               message={data.length === 0
                 ? (hasActiveFilter ? "No se encontraron órdenes para la búsqueda aplicada." : "Todavía no hay órdenes cargadas.")

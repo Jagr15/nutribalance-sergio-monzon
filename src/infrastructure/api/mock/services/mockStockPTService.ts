@@ -247,6 +247,12 @@ export const resetMockStockPTService = resetMockStockPTState;
 
 export const getMockStockPTRows = () => structuredClone(stockPTMock);
 
+let onMockStockPTAdjust: ((idOrden: string, deltaKg: number) => void) | null = null;
+
+export const registerMockStockPTAdjustCallback = (cb: (idOrden: string, deltaKg: number) => void) => {
+  onMockStockPTAdjust = cb;
+};
+
 export const mockStockPTService = {
   getAll: async (): Promise<StockProductoTerminado[]> => mockApiCall([...stockPTMock], 450),
 
@@ -279,6 +285,11 @@ export const mockStockPTService = {
     };
 
     stockPTMock[index] = nextStock;
+
+    if (current.id_orden && onMockStockPTAdjust) {
+      onMockStockPTAdjust(current.id_orden, -payload.cantidad);
+    }
+
     pushMovimiento({
       stock_pt_id: nextStock.uid,
       producto_id: nextStock.id_formula ?? nextStock.nombre_producto,
@@ -329,6 +340,11 @@ export const applyMockSalidaAjuste = (payload: {
     updateAt: nowIso(),
   };
   stockPTMock[index] = nextStock;
+
+  if (current.id_orden && onMockStockPTAdjust) {
+    onMockStockPTAdjust(current.id_orden, -payload.deltaKg);
+  }
+
   const esSalida = payload.deltaKg >= 0;
   const cantidadMovimiento = Math.abs(payload.deltaKg);
   pushMovimiento({
@@ -350,3 +366,4 @@ export const applyMockSalidaAjuste = (payload: {
   });
   return nextStock;
 };
+

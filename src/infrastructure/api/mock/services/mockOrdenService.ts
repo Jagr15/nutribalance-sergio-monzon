@@ -11,7 +11,7 @@ import {
   reserveStockForDetalle,
   restoreMockStockSnapshot,
 } from './mockMateriaPrimaService';
-import { registerMockIngresoPT } from './mockStockPTService';
+import { registerMockIngresoPT, registerMockStockPTAdjustCallback, mockStockPTService } from './mockStockPTService';
 import { mockMateriaPrimaService } from './mockMateriaPrimaService';
 import { getTodayDateInputValue } from '../../../../shared/utils/formatters';
 
@@ -94,13 +94,42 @@ export const mockOrdenService = {
   // --- OPERACIONES CRUD BÁSICAS ---
   
   getAll: async (): Promise<OrdenProduccion[]> => {
-    return new Promise((resolve) => setTimeout(() => resolve([...ordersDb]), 500));
+    const stockPT = await mockStockPTService.getAll();
+    const stockMap = new Map<string, number>();
+    stockPT.forEach((st) => {
+      if (st.id_orden) {
+        stockMap.set(st.id_orden, st.cantidad_total);
+      }
+    });
+
+    const enrichedOrders = ordersDb.map((order) => ({
+      ...order,
+      stock_disponible: stockMap.get(order.id) ?? stockMap.get(order.lote) ?? null,
+    }));
+
+    return new Promise((resolve) => setTimeout(() => resolve(enrichedOrders), 500));
   },
 
   getById: async (id: string): Promise<OrdenProduccion | undefined> => {
+    const stockPT = await mockStockPTService.getAll();
+    const stockMap = new Map<string, number>();
+    stockPT.forEach((st) => {
+      if (st.id_orden) {
+        stockMap.set(st.id_orden, st.cantidad_total);
+      }
+    });
+
     return new Promise((resolve) => {
       const order = ordersDb.find(o => o.id === id);
-      setTimeout(() => resolve(order), 300);
+      if (order) {
+        const enriched = {
+          ...order,
+          stock_disponible: stockMap.get(order.id) ?? stockMap.get(order.lote) ?? null,
+        };
+        setTimeout(() => resolve(enriched), 300);
+      } else {
+        setTimeout(() => resolve(undefined), 300);
+      }
     });
   },
 
@@ -292,3 +321,11 @@ export const mockOrdenService = {
     });
   }
 };
+
+registerMockStockPTAdjustCallback((idOrden, _deltaKg) => {
+  if (!idOrden) return;
+  const order = ordersDb.find(o => o.id === idOrden || o.lote === idOrden);
+  if (!order) {
+    throw new Error(`No se encontró la orden de producción asociada con ID/lote: ${idOrden}`);
+  }
+});

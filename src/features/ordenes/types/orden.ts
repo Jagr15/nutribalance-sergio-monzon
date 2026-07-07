@@ -33,6 +33,7 @@ export interface OrdenProduccion {
   usuario_responsable: string;
   id_silo: string | null;
   destino_silo: string | null;
+  stock_disponible?: number | null;
   
   // EL HISTORIAL DE TRAZABILIDAD
   detalle_insumos: DetalleInsumoLote[]; 

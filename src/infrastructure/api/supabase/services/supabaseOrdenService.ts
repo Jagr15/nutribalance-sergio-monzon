@@ -73,7 +73,7 @@ const buildDetalleMap = (rows: OrdenConsumoRow[]) => {
   return map;
 };
 
-const toOrden = (row: OrdenRow, detalle: DetalleInsumoLote[]): OrdenProduccion => ({
+const toOrden = (row: OrdenRow, detalle: DetalleInsumoLote[], stock_disponible?: number | null): OrdenProduccion => ({
   id: row.legacy_uid ?? crypto.randomUUID(),
   lote: row.lote,
   id_formula: row.id_formula_legacy ?? '',
@@ -90,6 +90,7 @@ const toOrden = (row: OrdenRow, detalle: DetalleInsumoLote[]): OrdenProduccion =
   destino_silo: row.destino_silo,
   detalle_insumos: detalle,
   costo_total_insumos: Number(row.costo_total_insumos),
+  stock_disponible: stock_disponible ?? null,
 });
 
 const buildDetalleRows = (
@@ -324,9 +325,29 @@ export const supabaseOrdenService = {
     if (error) throw error;
 
     const rows = (data ?? []) as unknown as OrdenRow[];
+    
+    // Fetch available stock from stock_pt
+    const { data: stockPtData, error: stockPtError } = await supabaseClient
+      .from('stock_pt')
+      .select('id_orden_legacy,cantidad_total')
+      .is('deleted_at', null);
+
+    const stockPtMap = new Map<string, number>();
+    if (!stockPtError && stockPtData) {
+      stockPtData.forEach((st) => {
+        if (st.id_orden_legacy) {
+          stockPtMap.set(st.id_orden_legacy, Number(st.cantidad_total));
+        }
+      });
+    }
+
     const detalleMap = await loadDetalleForOrdenIds(rows.map((row) => row.id));
 
-    return rows.map((row) => toOrden(row, detalleMap.get(row.id) ?? []));
+    return rows.map((row) => {
+      const legacyId = row.legacy_uid ?? row.id;
+      const stock_disponible = stockPtMap.get(legacyId) ?? null;
+      return toOrden(row, detalleMap.get(row.id) ?? [], stock_disponible);
+    });
   },
 
   async create(payload: Omit<OrdenProduccion, 'id'>): Promise<OrdenProduccion> {
