@@ -1,12 +1,24 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '../../../shared/components/card';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { useEstadosFinancieros } from '../hooks/useEstadosFinancieros';
-import type { PeriodoFiltro } from '../utils/estadosFinancieros';
+import { getFlujoCajaPagina, type PeriodoFiltro } from '../utils/estadosFinancieros';
 import { historicoContableService, parseHistoricoCsv, type MovimientoHistoricoImportRow } from '../services/historicoContableService';
 
 const money = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
 const dateLabel = (value: string) => formatDateDDMMYYYY(value);
+
+const formatMetodoPago = (metodo?: string | null) => {
+  if (!metodo) return '—';
+  const labelMap: Record<string, string> = {
+    transferencia: 'Transferencia',
+    efectivo: 'Efectivo',
+    cheque: 'Cheque',
+    tarjeta: 'Tarjeta',
+    deposito: 'Depósito',
+  };
+  return labelMap[metodo.toLowerCase()] ?? (metodo.charAt(0).toUpperCase() + metodo.slice(1));
+};
 
 const toDateInputValue = (date: Date) => date.toISOString().slice(0, 10);
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
@@ -52,11 +64,37 @@ const EstadosFinancierosPage = () => {
   const [importPreview, setImportPreview] = useState<MovimientoHistoricoImportRow[]>([]);
   const [importLoading, setImportLoading] = useState(false);
 
+  const [cashFlowPage, setCashFlowPage] = useState(1);
+  const CASH_FLOW_PAGE_SIZE = 15;
+
   const periodoEsPersonalizado = periodo === 'RANGO';
   const rangoVisible = useMemo(() => ({
     desde: periodoEsPersonalizado ? rangoCustom.desde : getPresetRange(periodo).desde,
     hasta: periodoEsPersonalizado ? rangoCustom.hasta : getPresetRange(periodo).hasta,
   }), [periodo, periodoEsPersonalizado, rangoCustom.desde, rangoCustom.hasta]);
+
+  useEffect(() => {
+    setCashFlowPage(1);
+  }, [periodo, rangoVisible.desde, rangoVisible.hasta]);
+
+  const cashFlowTotalPages = Math.max(
+    1,
+    Math.ceil((data?.flujoCaja?.movimientos?.length ?? 0) / CASH_FLOW_PAGE_SIZE)
+  );
+
+  useEffect(() => {
+    if (cashFlowPage > cashFlowTotalPages) {
+      setCashFlowPage(cashFlowTotalPages);
+    }
+  }, [cashFlowPage, cashFlowTotalPages]);
+
+  const cashFlowStartIndex = (cashFlowPage - 1) * CASH_FLOW_PAGE_SIZE;
+  const cashFlowEndIndex = cashFlowStartIndex + CASH_FLOW_PAGE_SIZE;
+
+  const flujoCajaMovimientosPaginados = useMemo(() => {
+    return getFlujoCajaPagina(data?.flujoCaja?.movimientos ?? [], cashFlowPage, CASH_FLOW_PAGE_SIZE);
+  }, [data?.flujoCaja?.movimientos, cashFlowPage, CASH_FLOW_PAGE_SIZE]);
+
   const showInitialLoadSection = import.meta.env.VITE_SHOW_HISTORICO_LOAD === 'true';
 
   const librosFiltrados = useMemo(() => ({
@@ -314,6 +352,200 @@ const EstadosFinancierosPage = () => {
           </div>
         </Card>
       </section>
+
+      <Card className="mt-6">
+        <div className="flex flex-col gap-1 mb-6">
+          <h2 className="text-xl font-bold tracking-tight text-slate-900">Flujo de caja operativo</h2>
+          <p className="text-xs text-slate-500">
+            Movimientos reales de ingresos y egresos registrados y confirmados para el periodo seleccionado.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-6">
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-700">Total ingresos</p>
+            <p className="mt-2 text-2xl font-black text-emerald-800">{money(data.flujoCaja.resumen.totalIngresos)}</p>
+          </div>
+          <div className="rounded-2xl border border-rose-100 bg-rose-50/50 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-rose-700">Total egresos</p>
+            <p className="mt-2 text-2xl font-black text-rose-800">{money(data.flujoCaja.resumen.totalEgresos)}</p>
+          </div>
+          <div className={`rounded-2xl border p-4 ${
+            data.flujoCaja.resumen.flujoNeto > 0 
+              ? 'border-emerald-100 bg-emerald-50/50' 
+              : data.flujoCaja.resumen.flujoNeto < 0 
+                ? 'border-rose-100 bg-rose-50/50' 
+                : 'border-slate-200 bg-slate-50/50'
+          }`}>
+            <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${
+              data.flujoCaja.resumen.flujoNeto > 0 
+                ? 'text-emerald-700' 
+                : data.flujoCaja.resumen.flujoNeto < 0 
+                  ? 'text-rose-700' 
+                  : 'text-slate-500'
+            }`}>Flujo neto</p>
+            <p className={`mt-2 text-2xl font-black ${
+              data.flujoCaja.resumen.flujoNeto > 0 
+                ? 'text-emerald-800' 
+                : data.flujoCaja.resumen.flujoNeto < 0 
+                  ? 'text-rose-800' 
+                  : 'text-slate-700'
+            }`}>{money(data.flujoCaja.resumen.flujoNeto)}</p>
+          </div>
+          <div className={`rounded-2xl border p-4 ${
+            data.flujoCaja.resumen.saldoFinal > 0 
+              ? 'border-emerald-100 bg-emerald-50/50' 
+              : data.flujoCaja.resumen.saldoFinal < 0 
+                ? 'border-rose-100 bg-rose-50/50' 
+                : 'border-slate-200 bg-slate-50/50'
+          }`}>
+            <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${
+              data.flujoCaja.resumen.saldoFinal > 0 
+                ? 'text-emerald-700' 
+                : data.flujoCaja.resumen.saldoFinal < 0 
+                  ? 'text-rose-700' 
+                  : 'text-slate-500'
+            }`}>Saldo final</p>
+            <p className={`mt-2 text-2xl font-black ${
+              data.flujoCaja.resumen.saldoFinal > 0 
+                ? 'text-emerald-800' 
+                : data.flujoCaja.resumen.saldoFinal < 0 
+                  ? 'text-rose-800' 
+                  : 'text-slate-700'
+            }`}>{money(data.flujoCaja.resumen.saldoFinal)}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Movimientos</p>
+            <p className="mt-2 text-2xl font-black text-slate-800">{data.flujoCaja.resumen.cantidadMovimientos}</p>
+          </div>
+        </div>
+
+        {data.flujoCaja.movimientos.length === 0 ? (
+          <EmptyState 
+            title="No hay movimientos de flujo de caja para el periodo seleccionado" 
+            description="Carga o confirma movimientos en el rango de fechas elegido para ver el flujo de caja." 
+          />
+        ) : (
+          <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1200px] text-left text-sm text-slate-600">
+                <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3">Fecha</th>
+                    <th className="px-4 py-3">Tipo</th>
+                    <th className="px-4 py-3">Concepto / Categoría</th>
+                    <th className="px-4 py-3">Referencia</th>
+                    <th className="px-4 py-3">Cliente / Proveedor</th>
+                    <th className="px-4 py-3">Descripción</th>
+                    <th className="px-4 py-3">Método de pago</th>
+                    <th className="px-4 py-3">Estado</th>
+                    <th className="px-4 py-3 text-right">Ingreso</th>
+                    <th className="px-4 py-3 text-right">Egreso</th>
+                    <th className="px-4 py-3 text-right">Saldo acumulado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {flujoCajaMovimientosPaginados.map((m) => {
+                    const isIngreso = m.tipo === 'INGRESO';
+                    return (
+                      <tr 
+                        key={m.id} 
+                        className={`hover:bg-slate-50/80 transition-colors ${
+                          isIngreso ? 'bg-emerald-50/10' : 'bg-rose-50/10'
+                        }`}
+                      >
+                        <td className="px-4 py-3.5 whitespace-nowrap font-medium text-slate-900">
+                          {dateLabel(m.fecha)}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            isIngreso ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'
+                          }`}>
+                            {isIngreso ? 'Ingreso' : 'Egreso'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap text-slate-800 font-medium">
+                          {m.categoria}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap text-xs text-slate-500 font-mono">
+                          {m.referencia || '—'}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-700 font-medium max-w-[200px] truncate">
+                          {m.tercero || '—'}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-600 max-w-[260px] truncate" title={m.descripcion ?? undefined}>
+                          {m.descripcion}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap text-xs text-slate-500">
+                          {formatMetodoPago(m.metodo_pago)}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap text-xs">
+                          <span className={`rounded-full px-2.5 py-0.5 font-medium ${
+                            m.estado === 'CONFIRMADO' 
+                              ? 'bg-slate-100 text-slate-700 border border-slate-200' 
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            {m.estado || '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-right whitespace-nowrap font-semibold text-emerald-600">
+                          {isIngreso ? money(m.ingreso) : '—'}
+                        </td>
+                        <td className="px-4 py-3.5 text-right whitespace-nowrap font-semibold text-rose-600">
+                          {!isIngreso ? money(m.egreso) : '—'}
+                        </td>
+                        <td className={`px-4 py-3.5 text-right whitespace-nowrap font-bold ${
+                          m.saldo_acumulado > 0 
+                            ? 'text-emerald-700' 
+                            : m.saldo_acumulado < 0 
+                              ? 'text-rose-700' 
+                              : 'text-slate-600'
+                        }`}>
+                          {money(m.saldo_acumulado)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {data.flujoCaja.movimientos.length > CASH_FLOW_PAGE_SIZE ? (
+              <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-xs text-slate-500 font-medium">
+                  Mostrando {cashFlowStartIndex + 1}-
+                  {Math.min(cashFlowEndIndex, data.flujoCaja.movimientos.length)} de{' '}
+                  <strong className="text-slate-900 font-semibold">{data.flujoCaja.movimientos.length}</strong> movimientos
+                </span>
+
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    disabled={cashFlowPage <= 1}
+                    onClick={() => setCashFlowPage((page) => Math.max(1, page - 1))}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white transition shadow-sm"
+                  >
+                    Anterior
+                  </button>
+
+                  <span className="text-xs text-slate-500 font-medium">
+                    Página <strong className="text-slate-900 font-semibold">{cashFlowPage}</strong> de <strong className="text-slate-900 font-semibold">{cashFlowTotalPages}</strong>
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={cashFlowPage >= cashFlowTotalPages}
+                    onClick={() => setCashFlowPage((page) => Math.min(cashFlowTotalPages, page + 1))}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white transition shadow-sm"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </Card>
     </div>
   );
 };

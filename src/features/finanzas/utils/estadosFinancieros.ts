@@ -26,6 +26,29 @@ export interface LibroMayorRow {
   saldo: number;
 }
 
+export interface FlujoCajaMovimiento {
+  id: string;
+  fecha: string;
+  tipo: 'INGRESO' | 'EGRESO';
+  categoria: string;
+  referencia: string | null;
+  tercero: string | null;
+  descripcion: string | null;
+  metodo_pago: string | null;
+  estado: string | null;
+  ingreso: number;
+  egreso: number;
+  saldo_acumulado: number;
+}
+
+export interface FlujoCajaResumen {
+  totalIngresos: number;
+  totalEgresos: number;
+  flujoNeto: number;
+  saldoFinal: number;
+  cantidadMovimientos: number;
+}
+
 export interface EstadosFinancierosData {
   estadoResultados: {
     ingresos: EstadoResultadoItem[];
@@ -42,7 +65,20 @@ export interface EstadosFinancierosData {
     auxiliarIngresos: EstadoResultadoItem[];
     auxiliarEgresos: EstadoResultadoItem[];
   };
+  flujoCaja: {
+    movimientos: FlujoCajaMovimiento[];
+    resumen: FlujoCajaResumen;
+  };
 }
+
+export const getFlujoCajaPagina = (
+  movimientos: FlujoCajaMovimiento[],
+  pagina: number,
+  size: number
+): FlujoCajaMovimiento[] => {
+  const start = (pagina - 1) * size;
+  return movimientos.slice(start, start + size);
+};
 
 const num = (value: unknown) => Number(value ?? 0);
 const toDate = (value: string) => new Date(value);
@@ -178,6 +214,77 @@ export const buildEstadosFinancieros = (params: {
     libroPorMes.set(mes, (libroPorMes.get(mes) ?? 0) + (movimiento.tipo === 'INGRESO' ? num(movimiento.monto) : -num(movimiento.monto)));
   });
 
+  // Cálculo de Flujo de Caja Operativo
+  const determineTipo = (m: MovimientoFinanciero): 'INGRESO' | 'EGRESO' => {
+    if (m.tipo === 'INGRESO') return 'INGRESO';
+    if (m.tipo === 'EGRESO') return 'EGRESO';
+
+    const op = (m.origen_operativo ?? '').toLowerCase();
+    if (/venta|cobranza|cobro|ingreso/i.test(op)) return 'INGRESO';
+    if (/compra|pago|egreso|gasto/i.test(op)) return 'EGRESO';
+
+    if (m.monto < 0) return 'EGRESO';
+    return 'INGRESO';
+  };
+
+  const sortedMovimientos = [...movimientosConfirmados].sort((a, b) => {
+    const timeA = new Date(a.fecha).getTime();
+    const timeB = new Date(b.fecha).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    const createA = new Date(a.created_at || 0).getTime();
+    const createB = new Date(b.created_at || 0).getTime();
+    if (createA !== createB) return createA - createB;
+    return a.uid.localeCompare(b.uid);
+  });
+
+  let cumulative = 0;
+  const flujoCajaMovimientos: FlujoCajaMovimiento[] = sortedMovimientos.map((m) => {
+    const tipo = determineTipo(m);
+    const montoAbs = Math.abs(m.monto);
+    const ingreso = tipo === 'INGRESO' ? montoAbs : 0;
+    const egreso = tipo === 'EGRESO' ? montoAbs : 0;
+    cumulative = cumulative + ingreso - egreso;
+
+    const id = m.uid;
+    const fecha = m.fecha;
+    const categoria = m.categoria ?? m.origen_operativo ?? 'Operación';
+    const referencia = m.referencia ?? m.comprobante ?? null;
+    const tercero = m.cliente ?? m.proveedor ?? m.tercero ?? null;
+    const descripcion = m.descripcion || 'Sin descripción';
+    const metodo_pago = m.metadata?.metodo_pago ?? m.metadata?.medio_pago ?? null;
+    const estado = m.estado || null;
+
+    return {
+      id,
+      fecha,
+      tipo,
+      categoria,
+      referencia,
+      tercero,
+      descripcion,
+      metodo_pago,
+      estado,
+      ingreso,
+      egreso,
+      saldo_acumulado: Number(cumulative.toFixed(2)),
+    };
+  });
+
+  const totalIngresos = flujoCajaMovimientos.reduce((acc, row) => acc + row.ingreso, 0);
+  const totalEgresos = flujoCajaMovimientos.reduce((acc, row) => acc + row.egreso, 0);
+  const flujoNeto = totalIngresos - totalEgresos;
+  const saldoFinal = flujoCajaMovimientos.length > 0 ? flujoCajaMovimientos[flujoCajaMovimientos.length - 1].saldo_acumulado : 0;
+
+  const flujoCajaResumen: FlujoCajaResumen = {
+    totalIngresos: Number(totalIngresos.toFixed(2)),
+    totalEgresos: Number(totalEgresos.toFixed(2)),
+    flujoNeto: Number(flujoNeto.toFixed(2)),
+    saldoFinal: Number(saldoFinal.toFixed(2)),
+    cantidadMovimientos: flujoCajaMovimientos.length,
+  };
+
+  const flujoCajaMovimientosDesc = [...flujoCajaMovimientos].reverse();
+
   return {
     estadoResultados: {
       ingresos: ingresosItems,
@@ -193,6 +300,10 @@ export const buildEstadosFinancieros = (params: {
       libroMayor,
       auxiliarIngresos: [...ingresosPorCuenta.entries()].map(([label, amount]) => ({ label, amount: Number(amount.toFixed(2)) })),
       auxiliarEgresos: [...egresosPorCuenta.entries()].map(([label, amount]) => ({ label, amount: Number(amount.toFixed(2)) })),
+    },
+    flujoCaja: {
+      movimientos: flujoCajaMovimientosDesc,
+      resumen: flujoCajaResumen,
     },
   };
 };
