@@ -74,15 +74,6 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
         <TableBody>
           {currentData.map((orden) => {
             const isExpanded = expandedId === orden.id;
-            console.log('ORDENES ROW STOCK FIELD', {
-              id: orden.id,
-              folio: (orden as any).folio,
-              lote: orden.lote,
-              cantidad_real: orden.cantidad_real,
-              cantidad_disponible: (orden as any).cantidad_disponible,
-              stock_disponible: (orden as any).stock_disponible,
-              raw: orden,
-            });
             return (
               <React.Fragment key={orden.id}>
                 <TableRow className={isExpanded ? 'bg-slate-50' : 'cursor-pointer'}>

@@ -128,12 +128,9 @@ const OrdenesSalidaPage: React.FC = () => {
   const totalKgReales = filtered.reduce((acc, item) => acc + Number(item.kilos_reales_cargados ?? 0), 0);
 
   const handleDespachar = useCallback(async (ordenId: string) => {
-    const orden = ordenesSalida.find(o => o.id === ordenId);
-    console.log('DESPACHANDO ORDEN SALIDA', orden);
-    const result = await ApiService.ordenesExpedicion.despachar(ordenId);
-    console.log('RESULTADO DESPACHO', result);
+    await ApiService.ordenesExpedicion.despachar(ordenId);
     await load();
-  }, [load, ordenesSalida]);
+  }, [load]);
 
   const handleCancelar = useCallback(async (ordenId: string) => {
     const currentOrden = ordenesSalida.find((orden) => orden.id === ordenId) ?? null;
@@ -250,17 +247,8 @@ const OrdenesSalidaPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {paginated.map((orden) => {
-                  console.log('RELACION ORDEN SALIDA -> ORDEN', {
-                    ordenExpedicionId: orden.id,
-                    orden_id: (orden as any).orden_id,
-                    orden_produccion_id: (orden as any).orden_produccion_id,
-                    lote_producto_terminado_id: (orden as any).lote_producto_terminado_id,
-                    lote_pt_id: (orden as any).lote_pt_id,
-                    lote: (orden as any).lote,
-                  });
-                  return (
-                    <tr key={orden.id} className="border-b border-slate-100 last:border-b-0">
+                {paginated.map((orden) => (
+                  <tr key={orden.id} className="border-b border-slate-100 last:border-b-0">
                     <td className="px-6 py-4">
                       <div className="font-medium text-slate-900">{orden.numero_expedicion}</div>
                       <div className="text-xs text-slate-500">{orden.referencia || 'Sin comprobante'}</div>
@@ -380,8 +368,7 @@ const OrdenesSalidaPage: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                );
-              })}
+                ))}
               </tbody>
             </table>
           </div>
