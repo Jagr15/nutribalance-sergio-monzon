@@ -4,6 +4,8 @@ import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { useEstadosFinancieros } from '../hooks/useEstadosFinancieros';
 import { getFlujoCajaPagina, type PeriodoFiltro } from '../utils/estadosFinancieros';
 import { historicoContableService, parseHistoricoCsv, type MovimientoHistoricoImportRow } from '../services/historicoContableService';
+import { ProyeccionCajaTable } from '../components/ProyeccionCajaTable';
+
 
 const money = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
 const dateLabel = (value: string) => formatDateDDMMYYYY(value);
@@ -55,7 +57,7 @@ const EmptyState = ({ title, description }: { title: string; description: string
 );
 
 const EstadosFinancierosPage = () => {
-  const { loading, error, data, periodo, setPeriodo, rangoCustom, setRangoCustom, refresh } = useEstadosFinancieros();
+  const { loading, error, data, periodo, setPeriodo, rangoCustom, setRangoCustom, refresh, movimientos, tesoreria } = useEstadosFinancieros();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [csvText, setCsvText] = useState('');
   const [importState, setImportState] = useState(historicoContableService.getState());
@@ -546,6 +548,14 @@ const EstadosFinancierosPage = () => {
           </div>
         )}
       </Card>
+
+      {!loading && (
+        <ProyeccionCajaTable
+          movimientos={movimientos}
+          chequesRecibidos={tesoreria.chequesRecibidos}
+          chequesEmitidos={tesoreria.chequesEmitidos}
+        />
+      )}
     </div>
   );
 };

@@ -30,7 +30,20 @@ export interface NewStockEntryData {
   fecha_ingreso: string;
   cantidad_actual: number;
   cantidad_inicial: number;
+  origen?: 'COMPRA' | 'AJUSTE' | 'CARGA_INICIAL' | 'CORRECCION' | 'ALTA_INSUMO';
+  tipoOperacion?: 'COMPRA' | 'AJUSTE' | 'CARGA_INICIAL' | 'CORRECCION' | 'ALTA_INSUMO';
+  registrarCompraFinanciera?: boolean;
+  condicion_pago?: string;
 }
+
+const COMPRA_MARKERS = new Set(['COMPRA']);
+
+const shouldRegisterFinancialPurchase = (data: NewStockEntryData) => {
+  if (data.registrarCompraFinanciera === true) return true;
+  if (COMPRA_MARKERS.has(data.origen ?? '')) return true;
+  if (COMPRA_MARKERS.has(data.tipoOperacion ?? '')) return true;
+  return false;
+};
 
 export const stockMateriaPrimaService = {
   findAll: async (): Promise<StockMateriaPrima[]> => {
@@ -39,6 +52,7 @@ export const stockMateriaPrimaService = {
 
   create: async (data: NewStockEntryData): Promise<StockMateriaPrima> => {
     assertPermission('stock_mp', 'modify_stock');
+    const shouldRegisterPurchase = shouldRegisterFinancialPurchase(data);
     if (!data.lote?.trim()) throw new Error('El lote es obligatorio.');
     if (!data.id_proveedor) throw new Error('El proveedor es obligatorio.');
     if (!data.id_insumo) throw new Error('El insumo es obligatorio.');
@@ -97,18 +111,21 @@ export const stockMateriaPrimaService = {
       ubicacion: data.ubicacion,
     });
 
-    try {
-      await contabilidadOperativaService.registrarCompraMateriaPrima({
-        stock_lote_legacy_uid: created.uid,
-        fecha: data.fecha_ingreso,
-        lote: lote,
-        insumo: data.nombre_insumo,
-        proveedor: data.nombre_prov,
-        monto: costoResuelto.costo_total,
-        remito: remito || undefined,
-      });
-    } catch (contabilidadError) {
-      console.warn('No se pudo registrar la compra en contabilidad operativa.', contabilidadError);
+    if (shouldRegisterPurchase) {
+      try {
+        await contabilidadOperativaService.registrarCompraMateriaPrima({
+          stock_lote_legacy_uid: created.uid,
+          fecha: data.fecha_ingreso,
+          lote: lote,
+          insumo: data.nombre_insumo,
+          proveedor: data.nombre_prov,
+          monto: costoResuelto.costo_total,
+          remito: remito || undefined,
+          condicion_pago: data.condicion_pago?.trim() || undefined,
+        });
+      } catch (contabilidadError) {
+        console.warn('No se pudo registrar la compra en contabilidad operativa.', contabilidadError);
+      }
     }
 
     await auditAction({

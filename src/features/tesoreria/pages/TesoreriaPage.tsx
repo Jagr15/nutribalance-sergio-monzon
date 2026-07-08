@@ -5,6 +5,7 @@ import { Card } from '../../../shared/components/card';
 import { useFinanzas } from '../../finanzas/hooks/useFinanzas';
 import { useTesoreria } from '../hooks/useTesoreria';
 import { ChequeForm } from '../components/ChequeForm';
+import { FlujoCharts } from '../../finanzas/components/FlujoCharts';
 import { EMPTY_CHEQUE_FORM } from '../components/chequeFormDefaults';
 import { tesoreriaService, type ChequeTesoreriaFormValues } from '../services/tesoreriaService';
 import type { ChequeTesoreriaRow, EstadoChequeTesoreria } from '../../finanzas/types';
@@ -435,6 +436,8 @@ const TesoreriaPage = () => {
         <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Listos para depositar hoy</p><p className="mt-2 text-2xl font-semibold">{cajasYcobranza.chequesRecibidosHoy.length}</p></Card>
         <Card><p className="text-xs uppercase tracking-[0.22em] text-slate-500">Listos para pagar hoy</p><p className="mt-2 text-2xl font-semibold">{cajasYcobranza.chequesEmitidosHoy.length}</p></Card>
       </section>
+
+      <FlujoCharts reportes={reportes} />
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card className="border-sky-200 bg-sky-50">

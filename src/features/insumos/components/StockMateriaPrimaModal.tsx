@@ -4,6 +4,7 @@ import { FiX, FiSave, FiBox, FiTruck, FiMapPin, FiCalendar, FiHash, FiFileText }
 import { useStockMateriaPrima } from '../hooks';
 import { ApiService } from '../../../infrastructure/api';
 import type { Insumo } from '../types';
+import type { NewStockEntryData } from '../services/stockMateriaPrimaService';
 import type { Proveedor } from '../../proveedores/types';
 import type { Silo } from '../../silos/types';
 import { findSiloByName, getMateriaPrimaSilos } from '../../silos/utils/siloFilters';
@@ -11,14 +12,16 @@ import { normalizeNumericInputChange, parseNumericInput } from '../../../shared/
 import { resolverCostoIngresoMP } from '../utils/costoIngreso';
 
 interface Props {
+  mode: 'COMPRA' | 'AJUSTE';
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
+const StockMPModal: React.FC<Props> = ({ mode, onClose, onSuccess }) => {
   const { create, isLoading } = useStockMateriaPrima();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const isPurchaseMode = mode === 'COMPRA';
   
   // Listas para catálogos
   const [insumos, setInsumos] = useState<Insumo[]>([]);
@@ -40,7 +43,8 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     cantidad: '',
     unidad_entrada: 'KG' as 'KG' | 'TON',
     costo_unitario: '',
-    fecha_ingreso: new Date().toISOString().split('T')[0]
+    fecha_ingreso: new Date().toISOString().split('T')[0],
+    condicion_pago: 'CONTADO',
   });
 
   // CARGA DE DATOS ORIGINALES (Insumos, Proveedores, Silos)
@@ -117,6 +121,10 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       setSubmitError('El costo unitario no puede ser negativo.');
       return;
     }
+    if (isPurchaseMode && !formData.remito_nro.trim() && !formData.condicion_pago.trim()) {
+      setSubmitError('La compra real requiere remito/documento o condición de pago.');
+      return;
+    }
     const siloSeleccionado = findSiloByName(silos, formData.ubicacion);
     if (!siloSeleccionado) {
       setSubmitError('El silo seleccionado no existe.');
@@ -127,7 +135,7 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       return;
     }
 
-    const dataToSave = {
+    const dataToSave: NewStockEntryData = {
       ...formData,
       lote: formData.lote.trim().toUpperCase(),
       remito_nro: formData.remito_nro.trim(),
@@ -135,6 +143,10 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       cantidad_actual: cantidad,
       cantidad_inicial: cantidad,
       cantidad,
+      origen: isPurchaseMode ? 'COMPRA' : 'AJUSTE',
+      tipoOperacion: isPurchaseMode ? 'COMPRA' : 'AJUSTE',
+      registrarCompraFinanciera: isPurchaseMode,
+      condicion_pago: isPurchaseMode ? formData.condicion_pago.trim() : undefined,
     };
 
     try {
@@ -159,7 +171,16 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
       <div className="bg-white border border-slate-200 rounded-[1.5rem] w-full max-w-4xl shadow-xl animate-in fade-in zoom-in-95 duration-200">
         
         <header className="px-8 py-5 border-b border-slate-200 flex justify-between items-center">
-          <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Ingreso de Materia Prima</h2>
+          <div>
+            <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">
+              {isPurchaseMode ? 'Registrar Compra de Materia Prima' : 'Ajuste de Stock / Carga Inicial'}
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              {isPurchaseMode
+                ? 'Esta acción actualiza stock y también genera la compra financiera pendiente.'
+                : 'Esta acción solo impacta inventario. No crea compra, tesorería ni cuentas por pagar.'}
+            </p>
+          </div>
           <button onClick={onClose} className="text-gray-500 hover:text-slate-900 transition-colors duration-200 transition-colors"><FiX size={18} /></button>
         </header>
 
@@ -258,7 +279,12 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             </div>
             <div className="space-y-1">
               <label className={labelStyles}><FiFileText /> Nro Remito</label>
-              <input required className={`${inputStyles} font-mono`} placeholder="000-000" onChange={e => setFormData({ ...formData, remito_nro: e.target.value })} />
+              <input
+                required={isPurchaseMode}
+                className={`${inputStyles} font-mono`}
+                placeholder={isPurchaseMode ? '000-000' : 'Opcional para trazabilidad'}
+                onChange={e => setFormData({ ...formData, remito_nro: e.target.value })}
+              />
             </div>
             <div className="space-y-1">
               <label className={labelStyles}>Cantidad Ingreso</label>
@@ -318,12 +344,36 @@ const StockMPModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             </div>
           </div>
 
+          {isPurchaseMode ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-1">
+                <label className={labelStyles}>Condición de pago</label>
+                <select
+                  className={inputStyles}
+                  value={formData.condicion_pago}
+                  onChange={e => setFormData({ ...formData, condicion_pago: e.target.value })}
+                >
+                  <option value="CONTADO">Contado</option>
+                  <option value="CTA_CTE">Cuenta corriente</option>
+                  <option value="TRANSFERENCIA">Transferencia</option>
+                </select>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                Compra real: se enviará un movimiento `COMPRA_MP` a Finanzas con estado pendiente de pago.
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
+              Ajuste o carga inicial: se registra el lote y su valorización de inventario, pero no se crea movimiento en `flujo_caja_movimientos`.
+            </div>
+          )}
+
           <footer className="pt-4 flex gap-3">
             <button type="button" onClick={onClose} className="px-8 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-100 hover:bg-red-50 hover:text-red-500 transition-all duration-200 ease-out">
               Cancelar
             </button>
             <button type="submit" disabled={isLoading || isSubmitting || hasNoCostoReferencia} className="flex-1 h-12 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all duration-200 ease-out disabled:opacity-30">
-              <FiSave size={14} /> {isLoading || isSubmitting ? 'Procesando Registro...' : 'Confirmar Ingreso a Almacén'}
+              <FiSave size={14} /> {isLoading || isSubmitting ? 'Procesando Registro...' : isPurchaseMode ? 'Registrar Compra y Stock' : 'Aplicar Ajuste de Stock'}
             </button>
           </footer>
         </form>

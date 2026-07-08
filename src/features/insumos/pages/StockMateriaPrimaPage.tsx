@@ -21,10 +21,11 @@ const formatterFecha = (value: string | Date | null | undefined) => formatDateDD
 type HistorialPeriodo = 'HOY' | 'SEMANA' | 'MES' | 'TODO';
 
 const DEFAULT_PAGE_SIZE = 10;
+type StockModalMode = 'COMPRA' | 'AJUSTE';
 
 const StockMateriaPrimaPage: React.FC = () => {
   const { lotes, isLoading, loadError, getAll, remove } = useStockMateriaPrima();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<StockModalMode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [comprasLoading, setComprasLoading] = useState(true);
   const [comprasError, setComprasError] = useState<string | null>(null);
@@ -150,12 +151,20 @@ const StockMateriaPrimaPage: React.FC = () => {
           <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Stock Materia Prima</h1>
           <p className="text-sm text-slate-500 mt-2">Inventario de materia prima con alertas automáticas por nivel de stock y umbral crítico.</p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="h-12 px-6 bg-blue-600 hover:bg-blue-500 text-slate-900 rounded-xl text-sm font-bold transition-all flex items-center gap-2 shadow-lg shadow-blue-600/20"
-        >
-          <FiPlus size={20} /> Registrar Ingreso
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => setModalMode('AJUSTE')}
+            className="h-12 px-6 bg-white hover:bg-slate-50 text-slate-900 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border border-slate-200"
+          >
+            <FiPlus size={20} /> Ajustar Stock / Carga Inicial
+          </button>
+          <button
+            onClick={() => setModalMode('COMPRA')}
+            className="h-12 px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2 shadow-lg shadow-blue-600/20"
+          >
+            <FiPlus size={20} /> Registrar Compra MP
+          </button>
+        </div>
       </header>
 
       <section className="mb-8 space-y-6">
@@ -167,9 +176,9 @@ const StockMateriaPrimaPage: React.FC = () => {
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Compras registradas</p>
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Ingresos registrados</p>
             <p className="mt-3 text-3xl font-black text-slate-900">{showLoadingCards ? '—' : comprasRegistradas}</p>
-            <p className="mt-2 text-xs text-slate-500">Historial consolidado de ingresos MP.</p>
+            <p className="mt-2 text-xs text-slate-500">Historial consolidado de ingresos de inventario MP.</p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Proveedores activos</p>
@@ -317,9 +326,10 @@ const StockMateriaPrimaPage: React.FC = () => {
         </article>
       </section>
 
-      {isModalOpen ? (
+      {modalMode ? (
         <StockMateriaPrimaModal
-          onClose={() => setIsModalOpen(false)}
+          mode={modalMode}
+          onClose={() => setModalMode(null)}
           onSuccess={refreshData}
         />
       ) : null}

@@ -63,11 +63,9 @@ const buildStockActualBySilo = async () => {
     const location = mp.ubicacion?.trim();
     if (!location) return;
 
-    const unit = mp.insumos?.unidad_medida || 'KG';
-    const isTons = ['tonelada', 'toneladas', 'tn'].includes(unit.trim().toLowerCase());
-    
-    const available = Math.max(0, toNumber(mp.cantidad_actual) - toNumber(mp.cantidad_comprometida));
-    const availableKg = isTons ? available * 1000 : available;
+    // Las cantidades en stock_lotes_mp ya se guardan normalizadas en kilogramos (KG),
+    // por lo que no es necesario volver a multiplicarlas por 1000 si el insumo está en toneladas.
+    const availableKg = Math.max(0, toNumber(mp.cantidad_actual) - toNumber(mp.cantidad_comprometida));
 
     mpStockByName.set(normalizeText(location), (mpStockByName.get(normalizeText(location)) ?? 0) + availableKg);
   });

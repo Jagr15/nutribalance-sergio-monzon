@@ -54,6 +54,7 @@ describe('contabilidadOperativaService', () => {
       proveedor: 'Proveedor SA',
       monto: 1500,
       remito: 'R-100',
+      condicion_pago: 'CTA_CTE',
     });
 
     expect(upsertMock).toHaveBeenCalledWith(
@@ -67,12 +68,37 @@ describe('contabilidadOperativaService', () => {
         estado: 'PENDIENTE',
         estado_financiero: 'PENDIENTE_PAGO',
         metadata: expect.objectContaining({
+          condicion_pago: 'CTA_CTE',
           remito: 'R-100',
           stock_lote_legacy_uid: 'stk-mp-1',
         }),
       }),
       expect.any(Object),
     );
+  });
+
+  it('rechaza compras incompletas sin proveedor ni documento o condición de pago', async () => {
+    await expect(
+      contabilidadOperativaService.registrarCompraMateriaPrima({
+        stock_lote_legacy_uid: 'stk-mp-2',
+        fecha: '2026-06-18',
+        lote: 'L-002',
+        insumo: 'Soja',
+        proveedor: '   ',
+        monto: 1500,
+      }),
+    ).rejects.toThrow(/proveedor es obligatorio/i);
+
+    await expect(
+      contabilidadOperativaService.registrarCompraMateriaPrima({
+        stock_lote_legacy_uid: 'stk-mp-3',
+        fecha: '2026-06-18',
+        lote: 'L-003',
+        insumo: 'Soja',
+        proveedor: 'Proveedor SA',
+        monto: 1500,
+      }),
+    ).rejects.toThrow(/remito\/documento o condición de pago/i);
   });
 
   it('sincroniza movimiento de costos de forma idempotente con origen', async () => {

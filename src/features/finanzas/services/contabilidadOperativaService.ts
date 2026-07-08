@@ -32,10 +32,20 @@ const ensurePositive = (value: number, label: string) => {
   if (!Number.isFinite(value) || value <= 0) throw new Error(`${label} debe ser mayor a 0.`);
 };
 
+const ensureRequiredText = (value: string | undefined, label: string) => {
+  if (!value?.trim()) throw new Error(`${label} es obligatorio.`);
+};
+
+const getStorage = () => {
+  if (typeof globalThis === 'undefined') return null;
+  return globalThis.localStorage ?? null;
+};
+
 const readMock = (): Array<MovimientoContablePayload & { id?: string }> => {
-  if (typeof window === 'undefined') return [];
+  const storage = getStorage();
+  if (!storage) return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     return Array.isArray(parsed) ? (parsed as Array<MovimientoContablePayload & { id?: string }>) : [];
@@ -45,8 +55,9 @@ const readMock = (): Array<MovimientoContablePayload & { id?: string }> => {
 };
 
 const writeMock = (rows: Array<MovimientoContablePayload & { id?: string }>) => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+  const storage = getStorage();
+  if (!storage) return;
+  storage.setItem(STORAGE_KEY, JSON.stringify(rows));
 };
 
 const resolveCategoriaIdByLegacy = async (legacyUid: string) => {
@@ -133,8 +144,17 @@ export const contabilidadOperativaService = {
     proveedor: string;
     monto: number;
     remito?: string;
+    condicion_pago?: string;
   }): Promise<void> {
+    ensureRequiredText(payload.stock_lote_legacy_uid, 'El lote de stock');
+    ensureRequiredText(payload.fecha, 'La fecha de compra');
+    ensureRequiredText(payload.lote, 'El lote');
+    ensureRequiredText(payload.insumo, 'El insumo');
+    ensureRequiredText(payload.proveedor, 'El proveedor');
     ensurePositive(payload.monto, 'El monto de compra');
+    if (!payload.remito?.trim() && !payload.condicion_pago?.trim()) {
+      throw new Error('La compra debe informar remito/documento o condición de pago.');
+    }
     const categoriaId = runtimeConfig.mode === 'supabase'
       ? await resolveCategoriaIdByLegacy('cat-compras')
       : null;
@@ -154,6 +174,7 @@ export const contabilidadOperativaService = {
         insumo: payload.insumo,
         proveedor: payload.proveedor,
         remito: payload.remito ?? null,
+        condicion_pago: payload.condicion_pago ?? null,
         stock_lote_legacy_uid: payload.stock_lote_legacy_uid,
       },
     });

@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockFrom, mockApiService } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
@@ -77,11 +77,26 @@ vi.mock('../../../infrastructure/api/supabase/client', () => ({ supabaseClient: 
 
 import { finanzasService } from './finanzasService';
 
+const storage = new Map<string, string>();
+Object.defineProperty(globalThis, 'localStorage', {
+  configurable: true,
+  value: {
+    getItem: (k: string) => storage.get(k) ?? null,
+    setItem: (k: string, v: string) => storage.set(k, v),
+    removeItem: (k: string) => storage.delete(k),
+    clear: () => storage.clear(),
+  },
+});
+
 afterAll(() => {
   vi.useRealTimers();
 });
 
 describe('finanzasService inventory', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it('separa valor de stock MP y PT', async () => {
     const resumen = await finanzasService.getInventarioResumen();
 
@@ -106,5 +121,36 @@ describe('finanzasService inventory', () => {
     expect(result.kpis.ingresos_mes).toBeGreaterThan(0);
     expect(result.kpis.cuentas_por_cobrar).toBeGreaterThan(0);
     expect(result.reportes.flujo_caja_mensual.some((row) => row.ingresos > 0)).toBe(true);
+  });
+
+  it('no convierte una carga de stock en cuentas por pagar sin movimiento financiero asociado', async () => {
+    const result = await finanzasService.getOperationalFallback();
+
+    expect(result.movimientos.some((mov) => mov.origen_operativo === 'COMPRA_MP')).toBe(false);
+    expect(result.kpis.cuentas_por_pagar).toBe(0);
+  });
+
+  it('incluye una compra real de MP en movimientos y cuentas por pagar', async () => {
+    localStorage.setItem('nutribalance_contabilidad_operativa_v1', JSON.stringify([
+      {
+        legacy_uid: 'fcm-compra-stk-mp-1',
+        fecha: '2026-06-18',
+        tipo: 'EGRESO',
+        origen_operativo: 'COMPRA_MP',
+        descripcion: 'Compra MP L-001 - Maíz',
+        monto: 1500,
+        estado: 'PENDIENTE',
+        estado_financiero: 'PENDIENTE_PAGO',
+        metadata: {
+          lote: 'L-001',
+          proveedor: 'Proveedor SA',
+        },
+      },
+    ]));
+
+    const result = await finanzasService.getOperationalFallback();
+
+    expect(result.movimientos.some((mov) => mov.origen_operativo === 'COMPRA_MP' && mov.monto === 1500)).toBe(true);
+    expect(result.kpis.cuentas_por_pagar).toBe(1500);
   });
 });

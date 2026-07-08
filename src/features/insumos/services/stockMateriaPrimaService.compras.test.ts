@@ -35,7 +35,31 @@ describe('stockMateriaPrimaService compras', () => {
     localStorage.setItem('nutribalance_user_role', 'inventario');
   });
 
-  it('registra el movimiento contable al crear un lote', async () => {
+  it('no registra compra financiera para una carga inicial de stock', async () => {
+    createMock.mockResolvedValue({ uid: 'stk-099' });
+
+    await stockMateriaPrimaService.create({
+      id_insumo: 'i-1',
+      nombre_insumo: 'Maiz',
+      id_proveedor: 'p-1',
+      nombre_prov: 'Proveedor SA',
+      ubicacion: 'Silo 1',
+      lote: ' lote-ajuste ',
+      remito_nro: '',
+      cantidad: 10,
+      unidad_entrada: TipoUnidad.KG,
+      fecha_ingreso: '2026-06-18',
+      cantidad_actual: 10,
+      cantidad_inicial: 10,
+      origen: 'CARGA_INICIAL',
+      tipoOperacion: 'AJUSTE',
+      registrarCompraFinanciera: false,
+    });
+
+    expect(registrarCompraMock).not.toHaveBeenCalled();
+  });
+
+  it('registra el movimiento contable solo para una compra real', async () => {
     createMock.mockResolvedValue({ uid: 'stk-100' });
 
     await stockMateriaPrimaService.create({
@@ -51,6 +75,10 @@ describe('stockMateriaPrimaService compras', () => {
       fecha_ingreso: '2026-06-18',
       cantidad_actual: 10,
       cantidad_inicial: 10,
+      origen: 'COMPRA',
+      tipoOperacion: 'COMPRA',
+      registrarCompraFinanciera: true,
+      condicion_pago: 'CTA_CTE',
     });
 
     expect(registrarCompraMock).toHaveBeenCalledWith({
@@ -61,6 +89,7 @@ describe('stockMateriaPrimaService compras', () => {
       proveedor: 'Proveedor SA',
       monto: expect.any(Number),
       remito: 'rem-1',
+      condicion_pago: 'CTA_CTE',
     });
   });
 });

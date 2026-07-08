@@ -35,13 +35,9 @@ const buildMockStockBySilo = async () => {
     const ubicacion = row.ubicacion?.trim();
     if (!ubicacion) return;
 
-    const insumoId = row.id_insumo || row.insumo_id || '';
-    const insumo = insumosMap.get(insumoId);
-    const unit = insumo?.unidad_medida || 'KG';
-    const isTons = ['tonelada', 'toneladas', 'tn'].includes(unit.trim().toLowerCase());
-
-    const disponible = Math.max(0, Number(row.cantidad_actual ?? 0) - Number(row.cantidad_comprometida ?? 0));
-    const disponibleKg = isTons ? disponible * 1000 : disponible;
+    // Las cantidades en stock ya se guardan normalizadas en kilogramos (KG),
+    // por lo que no es necesario volver a multiplicarlas por 1000 si el insumo está en toneladas.
+    const disponibleKg = Math.max(0, Number(row.cantidad_actual ?? 0) - Number(row.cantidad_comprometida ?? 0));
 
     mpByLocation.set(normalizeText(ubicacion), (mpByLocation.get(normalizeText(ubicacion)) ?? 0) + disponibleKg);
   });

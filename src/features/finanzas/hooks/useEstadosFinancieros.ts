@@ -146,5 +146,6 @@ export const useEstadosFinancieros = () => {
 
   const data = useMemo(() => buildEstadosFinancieros({ movimientos, kpis, tesoreria, inventario, periodo, rangoCustom }), [inventario, kpis, movimientos, periodo, rangoCustom, tesoreria]);
 
-  return { loading, error, data, periodo, setPeriodo, rangoCustom, setRangoCustom, refresh };
+  return { loading, error, data, periodo, setPeriodo, rangoCustom, setRangoCustom, refresh, movimientos, tesoreria };
 };
+

@@ -3,7 +3,6 @@ import { FiEdit2, FiPlus, FiPower, FiRotateCcw, FiTrendingUp, FiX } from 'react-
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../../shared/components/card';
 import { useFinanzas } from '../hooks/useFinanzas';
-import { FlujoCharts } from '../components/FlujoCharts';
 import { KpiGrid } from '../components/KpiGrid';
 import { MovimientosTable } from '../components/MovimientosTable';
 import { RegistrarMovimientoForm } from '../components/RegistrarMovimientoForm';
@@ -657,7 +656,7 @@ const FinanzasPage = () => {
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => navigate(ROUTES.PROYECCION_CAJA)}
+            onClick={() => navigate(ROUTES.ESTADOS_FINANCIEROS)}
             className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
           >
             <FiTrendingUp size={14} />
@@ -1295,13 +1294,6 @@ const FinanzasPage = () => {
         <KpiGrid kpis={kpisConCuentasActualizadas} />
       )}
 
-      {loading ? (
-        <Card className="h-80 animate-pulse bg-slate-100 border-slate-200">
-          <div />
-        </Card>
-      ) : (
-        <FlujoCharts reportes={reportes} />
-      )}
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card>
