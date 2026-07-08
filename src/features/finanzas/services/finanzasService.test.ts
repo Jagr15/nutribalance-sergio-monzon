@@ -5,6 +5,8 @@ vi.mock('../../../infrastructure/api/supabase/client', () => ({ supabaseClient: 
 vi.mock('../../../infrastructure/api/runtimeConfig', () => ({ runtimeConfig: { mode: 'mock' } }));
 
 import { finanzasService } from './finanzasService';
+import { mockFormulaService } from '../../../infrastructure/api/mock/services/mockFormulaService';
+import { mockOrdenService } from '../../../infrastructure/api/mock/services/mockOrdenService';
 
 describe('finanzasService', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -103,8 +105,45 @@ describe('finanzasService', () => {
       throw new Error('tabla inesperada');
     });
 
+    const spyFormulas = vi.spyOn(mockFormulaService, 'findAll').mockResolvedValue([
+      {
+        uid: 'for-1',
+        nombre_producto: 'Balanceado X',
+        version: 2,
+        costo_por_kg: 100,
+        costo_por_tonelada: 100000,
+        ingredientes: [],
+        esta_activa: true,
+        ultima_edicion: new Date(),
+        id_usuario: 'u1',
+        author: 'Admin',
+        createdAt: new Date(),
+      },
+    ]);
+    const spyOrdenes = vi.spyOn(mockOrdenService, 'getAll').mockResolvedValue([
+      {
+        id: 'o-1',
+        lote: 'OP-0001',
+        id_formula: 'for-1',
+        nombre_producto: 'Balanceado X',
+        version_formula: 2,
+        cantidad_objetivo: 1,
+        cantidad_real: 1,
+        estado: 'FINALIZADO',
+        fecha_creacion: '2026-07-01T00:00:00Z',
+        usuario_responsable: 'Admin',
+        detalle_insumos: [],
+        costo_total_insumos: 120,
+        id_silo: null,
+        destino_silo: null,
+      },
+    ]);
+
     const rows = await finanzasService.getCostosComparativos();
     expect(rows[0].variacion_pct).toBe(20);
+
+    spyFormulas.mockRestore();
+    spyOrdenes.mockRestore();
   });
 
   it('crea rubro con tipo válido en mock', async () => {

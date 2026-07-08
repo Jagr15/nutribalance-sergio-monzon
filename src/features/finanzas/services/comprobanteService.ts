@@ -2,6 +2,12 @@ import { supabaseClient } from '../../../infrastructure/api/supabase/client';
 import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 const isMockMode = () => runtimeConfig.mode === 'mock';
 
+export function isUuid(val: string | null | undefined): boolean {
+  if (!val) return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(val);
+}
+
 export interface Comprobante {
   id: string;
   legacy_uid?: string | null;
@@ -15,6 +21,8 @@ export interface Comprobante {
   saldo: number;
   cliente_id?: string | null;
   proveedor_id?: string | null;
+  fecha_operacion?: string | null;
+  estado_financiero?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -114,19 +122,95 @@ export const comprobanteService = {
         }
       }
 
+      // Integración financiera para modo Mock
+      if (nuevo.tipo === 'RECIBO' || nuevo.tipo === 'PAGO') {
+        try {
+          const { contabilidadOperativaService } = await import('./contabilidadOperativaService');
+          await contabilidadOperativaService.ensureMovimiento({
+            legacy_uid: `fcm-${nuevo.legacy_uid}`,
+            fecha: nuevo.fecha_emision,
+            tipo: nuevo.tipo === 'RECIBO' ? 'INGRESO' : 'EGRESO',
+            origen_operativo: nuevo.tipo === 'RECIBO' ? 'COBRANZA' : 'PAGO',
+            origen_modulo: 'finanzas',
+            origen_id: nuevo.id,
+            descripcion: `${nuevo.tipo === 'RECIBO' ? 'Recibo de cobro' : 'Orden de pago'} manual Nro ${nuevo.numero}`,
+            monto: nuevo.total,
+            comprobante_id: nuevo.id,
+            estado: 'CONFIRMADO',
+            fecha_operacion: nuevo.fecha_emision,
+            estado_financiero: nuevo.tipo === 'RECIBO' ? 'COBRADO' : 'PAGADO',
+          });
+        } catch (err) {
+          console.error('Error al registrar movimiento mock:', err);
+        }
+      }
+
       return nuevo;
+    }
+
+    // SUPABASE MODE:
+    // Resolve cliente_id to a valid UUID or null
+    let resolvedClienteId: string | null = null;
+    if (data.cliente_id) {
+      if (isUuid(data.cliente_id)) {
+        resolvedClienteId = data.cliente_id;
+      } else {
+        // Resolve from Supabase by legacy_uid
+        const { data: cliData, error: cliErr } = await supabaseClient
+          .from('clientes')
+          .select('id')
+          .eq('legacy_uid', data.cliente_id)
+          .maybeSingle();
+        if (!cliErr && cliData && cliData.id && isUuid(cliData.id)) {
+          resolvedClienteId = cliData.id;
+        }
+      }
     }
 
     const { data: inserted, error } = await supabaseClient
       .from('comprobantes')
       .insert({
-        ...data,
-        legacy_uid: `comp-manual-${Math.floor(Math.random() * 1000000)}`,
+        tipo: data.tipo,
+        numero: data.numero,
+        fecha_emision: data.fecha_emision,
+        fecha_vencimiento: data.fecha_vencimiento,
+        tercero: data.tercero,
+        estado: data.estado,
+        total: Number(data.total),
+        saldo: Number(data.saldo),
+        cliente_id: resolvedClienteId,
+        fecha_operacion: data.fecha_operacion || data.fecha_emision,
+        estado_financiero: data.estado_financiero,
+        legacy_uid: data.legacy_uid ?? `comp-manual-${Math.floor(Math.random() * 1000000)}`,
       })
       .select('*')
       .single();
 
     if (error) throw error;
+
+    // Integración financiera para Supabase
+    if (inserted.tipo === 'RECIBO' || inserted.tipo === 'PAGO') {
+      const { error: fcmError } = await supabaseClient
+        .from('flujo_caja_movimientos')
+        .insert({
+          legacy_uid: `fcm-${inserted.legacy_uid}`,
+          fecha: inserted.fecha_emision,
+          tipo: inserted.tipo === 'RECIBO' ? 'INGRESO' : 'EGRESO',
+          origen_operativo: inserted.tipo === 'RECIBO' ? 'COBRANZA' : 'PAGO',
+          origen_modulo: 'finanzas',
+          origen_id: inserted.id,
+          descripcion: `${inserted.tipo === 'RECIBO' ? 'Recibo de cobro' : 'Orden de pago'} manual Nro ${inserted.numero}`,
+          monto: Number(inserted.total),
+          comprobante_id: inserted.id,
+          estado: 'CONFIRMADO',
+          fecha_operacion: inserted.fecha_emision,
+          estado_financiero: inserted.tipo === 'RECIBO' ? 'COBRADO' : 'PAGADO',
+        });
+      if (fcmError) {
+        console.error('Error al registrar movimiento financiero:', fcmError);
+      }
+    }
+
     return {
       ...inserted,
       total: Number(inserted.total),

@@ -1,5 +1,44 @@
 import type { Formula, Ingrediente } from '../../../../features/formulas/types';
 import { supabaseClient } from '../client';
+import { supabaseInsumoService } from './supabaseInsumoService';
+import { supabaseStockMPService } from './supabaseStockMPService';
+import { calculateFormulaNutrition } from '../../../../features/formulas/utils/nutritionCalculator';
+import { calculateFormulaCost } from '../../../../features/formulas/utils/costCalculator';
+import type { Insumo, StockMateriaPrima } from '../../../../features/insumos/types';
+
+const withSnapshots = (
+  formula: Formula,
+  maestroStock: StockMateriaPrima[],
+  maestroInsumos: Insumo[]
+): Formula => {
+  const nutrition = calculateFormulaNutrition(formula.ingredientes, maestroInsumos);
+  const cost = calculateFormulaCost(formula.ingredientes, maestroStock, maestroInsumos);
+
+  const byNutritionId = new Map(nutrition.byIngredient.map((item) => [item.id_insumo, item]));
+  const byCostId = new Map(cost.byIngredient.map((item) => [item.id_insumo, item]));
+
+  return {
+    ...formula,
+    ingredientes: formula.ingredientes.map((ing) => {
+      const n = byNutritionId.get(ing.id_insumo);
+      const c = byCostId.get(ing.id_insumo);
+      return {
+        ...ing,
+        aporte_proteina_pct: n?.aporte_proteina_pct ?? ing.aporte_proteina_pct,
+        aporte_proteina_g_kg: n?.aporte_proteina_g_kg ?? ing.aporte_proteina_g_kg,
+        costo_unitario_usado: c?.costo_unitario_usado ?? ing.costo_unitario_usado,
+        costo_contribucion_kg: c?.costo_contribucion_kg ?? ing.costo_contribucion_kg,
+        fuente_costo: c?.fuente_costo ?? ing.fuente_costo,
+      };
+    }),
+    proteina_calculada_pct: nutrition.totals.proteina_bruta_pct,
+    costo_total: cost.costo_total_formula,
+    costo_por_kg: cost.costo_por_kg,
+    costo_por_tonelada: cost.costo_por_tonelada,
+    advertencias_nutricionales: nutrition.warnings,
+    advertencias_costos: cost.warnings,
+  };
+};
 
 interface FormulaRow {
   id: string;
@@ -189,7 +228,13 @@ export const supabaseFormulaService = {
     const rows = (data ?? []) as unknown as FormulaRow[];
     const ingredientesMap = await loadIngredientesByFormulaIds(rows.map((row) => row.id));
 
-    return rows.map((row) => toFormula(row, ingredientesMap.get(row.id) ?? []));
+    const maestroInsumos = await supabaseInsumoService.getAllInsumos();
+    const maestroStock = await supabaseStockMPService.getAllLotes();
+
+    return rows.map((row) => {
+      const formula = toFormula(row, ingredientesMap.get(row.id) ?? []);
+      return withSnapshots(formula, maestroStock, maestroInsumos);
+    });
   },
 
   async getById(uid: string): Promise<Formula | undefined> {
@@ -208,7 +253,12 @@ export const supabaseFormulaService = {
 
     const row = data as unknown as FormulaRow;
     const ingredientesMap = await loadIngredientesByFormulaIds([row.id]);
-    return toFormula(row, ingredientesMap.get(row.id) ?? []);
+    const formula = toFormula(row, ingredientesMap.get(row.id) ?? []);
+
+    const maestroInsumos = await supabaseInsumoService.getAllInsumos();
+    const maestroStock = await supabaseStockMPService.getAllLotes();
+
+    return withSnapshots(formula, maestroStock, maestroInsumos);
   },
 
   async create(payload: Omit<Formula, 'uid' | 'ultima_edicion'>): Promise<Formula> {
@@ -293,7 +343,9 @@ export const supabaseFormulaService = {
       }
     }
 
-    return toFormula(created, payload.ingredientes);
+    const maestroInsumos = await supabaseInsumoService.getAllInsumos();
+    const maestroStock = await supabaseStockMPService.getAllLotes();
+    return withSnapshots(toFormula(created, payload.ingredientes), maestroStock, maestroInsumos);
   },
 
   async update(uid: string, payload: Partial<Formula>): Promise<Formula> {
@@ -409,7 +461,9 @@ export const supabaseFormulaService = {
     }
 
     const ingredientes = payload.ingredientes ?? (await loadIngredientesByFormulaIds([updated.id])).get(updated.id) ?? [];
-    return toFormula(updated, ingredientes);
+    const maestroInsumos = await supabaseInsumoService.getAllInsumos();
+    const maestroStock = await supabaseStockMPService.getAllLotes();
+    return withSnapshots(toFormula(updated, ingredientes), maestroStock, maestroInsumos);
   },
 
   async delete(uid: string): Promise<boolean> {

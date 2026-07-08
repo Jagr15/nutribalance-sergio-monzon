@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { FiPlus, FiSearch, FiXCircle, FiAlertCircle } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiXCircle, FiAlertCircle, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import Swal from 'sweetalert2';
 import { Card } from '../../../shared/components/card';
 import { ApiService } from '../../../infrastructure/api';
@@ -7,6 +7,7 @@ import { comprobanteService, type Comprobante } from '../services/comprobanteSer
 import type { Cliente } from '../../clientes/types/cliente';
 import type { Proveedor } from '../../proveedores/types/proveedor';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
+import { filterComprobantes, paginateComprobantes } from '../utils/comprobantesPagination';
 
 const formatCurrency = (val: number) => 
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(val);
@@ -44,6 +45,7 @@ const ComprobantesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [tipoFilter, setTipoFilter] = useState('');
   const [estadoFilter, setEstadoFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -68,21 +70,19 @@ const ComprobantesPage: React.FC = () => {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, tipoFilter, estadoFilter]);
+
   const filtered = useMemo(() => {
-    return comprobantes.filter((c) => {
-      const matchSearch = [
-        c.numero,
-        c.tercero,
-        c.tipo,
-        c.estado,
-      ].some(val => (val ?? '').toLowerCase().includes(searchTerm.toLowerCase()));
-
-      const matchTipo = tipoFilter ? c.tipo === tipoFilter : true;
-      const matchEstado = estadoFilter ? c.estado === estadoFilter : true;
-
-      return matchSearch && matchTipo && matchEstado;
-    });
+    return filterComprobantes(comprobantes, searchTerm, tipoFilter, estadoFilter);
   }, [comprobantes, searchTerm, tipoFilter, estadoFilter]);
+
+  const itemsPerPage = 10;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+  const paginated = useMemo(() => {
+    return paginateComprobantes(filtered, currentPage, itemsPerPage);
+  }, [filtered, currentPage]);
 
   // KPIs
   const totalCxC = useMemo(() => {
@@ -140,10 +140,10 @@ const ComprobantesPage: React.FC = () => {
       if (!select) return;
       select.innerHTML = '';
       
-      if (tipo === 'FACTURA_VENTA') {
+      if (tipo === 'FACTURA_VENTA' || tipo === 'RECIBO') {
         clientes.forEach(c => {
           const opt = document.createElement('option');
-          opt.value = c.uid;
+          opt.value = c.id || c.uid;
           opt.textContent = c.nombre;
           select.appendChild(opt);
         });
@@ -166,6 +166,8 @@ const ComprobantesPage: React.FC = () => {
             <select id="com-tipo" class="swal2-input" style="width:100%; margin:0; box-sizing:border-box;">
               <option value="FACTURA_VENTA">Factura de Venta (CxC)</option>
               <option value="FACTURA_COMPRA">Factura de Compra (CxP)</option>
+              <option value="RECIBO">Recibo (Cobro)</option>
+              <option value="PAGO">Pago</option>
             </select>
           </div>
           <div>
@@ -237,22 +239,28 @@ const ComprobantesPage: React.FC = () => {
           return false;
         }
 
+        const isPaymentOrReceipt = tipo === 'RECIBO' || tipo === 'PAGO';
+
         return {
           tipo,
           numero,
           tercero: terceroNombre,
           fecha_emision: fechaEmision,
-          fecha_vencimiento: fechaVence || null,
+          fecha_vencimiento: isPaymentOrReceipt ? null : (fechaVence || null),
           total,
-          saldo: total,
-          estado: 'PENDIENTE',
-          cliente_id: tipo === 'FACTURA_VENTA' ? terceroId : null,
-          proveedor_id: tipo === 'FACTURA_COMPRA' ? terceroId : null,
+          saldo: isPaymentOrReceipt ? 0 : total,
+          estado: isPaymentOrReceipt ? 'PAGADO' : 'PENDIENTE',
+          cliente_id: (tipo === 'FACTURA_VENTA' || tipo === 'RECIBO') ? terceroId : null,
+          fecha_operacion: fechaEmision,
+          estado_financiero: tipo === 'FACTURA_VENTA' ? 'PENDIENTE_COBRO' :
+                             tipo === 'FACTURA_COMPRA' ? 'PENDIENTE_PAGO' :
+                             tipo === 'RECIBO' ? 'COBRADO' : 'PAGADO',
         };
       }
     }).then(async (result) => {
       if (result.isConfirmed && result.value) {
         try {
+          console.log('Enviando payload a comprobanteService.create:', result.value);
           await comprobanteService.create(result.value);
           await Swal.fire({
             icon: 'success',
@@ -261,11 +269,21 @@ const ComprobantesPage: React.FC = () => {
             confirmButtonColor: '#2563eb',
           });
           await loadData();
-        } catch (err) {
+        } catch (err: any) {
+          console.error('Error al registrar comprobante:', err);
+          const errorMsg = err.message || 'No se pudo crear el comprobante.';
+          const errorDetail = err.details ? `Detalle: ${err.details}` : '';
+          const errorHint = err.hint ? `Sugerencia: ${err.hint}` : '';
           await Swal.fire({
             icon: 'error',
             title: 'Error al registrar',
-            text: err instanceof Error ? err.message : 'No se pudo crear el comprobante.',
+            html: `
+              <div style="text-align:left;">
+                <p><strong>${errorMsg}</strong></p>
+                ${errorDetail ? `<p style="font-size:12px; margin-top:8px;">${errorDetail}</p>` : ''}
+                ${errorHint ? `<p style="font-size:12px; color:#64748b; margin-top:4px;">${errorHint}</p>` : ''}
+              </div>
+            `,
             confirmButtonColor: '#2563eb',
           });
         }
@@ -374,7 +392,7 @@ const ComprobantesPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {filtered.map((comp) => (
+                {paginated.map((comp) => (
                   <tr key={comp.id} className="hover:bg-slate-50/50">
                     <td className="px-6 py-4 text-slate-600">
                       {formatDateDDMMYYYY(comp.fecha_emision)}
@@ -417,6 +435,34 @@ const ComprobantesPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 bg-slate-50">
+            <span className="text-xs text-slate-600 font-semibold">
+              {filtered.length} comprobantes • Página {Math.min(currentPage, totalPages)} de {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                id="btn-prev-page"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed bg-white"
+                aria-label="Anterior"
+              >
+                <FiChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                id="btn-next-page"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed bg-white"
+                aria-label="Siguiente"
+              >
+                <FiChevronRight size={16} />
+              </button>
+            </div>
           </div>
         </Card>
       )}

@@ -587,6 +587,12 @@ export const finanzasService = {
   },
 
   async getCostosComparativos(): Promise<CostosFormulaVsReal[]> {
+    if (runtimeConfig.mode === 'mock') {
+      const formulas = await ApiService.formulas.findAll();
+      const ordenes = await ApiService.ordenes.getAll();
+      return buildCostosFormulaVsReal(formulas, ordenes);
+    }
+
     const { data, error } = await supabaseClient
       .from('vw_costos_formula_vs_real')
       .select('producto_formula_id,nombre_producto,version_formula,costo_formulado_kg,costo_formulado_ton,costo_real_kg,costo_real_ton,variacion_abs,variacion_pct,ultima_op')

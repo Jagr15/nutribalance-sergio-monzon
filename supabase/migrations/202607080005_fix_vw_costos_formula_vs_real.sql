@@ -1,4 +1,4 @@
--- FASE 5: Comparativa de costos formulados vs reales
+-- Fix vw_costos_formula_vs_real to support live insumo costs and resolve zero-cost historical values.
 
 create or replace view public.vw_costos_formula_vs_real as
 with formula_live_costs as (
