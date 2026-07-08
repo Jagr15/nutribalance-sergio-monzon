@@ -183,7 +183,8 @@ resetMockOrdenesExpedicionState();
 export const resetMockOrdenesExpedicionService = resetMockOrdenesExpedicionState;
 
 export const mockOrdenesExpedicionService = {
-  getAll: async (): Promise<OrdenExpedicion[]> => mockApiCall([...expedicionesDb], 300),
+  getAll: async (): Promise<OrdenExpedicion[]> =>
+    mockApiCall(expedicionesDb.filter((o: any) => !o.deletedAt && !o.deleted_at), 300),
 
   create: async (payload: RegistrarOrdenExpedicionPayload): Promise<OrdenExpedicion> => {
     if (!payload.cliente_id) {
@@ -396,5 +397,18 @@ export const mockOrdenesExpedicionService = {
     };
     expedicionesDb[index] = updated;
     return mockApiCall(updated, 250);
+  },
+
+  delete: async (id: string): Promise<boolean> => {
+    const index = expedicionesDb.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error('No se encontró la orden de salida.');
+    const current = expedicionesDb[index];
+    if (current.estado !== 'cancelada') {
+      throw new Error('Únicamente se pueden eliminar órdenes de salida canceladas.');
+    }
+    expedicionesDb = expedicionesDb.map((o) =>
+      o.id === id ? { ...o, deletedAt: new Date().toISOString() } : o
+    );
+    return mockApiCall(true, 250);
   },
 };

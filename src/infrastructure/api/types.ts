@@ -133,6 +133,7 @@ export interface OrdenesExpedicionService {
   despachar: (id: string) => Promise<OrdenExpedicion>;
   cancelar: (id: string) => Promise<OrdenExpedicion>;
   programarEntrega: (id: string, fechaProgramada: string | null, notaProgramacion?: string | null) => Promise<OrdenExpedicion>;
+  delete: (id: string) => Promise<boolean>;
 }
 
 export interface StockPTService {

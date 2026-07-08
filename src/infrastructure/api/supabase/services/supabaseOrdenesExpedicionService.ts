@@ -101,6 +101,8 @@ const resolveStockPtDbId = async (stockPtLegacyUid: string) => {
   return data?.id ?? null;
 };
 
+const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
 const formatRpcError = (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
   const candidate = error as { message?: string; details?: string; hint?: string; code?: string };
@@ -136,6 +138,7 @@ export const supabaseOrdenesExpedicionService = {
     const { data, error } = await supabaseClient
       .from('ordenes_expedicion')
       .select('id,legacy_uid,numero_expedicion,stock_pt_id,producto_id,nombre_producto,lote_pt,cliente_id,clientes(legacy_uid,nombre),presentacion_key,presentacion,cantidad,cantidad_original,unidad_original,cantidad_kg,precio_unitario_venta,total_venta,moneda,modo_calculo,empaque_id,tipo_empaque,capacidad_empaque_kg,cantidad_empaques,sobrante_kg,kilos_reales_cargados,unidad_cantidad,estado,motivo,referencia,fecha_programada,created_at,updated_at')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -258,40 +261,70 @@ export const supabaseOrdenesExpedicionService = {
   },
 
   async iniciarPreparacion(id: string): Promise<OrdenExpedicion> {
+    if (!isUuid(id)) {
+      throw new Error('El ID especificado no es un UUID válido de la orden de expedición.');
+    }
     return ensureState(id, ['pendiente'], 'preparando');
   },
 
   async marcarLista(id: string, kilosRealesCargados: number): Promise<OrdenExpedicion> {
+    if (!isUuid(id)) {
+      throw new Error('El ID especificado no es un UUID válido de la orden de expedición.');
+    }
     if (!Number.isFinite(Number(kilosRealesCargados)) || Number(kilosRealesCargados) <= 0) {
       throw new Error('Los kilos reales cargados deben ser mayores a cero.');
     }
-    const { data, error } = await supabaseClient.rpc('marcar_lista_orden_expedicion', {
-      p_orden_id: id,
-      p_kilos_reales_cargados: Number(kilosRealesCargados),
-    });
-    if (error) throw error;
-    const updated = Array.isArray(data) ? data[0] : data;
-    if (!updated) throw new Error('No se pudo marcar la orden como lista.');
-    return mapRow(updated as unknown as OrdenExpedicionRow);
+    try {
+      const { data, error } = await supabaseClient.rpc('marcar_lista_orden_expedicion', {
+        p_orden_id: id,
+        p_kilos_reales_cargados: Number(kilosRealesCargados),
+      });
+      if (error) throw error;
+      const updated = Array.isArray(data) ? data[0] : data;
+      if (!updated) throw new Error('No se pudo marcar la orden como lista.');
+      return mapRow(updated as unknown as OrdenExpedicionRow);
+    } catch (error: any) {
+      const message = formatRpcError(error, 'No se pudo marcar la orden como lista.');
+      throw new Error(message, { cause: error });
+    }
   },
 
   async despachar(id: string): Promise<OrdenExpedicion> {
-    const { data, error } = await supabaseClient.rpc('despachar_orden_expedicion', { p_orden_id: id });
-    if (error) throw error;
-    const updated = Array.isArray(data) ? data[0] : data;
-    if (!updated) throw new Error('No se pudo despachar la orden de expedición.');
-    return mapRow(updated as unknown as OrdenExpedicionRow);
+    if (!isUuid(id)) {
+      throw new Error('El ID especificado no es un UUID válido de la orden de expedición.');
+    }
+    try {
+      const { data, error } = await supabaseClient.rpc('despachar_orden_expedicion', { p_orden_id: id });
+      if (error) throw error;
+      const updated = Array.isArray(data) ? data[0] : data;
+      if (!updated) throw new Error('No se pudo despachar la orden de expedición.');
+      return mapRow(updated as unknown as OrdenExpedicionRow);
+    } catch (error: any) {
+      const message = formatRpcError(error, 'No se pudo despachar la orden de expedición.');
+      throw new Error(message, { cause: error });
+    }
   },
 
   async cancelar(id: string): Promise<OrdenExpedicion> {
-    const { data, error } = await supabaseClient.rpc('cancelar_orden_expedicion', { p_orden_id: id });
-    if (error) throw error;
-    const updated = Array.isArray(data) ? data[0] : data;
-    if (!updated) throw new Error('No se pudo cancelar la orden de expedición.');
-    return mapRow(updated as unknown as OrdenExpedicionRow);
+    if (!isUuid(id)) {
+      throw new Error('El ID especificado no es un UUID válido de la orden de expedición.');
+    }
+    try {
+      const { data, error } = await supabaseClient.rpc('cancelar_orden_expedicion', { p_orden_id: id });
+      if (error) throw error;
+      const updated = Array.isArray(data) ? data[0] : data;
+      if (!updated) throw new Error('No se pudo cancelar la orden de expedición.');
+      return mapRow(updated as unknown as OrdenExpedicionRow);
+    } catch (error: any) {
+      const message = formatRpcError(error, 'No se pudo cancelar la orden de expedición.');
+      throw new Error(message, { cause: error });
+    }
   },
 
   async programarEntrega(id: string, fechaProgramada: string | null, _notaProgramacion?: string | null): Promise<OrdenExpedicion> {
+    if (!isUuid(id)) {
+      throw new Error('El ID especificado no es un UUID válido de la orden de expedición.');
+    }
     // Check current state to prevent modifications on despachada/cancelada
     const { data: current, error: getError } = await supabaseClient
       .from('ordenes_expedicion')
@@ -317,5 +350,30 @@ export const supabaseOrdenesExpedicionService = {
     if (error) throw error;
     if (!data) throw new Error('No se encontró la orden de salida.');
     return mapRow(data);
+  },
+
+  async delete(id: string): Promise<boolean> {
+    if (!isUuid(id)) {
+      throw new Error('El ID especificado no es un UUID válido de la orden de expedición.');
+    }
+    const { data: current, error: getErr } = await supabaseClient
+      .from('ordenes_expedicion')
+      .select('estado')
+      .eq('id', id)
+      .maybeSingle<{ estado: string }>();
+
+    if (getErr) throw getErr;
+    if (!current) throw new Error('No se encontró la orden de salida.');
+    if (current.estado !== 'cancelada') {
+      throw new Error('Únicamente se pueden eliminar órdenes de salida canceladas.');
+    }
+
+    const { error } = await supabaseClient
+      .from('ordenes_expedicion')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
   },
 };

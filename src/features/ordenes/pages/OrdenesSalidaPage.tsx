@@ -4,10 +4,11 @@ import { ApiService } from '../../../infrastructure/api';
 import { Card } from '../../../shared/components/card';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import type { OrdenExpedicion } from '../types';
+import Swal from 'sweetalert2';
 import OrdenExpedicionModal from '../components/OrdenExpedicionModal';
 import MarcarListaOrdenExpedicionModal from '../components/MarcarListaOrdenExpedicionModal';
 import ProgramarEntregaModal from '../components/ProgramarEntregaModal';
-import { cancelarOrdenExpedicionEnLista, puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
+import { puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
 import { openConfiguracionEmpaquesModal } from '../../productos/utils/openConfiguracionEmpaquesModal';
 import { getPresentacionExpedicionKeyFromOrder, getPresentacionExpedicionOption } from '../utils/presentacionExpedicion';
 import { usePermissions } from '../../auth/usePermissions';
@@ -16,6 +17,18 @@ const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
 const formatKgDiff = (value: number) => `${value > 0 ? '+' : ''}${value.toLocaleString('es-AR')} kg`;
 const formatMoney = (value: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(value);
+
+const getErrorMessage = (err: any): string => {
+  if (!err) return 'Error desconocido.';
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  if (typeof err === 'object') {
+    const parts = [err.message, err.details, err.hint].filter(Boolean);
+    const msg = parts.join(' | ').trim();
+    if (msg) return msg;
+  }
+  return JSON.stringify(err);
+};
 
 const estadoBadge: Record<string, string> = {
   pendiente: 'bg-amber-50 text-amber-700',
@@ -133,10 +146,93 @@ const OrdenesSalidaPage: React.FC = () => {
   }, [load]);
 
   const handleCancelar = useCallback(async (ordenId: string) => {
-    const currentOrden = ordenesSalida.find((orden) => orden.id === ordenId) ?? null;
-    const cancelada = await ApiService.ordenesExpedicion.cancelar(ordenId);
-    setOrdenesSalida((current) => cancelarOrdenExpedicionEnLista(current, ordenId, cancelada ?? currentOrden));
-    await load();
+    const currentOrden = ordenesSalida.find((orden) => orden.id === ordenId);
+    if (!currentOrden) return;
+
+    const result = await Swal.fire({
+      title: '¿Cancelar orden de salida?',
+      text: `Se cancelará la orden ${currentOrden.numero_expedicion}. Esta acción liberará el stock comprometido.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, cancelar',
+      cancelButtonText: 'No, mantener',
+      background: '#ffffff',
+      color: '#0f172a',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#334155',
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await ApiService.ordenesExpedicion.cancelar(ordenId);
+      setOrdenesSalida((current) =>
+        current.map((o) => (o.id === ordenId ? { ...o, estado: 'cancelada' } : o))
+      );
+      await load();
+      await Swal.fire({
+        icon: 'success',
+        title: 'Orden cancelada',
+        text: `La orden ${currentOrden.numero_expedicion} ha sido cancelada.`,
+        background: '#ffffff',
+        color: '#0f172a',
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err: any) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo cancelar',
+        text: getErrorMessage(err),
+        background: '#ffffff',
+        color: '#0f172a',
+        confirmButtonColor: '#2563eb',
+      });
+    }
+  }, [load, ordenesSalida]);
+
+  const handleDelete = useCallback(async (ordenId: string) => {
+    const currentOrden = ordenesSalida.find((orden) => orden.id === ordenId);
+    if (!currentOrden) return;
+
+    const result = await Swal.fire({
+      title: '¿Eliminar orden de salida?',
+      text: `Se eliminará la orden ${currentOrden.numero_expedicion}. Esta acción no se puede deshacer.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      background: '#ffffff',
+      color: '#0f172a',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#334155',
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await ApiService.ordenesExpedicion.delete(ordenId);
+      setOrdenesSalida((current) => current.filter((o) => o.id !== ordenId));
+      await load();
+      await Swal.fire({
+        icon: 'success',
+        title: 'Orden eliminada',
+        text: `La orden ${currentOrden.numero_expedicion} ha sido eliminada correctamente.`,
+        background: '#ffffff',
+        color: '#0f172a',
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err: any) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo eliminar',
+        text: getErrorMessage(err),
+        background: '#ffffff',
+        color: '#0f172a',
+        confirmButtonColor: '#2563eb',
+      });
+    }
   }, [load, ordenesSalida]);
 
   const handlePreparar = useCallback(async (ordenId: string) => {
@@ -362,6 +458,10 @@ const OrdenesSalidaPage: React.FC = () => {
                               Cancelar
                             </button>
                           </>
+                        ) : orden.estado === 'cancelada' ? (
+                          <button type="button" onClick={() => void handleDelete(orden.id)} className="inline-flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100">
+                            Eliminar
+                          </button>
                         ) : (
                           <span className="text-xs text-slate-400">Sin acciones</span>
                         )}
