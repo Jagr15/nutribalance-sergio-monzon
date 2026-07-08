@@ -251,9 +251,9 @@ export const supabaseClienteService = {
 
     if (comprobantesError) throw comprobantesError;
 
-    const comprobantes = (comprobantesData ?? [])
-      .filter((row): row is ComprobanteRow => row.tipo === 'FACTURA_VENTA') as ComprobanteRow[];
-    const comprobanteIds = comprobantes.map((row) => row.id).filter(Boolean);
+    const facturas = (comprobantesData ?? [])
+      .filter((row) => row.tipo === 'FACTURA_VENTA') as ComprobanteRow[];
+    const comprobanteIds = facturas.map((row) => row.id).filter(Boolean);
 
     let movimientos = [] as FlujoCajaMovimientoRow[];
     if (comprobanteIds.length > 0) {
@@ -275,7 +275,23 @@ export const supabaseClienteService = {
       movimientosByComprobante.set(row.comprobante_id, current);
     });
 
-    return comprobantes.map((comprobante) => {
+    const mappedRows = (comprobantesData ?? []).map((comprobante) => {
+      const isPago = comprobante.tipo === 'RECIBO' || comprobante.tipo === 'PAGO';
+      if (isPago) {
+        return {
+          id: comprobante.legacy_uid ?? comprobante.id,
+          fecha: comprobante.fecha_emision,
+          producto: 'PAGO CLIENTE',
+          cantidad: null,
+          unidad: null,
+          importe: Number(comprobante.total ?? 0),
+          saldo: 0,
+          referencia: comprobante.numero || 'Cobro registrado',
+          estado: 'PAGADO' as const,
+          comprobanteNumero: comprobante.numero || null,
+        };
+      }
+
       const movimiento = movimientosByComprobante.get(comprobante.id)?.[0] ?? null;
       const metadata = movimiento?.metadata ?? null;
       const producto =
@@ -284,7 +300,7 @@ export const supabaseClienteService = {
         ?? formatMetadataText(metadata?.concepto)
         ?? formatMetadataText(metadata?.descripcion)
         ?? formatMetadataText(movimiento?.descripcion)
-        ?? '—';
+        ?? 'Venta';
       const referencia =
         formatMetadataText(metadata?.referencia)
         ?? formatMetadataText(metadata?.comprobante_legacy_uid)
@@ -295,6 +311,11 @@ export const supabaseClienteService = {
       const importe = Number(comprobante.total ?? movimiento?.monto ?? 0);
       const saldo = Number(comprobante.saldo ?? importe);
 
+      let estadoText = (saldo <= 0 ? 'PAGADO' : 'PENDIENTE') as 'PENDIENTE' | 'PAGADO' | 'ANULADO' | 'SIN DEUDA';
+      if (importe === 0) {
+        estadoText = 'SIN DEUDA' as any;
+      }
+
       return {
         id: comprobante.legacy_uid ?? comprobante.id,
         fecha: comprobante.fecha_emision,
@@ -303,11 +324,13 @@ export const supabaseClienteService = {
         unidad,
         importe,
         saldo,
-        referencia,
-        estado: comprobante.estado,
+        referencia: importe === 0 ? 'Sin cargo / Bonificación' : referencia,
+        estado: estadoText,
         comprobanteNumero: comprobante.numero ?? comprobante.legacy_uid ?? null,
       };
     });
+
+    return mappedRows.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
   },
 
   async create(payload: Omit<Cliente, 'uid' | 'createdAt' | 'updatedAt'>): Promise<Cliente> {

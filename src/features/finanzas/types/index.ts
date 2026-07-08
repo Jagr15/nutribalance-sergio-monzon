@@ -4,6 +4,8 @@ export interface MovimientoFinanciero {
   uid: string;
   fecha: string;
   tipo: TipoMovimientoFinanciero;
+  categoria_id?: string;
+  comprobante_id?: string;
   origen_operativo?: string;
   origen_modulo?: string;
   origen_id?: string;
@@ -15,6 +17,10 @@ export interface MovimientoFinanciero {
   cliente?: string;
   proveedor?: string;
   comprobante?: string;
+  comprobante_tipo?: string;
+  comprobante_estado?: string;
+  comprobante_total?: number;
+  comprobante_saldo?: number;
   referencia?: string;
   estado: 'PENDIENTE' | 'CONFIRMADO' | 'ANULADO';
   fecha_operacion?: string;

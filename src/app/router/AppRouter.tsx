@@ -22,6 +22,7 @@ const EstadosFinancierosPage = lazy(() => import('../../features/finanzas/pages/
 const PresupuestosPage = lazy(() => import('../../features/finanzas/pages/PresupuestosPage'));
 const MovimientosFinancierosPage = lazy(() => import('../../features/finanzas/pages/MovimientosFinancierosPage'));
 const ProyeccionCajaPage = lazy(() => import('../../features/finanzas/pages/ProyeccionCajaPage'));
+const ComprobantesPage = lazy(() => import('../../features/finanzas/pages/ComprobantesPage'));
 const TesoreriaPage = lazy(() => import('../../features/tesoreria/pages/TesoreriaPage'));
 const StockGeneralPage = lazy(() => import('../../features/inventario/pages/StockGeneralPage'));
 const TrazabilidadPage = lazy(() => import('../../features/trazabilidad/pages/TrazabilidadPage'));
@@ -95,6 +96,7 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.PRESUPUESTOS} element={<ModuleRoute module="finanzas"><PresupuestosPage /></ModuleRoute>} />
           <Route path={ROUTES.ESTADOS_FINANCIEROS} element={<ModuleRoute module="finanzas"><EstadosFinancierosPage /></ModuleRoute>} />
           <Route path={ROUTES.PROYECCION_CAJA} element={<ModuleRoute module="finanzas"><ProyeccionCajaPage /></ModuleRoute>} />
+          <Route path={ROUTES.COMPROBANTES} element={<ModuleRoute module="finanzas"><ComprobantesPage /></ModuleRoute>} />
           <Route path={ROUTES.TESORERIA} element={<ModuleRoute module="tesoreria"><TesoreriaPage /></ModuleRoute>} />
           <Route path={ROUTES.USUARIOS} element={<ModuleRoute module="usuarios"><UsuariosPage /></ModuleRoute>} />
         </Route>

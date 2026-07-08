@@ -83,7 +83,19 @@ export const buildTrazabilidadHistoria = (
         tipo: 'INGRESO_MP',
         referencia: lote.remito_nro,
         entidad: 'Insumo',
-        detalle: `${insumo?.nombre ?? lote.id_insumo} · Lote ${lote.lote}${lote.id_proveedor ? ` · ${proveedoresById.get(lote.id_proveedor)?.nombre_empresa ?? 'Sin proveedor'}` : ''}`,
+        detalle: `${insumo?.nombre ?? lote.id_insumo} · Lote ${lote.lote}${lote.id_proveedor ? ` · ${proveedoresById.get(lote.id_proveedor)?.nombre_empresa ?? 'Sin proveedor'}` : ''}${lote.ubicacion ? ` · Silo/Ubicación: ${lote.ubicacion}` : ''}`,
+        orden_lote: null,
+        lote_mp: lote.lote,
+        lote_pt: null,
+        venta: null,
+        cliente: null,
+      }),
+      buildMovimiento({
+        fecha: new Date(new Date(toIso(lote.fecha_ingreso)).getTime() + 1000).toISOString(),
+        tipo: 'ALMACENAMIENTO_SILO',
+        referencia: lote.lote,
+        entidad: 'Silo / Ubicación',
+        detalle: `Almacenado en: ${lote.ubicacion || 'Almacén General'}`,
         orden_lote: null,
         lote_mp: lote.lote,
         lote_pt: null,
@@ -161,7 +173,6 @@ export const buildTrazabilidadHistoria = (
 
   const query = normalize(params.venta ?? params.producto ?? params.cliente ?? '');
   if (!query) return null;
-
   const exp = data.expediciones.find((item) =>
     normalize(item.numero_expedicion) === query ||
     normalize(item.referencia ?? '') === query ||
@@ -172,9 +183,21 @@ export const buildTrazabilidadHistoria = (
 
   const cliente = clientesByNombre.get(normalize(exp.cliente_nombre ?? '')) ?? data.clientes.find((item) => item.uid === exp.cliente_id) ?? null;
   const movimientoPt = data.movimientosPT.find((mov) => mov.stock_pt_id === exp.stock_pt_id || mov.lote === exp.lote_pt) ?? null;
-  const op = data.trazabilidadOP.find((item) => item.pt_generado.some((ptItem) => ptItem.stock_pt_id === exp.stock_pt_id || ptItem.lote_pt === exp.lote_pt)) ?? null;
-  const orden = data.ordenes.find((item) => item.id === op?.orden_legacy_uid || item.lote === op?.numero_orden || item.nombre_producto === exp.nombre_producto) ?? null;
-  const lotesUsados = op ? data.lotes.filter((lote) => op.lotes_mp_usados.includes(lote.lote)) : [];
+  const op = data.trazabilidadOP.find((item) => 
+    item.pt_generado.some((ptItem) => ptItem.stock_pt_id === exp.stock_pt_id || ptItem.lote_pt === exp.lote_pt) ||
+    item.orden_legacy_uid === exp.stock_pt_id
+  ) ?? null;
+  const orden = data.ordenes.find((item) => 
+    item.id === op?.op_id || 
+    item.id === op?.orden_legacy_uid || 
+    item.lote === op?.numero_orden
+  ) ?? (op ? null : data.ordenes.find((item) => item.nombre_producto === exp.nombre_producto));
+
+  const lotesUsados = op ? data.lotes.filter((lote) => 
+    op.lotes_mp_usados.includes(lote.lote) || 
+    op.lotes_mp_usados.includes(lote.uid) ||
+    op.mp_movimientos.some((m) => normalize(m.lote_mp) === normalize(lote.lote) || normalize(m.lote_mp) === normalize(lote.uid))
+  ) : [];
 
   const movimientosBase: TrazabilidadMovimientoHistoria[] = [
     buildMovimiento({
@@ -222,11 +245,23 @@ export const buildTrazabilidadHistoria = (
 
     lotesUsados.forEach((lote) => {
       movimientosBase.push(buildMovimiento({
+        fecha: new Date(new Date(toIso(lote.fecha_ingreso)).getTime() + 1000).toISOString(),
+        tipo: 'ALMACENAMIENTO_SILO',
+        referencia: lote.lote,
+        entidad: 'Silo / Ubicación',
+        detalle: `Almacenado en: ${lote.ubicacion || 'Almacén General'}`,
+        orden_lote: null,
+        lote_mp: lote.lote,
+        lote_pt: null,
+        venta: exp.numero_expedicion,
+        cliente: cliente?.nombre ?? exp.cliente_nombre,
+      }));
+      movimientosBase.push(buildMovimiento({
         fecha: toIso(lote.fecha_ingreso),
         tipo: 'INGRESO_MP',
         referencia: lote.remito_nro,
         entidad: 'Insumo',
-        detalle: `${lote.lote} · ${insumosById.get(lote.id_insumo)?.nombre ?? lote.id_insumo}${lote.id_proveedor ? ` · ${proveedoresById.get(lote.id_proveedor)?.nombre_empresa ?? 'Sin proveedor'}` : ''}`,
+        detalle: `${lote.lote} · ${insumosById.get(lote.id_insumo)?.nombre ?? lote.id_insumo}${lote.id_proveedor ? ` · ${proveedoresById.get(lote.id_proveedor)?.nombre_empresa ?? 'Sin proveedor'}` : ''}${lote.ubicacion ? ` · Silo/Ubicación: ${lote.ubicacion}` : ''}`,
         orden_lote: null,
         lote_mp: lote.lote,
         lote_pt: null,

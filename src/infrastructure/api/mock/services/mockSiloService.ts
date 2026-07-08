@@ -193,3 +193,5 @@ export const mockSiloService = {
     });
   }
 };
+
+export const getMockSilosLocal = () => silosDb;

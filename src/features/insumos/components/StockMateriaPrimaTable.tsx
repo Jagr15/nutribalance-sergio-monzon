@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../../shared/components/table';
+import { usePermissions } from '../../auth/usePermissions';
 
 interface Props {
   resumen: StockMateriaPrimaResumen[];
@@ -30,6 +31,7 @@ const formatMoney = (value: number) => new Intl.NumberFormat('es-AR', {
 }).format(value);
 
 const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], proveedores, onDelete }) => {
+  const { canSeeFinancials } = usePermissions();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -107,17 +109,17 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
         />
       </div>
 
-      <DataTable minWidthClassName="table-fixed min-w-[1560px]">
+      <DataTable minWidthClassName={`table-fixed ${canSeeFinancials ? 'min-w-[1560px]' : 'min-w-[1200px]'}`}>
         <TableHeader>
           <tr>
             <TableCell header className="w-[22%]">Insumo</TableCell>
             <TableCell header className="w-[12%] text-right">Stock actual</TableCell>
             <TableCell header className="w-[12%] text-right">Comprometido</TableCell>
             <TableCell header className="w-[12%] text-right">Disponible</TableCell>
-            <TableCell header className="w-[12%] text-right">Costo promedio</TableCell>
-            <TableCell header className="w-[12%] text-right">Valor inventario</TableCell>
-            <TableCell header className="w-[8%] text-center">Estado</TableCell>
-            <TableCell header className="w-[8%] text-right">Umbral</TableCell>
+            {canSeeFinancials && <TableCell header className="w-[12%] text-right">Costo promedio</TableCell>}
+            {canSeeFinancials && <TableCell header className="w-[12%] text-right">Valor inventario</TableCell>}
+            <TableCell header className={canSeeFinancials ? "w-[8%] text-center" : "w-[12%] text-center"}>Estado</TableCell>
+            <TableCell header className={canSeeFinancials ? "w-[8%] text-right" : "w-[12%] text-right"}>Umbral</TableCell>
             <TableCell header className="w-[12%] text-right">Acciones</TableCell>
           </tr>
         </TableHeader>
@@ -161,21 +163,25 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
                     </div>
                   </TableCell>
 
-                  <TableCell className="text-right">
-                    <div className="flex flex-col leading-tight">
-                      <span className="text-sm text-slate-900 font-semibold">{formatMoney(item.costo_promedio_ponderado)}</span>
-                      <span className="text-xs text-slate-500">Costo promedio ponderado</span>
-                    </div>
-                  </TableCell>
+                  {canSeeFinancials && (
+                    <TableCell className="text-right">
+                      <div className="flex flex-col leading-tight">
+                        <span className="text-sm text-slate-900 font-semibold">{formatMoney(item.costo_promedio_ponderado)}</span>
+                        <span className="text-xs text-slate-500">Costo promedio ponderado</span>
+                      </div>
+                    </TableCell>
+                  )}
 
-                  <TableCell className="text-right">
-                    <div className="flex flex-col leading-tight">
-                      <span className="text-sm text-blue-700 font-semibold">{formatMoney(Number(item.valor_inventario ?? 0))}</span>
-                      <span className="text-xs text-slate-500">
-                        {item.lotes_sin_costo ? `${item.lotes_sin_costo} lotes sin costo` : 'Valorizado por lotes'}
-                      </span>
-                    </div>
-                  </TableCell>
+                  {canSeeFinancials && (
+                    <TableCell className="text-right">
+                      <div className="flex flex-col leading-tight">
+                        <span className="text-sm text-blue-700 font-semibold">{formatMoney(Number(item.valor_inventario ?? 0))}</span>
+                        <span className="text-xs text-slate-500">
+                          {item.lotes_sin_costo ? `${item.lotes_sin_costo} lotes sin costo` : 'Valorizado por lotes'}
+                        </span>
+                      </div>
+                    </TableCell>
+                  )}
 
                   <TableCell className="text-center">
                     <StatusBadge value={item.estado} />
@@ -201,7 +207,7 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
 
                 {isExpanded ? (
                   <tr className="bg-slate-50">
-                    <td colSpan={9} className="px-6 py-5 border-l-2 border-blue-200">
+                    <td colSpan={canSeeFinancials ? 9 : 7} className="px-6 py-5 border-l-2 border-blue-200">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
@@ -218,8 +224,8 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
                                   <th className="text-left px-4 py-3">Lote</th>
                                   <th className="text-left px-4 py-3">Proveedor</th>
                                   <th className="text-center px-4 py-3">Ubicación</th>
-                                  <th className="text-right px-4 py-3">Costo unitario</th>
-                                  <th className="text-right px-4 py-3">Costo total</th>
+                                  {canSeeFinancials && <th className="text-right px-4 py-3">Costo unitario</th>}
+                                  {canSeeFinancials && <th className="text-right px-4 py-3">Costo total</th>}
                                   <th className="text-right px-4 py-3">Actual</th>
                                   <th className="text-right px-4 py-3">Comprometido</th>
                                   <th className="text-right px-4 py-3">Disponible</th>
@@ -243,8 +249,8 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
                                           <FiMapPin size={10} /> {lote.ubicacion}
                                         </span>
                                       </td>
-                                      <td className="px-4 py-3 text-right text-xs text-slate-700 font-semibold">{formatMoney(Number(lote.costo_unitario ?? 0))}</td>
-                                      <td className="px-4 py-3 text-right text-xs text-slate-700 font-semibold">{formatMoney(Number(lote.costo_total ?? 0))}</td>
+                                      {canSeeFinancials && <td className="px-4 py-3 text-right text-xs text-slate-700 font-semibold">{formatMoney(Number(lote.costo_unitario ?? 0))}</td>}
+                                      {canSeeFinancials && <td className="px-4 py-3 text-right text-xs text-slate-700 font-semibold">{formatMoney(Number(lote.costo_total ?? 0))}</td>}
                                       <td className="px-4 py-3 text-right text-xs text-slate-900 font-semibold">{(lote.cantidad_actual || 0).toLocaleString()}</td>
                                       <td className="px-4 py-3 text-right text-xs text-orange-700 font-semibold">{(lote.cantidad_comprometida || 0).toLocaleString()}</td>
                                       <td className="px-4 py-3 text-right text-xs text-emerald-700 font-semibold">{disponible.toLocaleString()}</td>

@@ -10,6 +10,7 @@ import { resolverCostoIngresoMP } from '../../../../features/insumos/utils/costo
 import type { DetalleInsumoLote } from '../../../../features/ordenes/types';
 import { type Movimiento, TipoMovimiento, OrigenMovimiento } from "../../../../features/movimientos/types";
 import { TipoUnidad } from "../../../../shared/types/global.interface";
+import { contabilidadOperativaService } from '../../../../features/finanzas/services/contabilidadOperativaService';
 import insumosData from '../data/insumos.json';
 import proveedoresData from '../data/proveedores.json';
 import initialDataRaw from "../data/stockMateriaPrima.json";
@@ -39,6 +40,7 @@ const initialData: StockMateriaPrima[] = (initialDataRaw as unknown as StockMate
 })) as StockMateriaPrima[];
 
 let stockDB: StockMateriaPrima[] = [...initialData];
+export const getMockStockLocal = () => stockDB;
 const mockInsumos = insumosData as unknown as Array<{
   uid: string;
   nombre?: string;
@@ -218,9 +220,10 @@ export const mockMateriaPrimaService = {
     id_usuario: string;
     fecha_ingreso: Date;
     ubicacion: string; 
+    silo_id?: string;
   }): Promise<StockMateriaPrima> {
     
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       const insumo = mockInsumos.find((item) => item.uid === data.id_insumo);
       const costo = resolverCostoIngresoMP({
         cantidad: data.cantidad,
@@ -232,6 +235,14 @@ export const mockMateriaPrimaService = {
         costo: insumo?.costo ?? null,
       });
       const ahora = new Date();
+
+      const { getMockSilosLocal } = await import('./mockSiloService');
+      let siloId = data.silo_id;
+      if (!siloId && data.ubicacion) {
+        const silos = getMockSilosLocal();
+        const match = silos.find((s: any) => s.nombre.trim().toLowerCase() === data.ubicacion.trim().toLowerCase());
+        if (match) siloId = match.uid;
+      }
 
       // Creamos el lote limpio: sin operaciones de consumo iniciales
       const nuevoLote: StockMateriaPrima = {
@@ -248,6 +259,7 @@ export const mockMateriaPrimaService = {
         fecha_ingreso: data.fecha_ingreso,
         remito_nro: data.remito_nro,
         ubicacion: data.ubicacion,
+        silo_id: siloId,
         operaciones: undefined, // Lote nuevo nace sin historial de consumo
         stock_transito: undefined,
         id_usuario: data.id_usuario,
@@ -301,14 +313,18 @@ export const mockMateriaPrimaService = {
       const lote = stockDB.find(l => l.uid === uid);
       if (!lote) return reject(new Error("El lote no existe."));
 
-      if (lote.cantidad_actual !== lote.cantidad_inicial) {
-        return reject(new Error("No se puede eliminar: el lote ya tiene consumos registrados."));
+      const isModified = lote.cantidad_actual !== lote.cantidad_inicial || (lote.cantidad_comprometida || 0) > 0;
+
+      const mockMovs = contabilidadOperativaService.getMovimientosMock();
+      const hasConfirmed = mockMovs.some(
+        m => (m.legacy_uid === `fcm-compra-${uid}` || m.metadata?.stock_lote_legacy_uid === uid) && m.estado === 'CONFIRMADO'
+      );
+
+      if (isModified || hasConfirmed) {
+        return reject(new Error("No se puede eliminar el lote porque tiene consumos de stock o transacciones financieras confirmadas asociadas."));
       }
 
-      if ((lote.cantidad_comprometida || 0) > 0) {
-        return reject(new Error("No se puede eliminar: el lote tiene stock comprometido."));
-      }
-
+      contabilidadOperativaService.eliminarMovimientosPendientesDeLoteMock(uid);
       stockDB = stockDB.filter(l => l.uid !== uid);
       setTimeout(() => resolve(), 400);
     });

@@ -1,6 +1,8 @@
 import { supabaseClient } from '../../../infrastructure/api/supabase/client';
 import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 import { ApiService } from '../../../infrastructure/api';
+const isMockMode = () => runtimeConfig.mode === 'mock';
+import { comprobanteService } from './comprobanteService';
 import type { MovimientoStockPT } from '../../productos/types';
 import type {
   CostosFormulaVsReal,
@@ -12,7 +14,13 @@ import type {
   PresupuestoMensualGestionRow,
   RubroFinancieroCatalogo,
 } from '../types';
-import { normalizeKpis, calcularCuentasPorCobrar, calcularCuentasPorPagar, obtenerMontoPendiente } from '../utils/finanzasCalculations';
+import {
+  normalizeKpis,
+  calcularCuentasPorCobrar,
+  calcularCuentasPorPagar,
+  isMovimientoCajaReal,
+  obtenerMontoPendiente,
+} from '../utils/finanzasCalculations';
 import { buildCostosFormulaVsReal } from '../utils/costosFormulaVsReal';
 import { buildIngresosPtPorProducto } from '../utils/ingresosPtPorProducto';
 import { buildTesoreriaInsights } from '../utils/tesoreriaInsights';
@@ -37,9 +45,20 @@ export interface CrearMovimientoPayload {
 type FinanzasReportesRow = { payload?: Record<string, unknown> };
 type CategoriaNested = { nombre?: string } | null;
 type CentroCostoNested = { nombre?: string } | null;
-type ComprobanteNested = { legacy_uid?: string | null; numero?: string | null; tercero?: string | null; tipo?: string | null } | null;
+type ComprobanteNested = {
+  id?: string | null;
+  legacy_uid?: string | null;
+  numero?: string | null;
+  tercero?: string | null;
+  tipo?: string | null;
+  estado?: string | null;
+  saldo?: number | string | null;
+  total?: number | string | null;
+} | null;
 type FlujoCajaMovimientoRow = {
   legacy_uid?: string | null;
+  categoria_id?: string | null;
+  comprobante_id?: string | null;
   fecha: string;
   tipo: MovimientoFinanciero['tipo'];
   origen_operativo?: string | null;
@@ -101,14 +120,24 @@ type FlujoCajaRubroDbRow = {
   monto: number | string | null;
   categoria: string | null;
   centro_costo: string | null;
+  estado?: string | null;
+  estado_financiero?: string | null;
+  fecha_cobro_pago?: string | null;
+  comprobante_tipo?: string | null;
+  comprobante_estado?: string | null;
+  comprobante_saldo?: number | string | null;
 };
 type ComprobanteCarteraDbRow = {
+  id?: string | null;
+  legacy_uid?: string | null;
   cliente_id: string | null;
+  proveedor_id?: string | null;
   tercero: string | null;
   fecha_emision: string;
   fecha_vencimiento: string | null;
   estado: string;
   saldo: number | string | null;
+  total?: number | string | null;
   tipo: string;
 };
 type PresupuestoDbRow = {
@@ -178,6 +207,77 @@ const formatDbError = (action: string, error: unknown) => {
   return `No se pudo ${action}.`;
 };
 
+const mapMovimientoFinanciero = (row: FlujoCajaMovimientoRow): MovimientoFinanciero => ({
+  uid: row.legacy_uid ?? crypto.randomUUID(),
+  fecha: row.fecha,
+  tipo: row.tipo,
+  categoria_id: row.categoria_id ?? undefined,
+  comprobante_id: row.comprobante_id ?? undefined,
+  origen_operativo: row.origen_operativo ?? undefined,
+  origen_modulo: row.origen_modulo ?? undefined,
+  origen_id: row.origen_id ?? undefined,
+  descripcion: row.descripcion,
+  monto: Number(row.monto ?? 0),
+  categoria: row.categorias_financieras?.nombre,
+  centro_costo: row.centros_costo?.nombre,
+  tercero: readMetadataText(row.metadata, 'tercero') ?? row.comprobantes?.tercero ?? undefined,
+  cliente: readMetadataText(row.metadata, 'cliente') ?? (row.comprobantes?.tipo === 'FACTURA_VENTA' ? row.comprobantes?.tercero ?? undefined : undefined),
+  proveedor: readMetadataText(row.metadata, 'proveedor') ?? (row.comprobantes?.tipo === 'FACTURA_COMPRA' ? row.comprobantes?.tercero ?? undefined : undefined),
+  comprobante: row.comprobantes?.numero ?? readMetadataText(row.metadata, 'comprobante') ?? readMetadataText(row.metadata, 'comprobante_legacy_uid') ?? row.comprobantes?.legacy_uid ?? undefined,
+  comprobante_tipo: row.comprobantes?.tipo ?? undefined,
+  comprobante_estado: row.comprobantes?.estado ?? undefined,
+  comprobante_total: row.comprobantes?.total == null ? undefined : Number(row.comprobantes.total),
+  comprobante_saldo: row.comprobantes?.saldo == null ? undefined : Number(row.comprobantes.saldo),
+  referencia: readMetadataText(row.metadata, 'referencia') ?? readMetadataText(row.metadata, 'numero') ?? readMetadataText(row.metadata, 'remito') ?? undefined,
+  estado: row.estado,
+  fecha_operacion: row.fecha_operacion ?? undefined,
+  fecha_vencimiento: row.fecha_vencimiento ?? undefined,
+  estado_financiero: row.estado_financiero ?? undefined,
+  fecha_cobro_pago: row.fecha_cobro_pago ?? undefined,
+  metadata: row.metadata ?? undefined,
+  created_at: row.created_at ?? undefined,
+});
+
+const summarizeKpisFromData = (params: {
+  movimientos: MovimientoFinanciero[];
+  comprobantes: ComprobanteCarteraDbRow[];
+  saldoActual: number;
+  inventario: FinanzasInventarioResumen;
+}) => {
+  const movimientosCaja = params.movimientos.filter(isMovimientoCajaReal);
+  const confirmedCash = movimientosCaja.filter((movement) => movement.estado === 'CONFIRMADO');
+  const ingresosMes = confirmedCash
+    .filter((movement) => movement.tipo === 'INGRESO')
+    .reduce((acc, movement) => acc + Number(movement.monto ?? 0), 0);
+  const egresosMes = confirmedCash
+    .filter((movement) => movement.tipo === 'EGRESO')
+    .reduce((acc, movement) => acc + Number(movement.monto ?? 0), 0);
+
+  const cuentasPorCobrar = params.comprobantes
+    .filter((row) => row.tipo === 'FACTURA_VENTA' && Number(row.saldo ?? 0) > 0 && !['ANULADO', 'PAGADO'].includes(String(row.estado ?? '').toUpperCase()))
+    .reduce((acc, row) => acc + Number(row.saldo ?? 0), 0);
+  const cuentasPorPagarComprobantes = params.comprobantes
+    .filter((row) => row.tipo === 'FACTURA_COMPRA' && Number(row.saldo ?? 0) > 0 && !['ANULADO', 'PAGADO'].includes(String(row.estado ?? '').toUpperCase()))
+    .reduce((acc, row) => acc + Number(row.saldo ?? 0), 0);
+  const cuentasPorPagarSinComprobante = calcularCuentasPorPagar(
+    params.movimientos.filter((movement) => !movement.comprobante_id),
+  ).reduce((acc, movement) => acc + obtenerMontoPendiente(movement), 0);
+
+  return normalizeKpis({
+    saldo_actual: params.saldoActual,
+    ingresos_mes: ingresosMes,
+    egresos_mes: egresosMes,
+    flujo_neto: ingresosMes - egresosMes,
+    margen_operativo: ingresosMes > 0 ? ((ingresosMes - egresosMes) / ingresosMes) * 100 : 0,
+    valorizacion_inventario: params.inventario.valor_inventario_total,
+    cuentas_por_cobrar: cuentasPorCobrar,
+    cuentas_por_pagar: cuentasPorPagarComprobantes + cuentasPorPagarSinComprobante,
+    valor_stock_mp: params.inventario.valor_stock_mp,
+    valor_stock_pt: params.inventario.valor_stock_pt,
+    valor_inventario_total: params.inventario.valor_inventario_total,
+  });
+};
+
 const defaultRubros = (): RubroFinancieroCatalogo[] => [
   { id: 'cat-materia-prima', nombre: 'Materia prima', tipo: 'EGRESO', activo: true, area: 'Operaciones' },
   { id: 'cat-produccion', nombre: 'Producción', tipo: 'EGRESO', activo: true, area: 'Operaciones' },
@@ -207,9 +307,22 @@ const writeMockRubros = (rows: RubroFinancieroCatalogo[]) => {
 
 export const finanzasService = {
   async getKPIs(): Promise<FinanzasKPIs> {
-    const { data, error } = await supabaseClient.from('vw_finanzas_kpis').select('*').single<Record<string, unknown>>();
-    if (error) throw error;
-    return normalizeKpis(data ?? {});
+    const [movimientos, comprobantes, saldoResult, inventario] = await Promise.all([
+      this.getMovimientos(),
+      comprobanteService.getAll(),
+      supabaseClient.from('cuentas_bancarias').select('saldo_actual').is('deleted_at', null),
+      this.getInventarioResumen(),
+    ]);
+
+    if (saldoResult.error) throw saldoResult.error;
+    const saldoActual = (saldoResult.data ?? []).reduce((acc, row) => acc + Number((row as CuentasBancariasSaldoRow).saldo_actual ?? 0), 0);
+
+    return summarizeKpisFromData({
+      movimientos,
+      comprobantes: comprobantes as ComprobanteCarteraDbRow[],
+      saldoActual,
+      inventario,
+    });
   },
 
   async getReportes(): Promise<FinanzasReportes> {
@@ -243,9 +356,8 @@ export const finanzasService = {
         .order('anio', { ascending: false }),
       supabaseClient
         .from('flujo_caja_movimientos')
-        .select('fecha,tipo,origen_operativo,descripcion,monto,categorias_financieras(nombre),centros_costo(nombre)')
+        .select('fecha,tipo,origen_operativo,descripcion,monto,estado,estado_financiero,fecha_cobro_pago,categorias_financieras(nombre),centros_costo(nombre),comprobantes(tipo,estado,saldo)')
         .is('deleted_at', null)
-        .eq('estado', 'CONFIRMADO')
         .order('fecha', { ascending: false }),
       supabaseClient
         .from('comprobantes')
@@ -308,8 +420,39 @@ export const finanzasService = {
       monto: row.monto,
       categoria: row.categorias_financieras?.nombre ?? null,
       centro_costo: row.centros_costo?.nombre ?? null,
+      estado: row.estado ?? null,
+      estado_financiero: row.estado_financiero ?? null,
+      fecha_cobro_pago: row.fecha_cobro_pago ?? null,
+      comprobante_tipo: row.comprobantes?.tipo ?? null,
+      comprobante_estado: row.comprobantes?.estado ?? null,
+      comprobante_saldo: row.comprobantes?.saldo ?? null,
+    })).filter((row) => isMovimientoCajaReal({
+      tipo: row.tipo,
+      origen_operativo: row.origen_operativo,
+      estado: (row.estado ?? 'PENDIENTE') as MovimientoFinanciero['estado'],
+      estado_financiero: row.estado_financiero ?? undefined,
+      fecha_cobro_pago: row.fecha_cobro_pago ?? undefined,
+      comprobante_tipo: row.comprobante_tipo ?? undefined,
+      comprobante_estado: row.comprobante_estado ?? undefined,
+      comprobante_saldo: row.comprobante_saldo ?? undefined,
     }));
-    const comprobantes = unwrap<ComprobanteCarteraDbRow[]>(comprobantesResult, [], 'comprobantes') as ComprobanteCarteraDbRow[];
+    let comprobantes = unwrap<ComprobanteCarteraDbRow[]>(comprobantesResult, [], 'comprobantes') as ComprobanteCarteraDbRow[];
+    if (isMockMode()) {
+      try {
+        const mockList = await comprobanteService.getAll();
+        comprobantes = mockList.map((c) => ({
+          cliente_id: c.cliente_id || null,
+          tercero: c.tercero || 'Sin tercero',
+          fecha_emision: c.fecha_emision,
+          fecha_vencimiento: c.fecha_vencimiento || new Date().toISOString(),
+          estado: c.estado,
+          saldo: c.saldo,
+          tipo: c.tipo,
+        })) as any[];
+      } catch (e) {
+        // ignore
+      }
+    }
     const cheques = (unwrap<ChequeTesoreriaDbRow[]>(chequesResult, [], 'tesoreria_cheques') as ChequeTesoreriaDbRow[]).map((row) => ({
       ...row,
       importe: Number(row.importe ?? 0),
@@ -434,36 +577,13 @@ export const finanzasService = {
   async getMovimientos(): Promise<MovimientoFinanciero[]> {
     const { data, error } = await supabaseClient
       .from('flujo_caja_movimientos')
-      .select('legacy_uid,fecha,tipo,origen_operativo,origen_modulo,origen_id,descripcion,monto,estado,categorias_financieras(nombre),centros_costo(nombre),comprobantes(legacy_uid,numero,tercero,tipo),fecha_operacion,fecha_vencimiento,estado_financiero,fecha_cobro_pago,metadata,created_at')
+      .select('legacy_uid,categoria_id,comprobante_id,fecha,tipo,origen_operativo,origen_modulo,origen_id,descripcion,monto,estado,categorias_financieras(nombre),centros_costo(nombre),comprobantes(id,legacy_uid,numero,tercero,tipo,estado,saldo,total),fecha_operacion,fecha_vencimiento,estado_financiero,fecha_cobro_pago,metadata,created_at')
       .is('deleted_at', null)
       .order('created_at', { ascending: false, nullsFirst: false })
       .order('fecha', { ascending: false });
 
     if (error) throw error;
-    return ((data ?? []) as FlujoCajaMovimientoRow[]).map((row) => ({
-      uid: row.legacy_uid ?? crypto.randomUUID(),
-      fecha: row.fecha,
-      tipo: row.tipo,
-      origen_operativo: row.origen_operativo ?? undefined,
-      origen_modulo: row.origen_modulo ?? undefined,
-      origen_id: row.origen_id ?? undefined,
-      descripcion: row.descripcion,
-      monto: Number(row.monto ?? 0),
-      categoria: row.categorias_financieras?.nombre,
-      centro_costo: row.centros_costo?.nombre,
-      tercero: readMetadataText(row.metadata, 'tercero') ?? row.comprobantes?.tercero ?? undefined,
-      cliente: readMetadataText(row.metadata, 'cliente') ?? (row.comprobantes?.tipo === 'FACTURA_VENTA' ? row.comprobantes?.tercero ?? undefined : undefined),
-      proveedor: readMetadataText(row.metadata, 'proveedor') ?? (row.comprobantes?.tipo === 'FACTURA_COMPRA' ? row.comprobantes?.tercero ?? undefined : undefined),
-      comprobante: row.comprobantes?.numero ?? readMetadataText(row.metadata, 'comprobante') ?? readMetadataText(row.metadata, 'comprobante_legacy_uid') ?? row.comprobantes?.legacy_uid ?? undefined,
-      referencia: readMetadataText(row.metadata, 'referencia') ?? readMetadataText(row.metadata, 'numero') ?? readMetadataText(row.metadata, 'remito') ?? undefined,
-      estado: row.estado,
-      fecha_operacion: row.fecha_operacion ?? undefined,
-      fecha_vencimiento: row.fecha_vencimiento ?? undefined,
-      estado_financiero: row.estado_financiero ?? undefined,
-      fecha_cobro_pago: row.fecha_cobro_pago ?? undefined,
-      metadata: row.metadata ?? undefined,
-      created_at: row.created_at ?? undefined,
-    }));
+    return ((data ?? []) as FlujoCajaMovimientoRow[]).map(mapMovimientoFinanciero);
   },
 
   async getCostosComparativos(): Promise<CostosFormulaVsReal[]> {
@@ -714,15 +834,6 @@ export const finanzasService = {
         categoria: 'Producción',
         centro_costo: 'Planta',
       })),
-      ...ventasFinancieras.map((movimiento) => ({
-        fecha: movimiento.fecha,
-        tipo: movimiento.tipo,
-        origen_operativo: movimiento.origen_operativo,
-        descripcion: movimiento.descripcion,
-        monto: movimiento.monto,
-        categoria: movimiento.categoria,
-        centro_costo: movimiento.centro_costo,
-      })),
     ];
 
     const comprobantesVentas: ComprobanteCarteraDbRow[] = ventasPt.flatMap((movimiento) => {
@@ -824,6 +935,8 @@ export const finanzasService = {
       uid: row.legacy_uid || row.id || crypto.randomUUID(),
       fecha: row.fecha,
       tipo: row.tipo,
+      categoria_id: row.categoria_id || undefined,
+      comprobante_id: row.comprobante_id || undefined,
       origen_operativo: row.origen_operativo || undefined,
       origen_modulo: row.origen_modulo || undefined,
       origen_id: row.origen_id || undefined,
@@ -834,6 +947,10 @@ export const finanzasService = {
       cliente: readMetadataText(row.metadata, 'cliente'),
       proveedor: readMetadataText(row.metadata, 'proveedor'),
       comprobante: readMetadataText(row.metadata, 'comprobante') ?? readMetadataText(row.metadata, 'comprobante_legacy_uid'),
+      comprobante_tipo: row.comprobante_tipo || readMetadataText(row.metadata, 'comprobante_tipo'),
+      comprobante_estado: row.comprobante_estado || readMetadataText(row.metadata, 'comprobante_estado'),
+      comprobante_total: row.comprobante_total == null ? undefined : Number(row.comprobante_total),
+      comprobante_saldo: row.comprobante_saldo == null ? undefined : Number(row.comprobante_saldo),
       referencia: readMetadataText(row.metadata, 'referencia') ?? readMetadataText(row.metadata, 'numero') ?? readMetadataText(row.metadata, 'remito'),
       fecha_operacion: row.fecha_operacion || undefined,
       fecha_vencimiento: row.fecha_vencimiento || undefined,
@@ -860,8 +977,10 @@ export const finanzasService = {
       ...customMockMovimientos,
     ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
+    const movimientosCajaFallback = movimientosFinancierosUi.filter(isMovimientoCajaReal);
+
     const flujoPorMes = new Map<string, { ingresos: number; egresos: number }>();
-    movimientosFinancierosUi.forEach((movimiento) => {
+    movimientosCajaFallback.forEach((movimiento) => {
       if (movimiento.estado !== 'CONFIRMADO') return;
       const date = new Date(movimiento.fecha);
       if (Number.isNaN(date.getTime())) return;

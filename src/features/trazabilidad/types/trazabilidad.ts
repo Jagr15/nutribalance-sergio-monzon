@@ -9,7 +9,8 @@ export type TipoEventoTrazabilidad =
   | 'AJUSTE'
   | 'RESERVA_PT'
   | 'LIBERACION_RESERVA_PT'
-  | 'CANCELACION_EXPEDICION';
+  | 'CANCELACION_EXPEDICION'
+  | 'CANCELACION_PT';
 
 export interface TrazabilidadEvento {
   uid: string;

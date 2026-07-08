@@ -20,16 +20,14 @@ import { contabilidadOperativaService } from './contabilidadOperativaService';
 describe('contabilidadOperativaService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFrom.mockImplementation(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          is: vi.fn(() => ({
-            maybeSingle: vi.fn(async () => ({ data: { id: 'cat-1' }, error: null })),
-          })),
-        })),
-      })),
+    const mockQuery: any = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn(async () => ({ data: { id: 'cat-1' }, error: null })),
       upsert: upsertMock.mockResolvedValue({ error: null }),
-    }));
+    };
+    mockFrom.mockReturnValue(mockQuery);
   });
 
   it('valida que el monto sea mayor a 0', async () => {

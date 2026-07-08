@@ -9,6 +9,7 @@ import type { Formula } from '../../formulas/types';
 import { useCalculoOrden, type CalculoOrdenResultado } from '../hooks/useCalculoOrden';
 import Swal from 'sweetalert2';
 import { getTodayDateInputValue, parseNumericInput } from '../../../shared/utils/formatters';
+import { usePermissions } from '../../auth/usePermissions';
 
 interface Props {
   onClose: () => void;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
+  const { canSeeFinancials } = usePermissions();
   const [pesoObjetivo, setPesoObjetivo] = useState<number | "">("");
   const [unidad, setUnidad] = useState<'KG' | 'TON'>('KG');
   const [fechaProgramada, setFechaProgramada] = useState<string>(getTodayDateInputValue());
@@ -224,20 +226,24 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                       : 'Sin dato'}
                   </strong>
                 </p>
-                <p>
-                  Costo/kg: <strong>
-                    {typeof selectedFormula.costo_por_kg === 'number'
-                      ? `ARS ${selectedFormula.costo_por_kg.toFixed(4)}`
-                      : 'Sin dato'}
-                  </strong>
-                </p>
-                <p>
-                  Costo/ton: <strong>
-                    {typeof selectedFormula.costo_por_tonelada === 'number'
-                      ? `ARS ${selectedFormula.costo_por_tonelada.toFixed(2)}`
-                      : 'Sin dato'}
-                  </strong>
-                </p>
+                {canSeeFinancials && (
+                  <p>
+                    Costo/kg: <strong>
+                      {typeof selectedFormula.costo_por_kg === 'number'
+                        ? `ARS ${selectedFormula.costo_por_kg.toFixed(4)}`
+                        : 'Sin dato'}
+                    </strong>
+                  </p>
+                )}
+                {canSeeFinancials && (
+                  <p>
+                    Costo/ton: <strong>
+                      {typeof selectedFormula.costo_por_tonelada === 'number'
+                        ? `ARS ${selectedFormula.costo_por_tonelada.toFixed(2)}`
+                        : 'Sin dato'}
+                    </strong>
+                  </p>
+                )}
               </div>
             ) : null}
           </div>
@@ -314,23 +320,25 @@ const OrdenModal: React.FC<Props> = ({ onClose, onSuccess }) => {
             </div>
           )}
 
-          <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest block">Inversión Estimada</span>
-              <div className="flex items-baseline gap-1">
-                <span className="text-[10px] font-bold text-emerald-500/50">ARS</span>
-                <span className="text-xl font-black text-emerald-400 italic tracking-tighter">
-                  {datosInversion ? datosInversion.inversionTotal.toLocaleString('en-US', { minimumFractionDigits: 2 }) : "0.00"}
+          {canSeeFinancials && (
+            <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest block">Inversión Estimada</span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-[10px] font-bold text-emerald-500/50">ARS</span>
+                  <span className="text-xl font-black text-emerald-400 italic tracking-tighter">
+                    {datosInversion ? datosInversion.inversionTotal.toLocaleString('en-US', { minimumFractionDigits: 2 }) : "0.00"}
+                  </span>
+                </div>
+              </div>
+              <div className="text-right border-l border-slate-200 pl-4">
+                <span className="text-[8px] font-black text-gray-600 uppercase block">Costo x Kg</span>
+                <span className="text-xs font-bold text-emerald-400/80">
+                  ARS {datosInversion ? datosInversion.costoPorKg.toFixed(3) : "0.00"}
                 </span>
               </div>
             </div>
-            <div className="text-right border-l border-slate-200 pl-4">
-              <span className="text-[8px] font-black text-gray-600 uppercase block">Costo x Kg</span>
-              <span className="text-xs font-bold text-emerald-400/80">
-                ARS {datosInversion ? datosInversion.costoPorKg.toFixed(3) : "0.00"}
-              </span>
-            </div>
-          </div>
+          )}
         </div>
 
         <footer className="px-8 py-6 border-t border-slate-200 flex gap-4 bg-slate-50">

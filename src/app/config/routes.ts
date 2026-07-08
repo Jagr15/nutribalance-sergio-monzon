@@ -22,4 +22,5 @@ export const ROUTES = {
   SILOS: '/silos',
   ORDENES: '/ordenes',
   ORDENES_SALIDA: '/ordenes-salida',
+  COMPROBANTES: '/comprobantes',
 } as const;

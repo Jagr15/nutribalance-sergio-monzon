@@ -1,4 +1,5 @@
 import type { FinanzasInventarioResumen, FinanzasKPIs, FinanzasTesoreriaInsights, MovimientoFinanciero } from '../types';
+import { isMovimientoCajaReal } from './finanzasCalculations';
 
 export type PeriodoFiltro = 'MES_ACTUAL' | 'TRIMESTRE_ACTUAL' | 'ANIO_ACTUAL' | 'TODO' | 'RANGO';
 
@@ -227,7 +228,9 @@ export const buildEstadosFinancieros = (params: {
     return 'INGRESO';
   };
 
-  const sortedMovimientos = [...movimientosConfirmados].sort((a, b) => {
+  const movimientosCaja = movimientosConfirmados.filter(isMovimientoCajaReal);
+
+  const sortedMovimientos = [...movimientosCaja].sort((a, b) => {
     const timeA = new Date(a.fecha).getTime();
     const timeB = new Date(b.fecha).getTime();
     if (timeA !== timeB) return timeA - timeB;

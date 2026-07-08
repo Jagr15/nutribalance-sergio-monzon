@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   calcFlujoNeto,
   calcMargenOperativo,
-  normalizeKpis,
+  calcularCuentasPorCobrar,
   calcularCuentasPorPagar,
+  isMovimientoCajaReal,
+  normalizeKpis,
   obtenerMontoPendiente,
 } from './finanzasCalculations';
 import type { MovimientoFinanciero } from '../types';
@@ -66,14 +68,17 @@ describe('finanzas calculations', () => {
       expect(kpiCuentasPorPagar).toBe(2000000);
     });
 
-    it('Caso C: comprobantes tiene FACTURA_COMPRA con saldo $1.500.000. KPI debe sumar $1.500.000', () => {
+    it('Caso C: movimiento con FACTURA_COMPRA pendiente usa comprobante_saldo como monto pendiente', () => {
       const comprobantes: any[] = [
         {
           uid: 'comp-1',
           fecha: '2026-07-02',
           tipo: 'EGRESO',
           descripcion: 'Factura Compra Proveedor',
-          saldo: 1500000,
+          monto: 2000000,
+          comprobante_tipo: 'FACTURA_COMPRA',
+          comprobante_saldo: 1500000,
+          comprobante_estado: 'PENDIENTE',
           estado: 'PENDIENTE',
           estado_financiero: 'PENDIENTE_PAGO',
         },
@@ -124,6 +129,131 @@ describe('finanzas calculations', () => {
 
       const kpiCuentasPorPagar = filtrados.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0);
       expect(kpiCuentasPorPagar).toBe(0);
+    });
+
+    it('FACTURA_VENTA pendiente suma a CxC pero no cuenta como caja', () => {
+      const movimientos: MovimientoFinanciero[] = [
+        {
+          uid: 'venta-1',
+          fecha: '2026-07-02',
+          tipo: 'INGRESO',
+          origen_operativo: 'VENTA_PT',
+          descripcion: 'Venta facturada a crédito',
+          monto: 500000,
+          comprobante_tipo: 'FACTURA_VENTA',
+          comprobante_estado: 'PENDIENTE',
+          comprobante_saldo: 500000,
+          estado: 'CONFIRMADO',
+          estado_financiero: 'CONFIRMADO',
+        },
+      ];
+
+      expect(calcularCuentasPorCobrar(movimientos)).toHaveLength(1);
+      expect(isMovimientoCajaReal(movimientos[0])).toBe(false);
+    });
+
+    it('COBRANZA confirmada cuenta como caja real', () => {
+      const movimiento: MovimientoFinanciero = {
+        uid: 'cob-1',
+        fecha: '2026-07-02',
+        tipo: 'INGRESO',
+        origen_operativo: 'COBRANZA',
+        descripcion: 'Recibo aplicado',
+        monto: 500000,
+        comprobante_tipo: 'RECIBO',
+        comprobante_estado: 'PAGADO',
+        comprobante_saldo: 0,
+        estado: 'CONFIRMADO',
+        estado_financiero: 'COBRADO',
+        fecha_cobro_pago: '2026-07-02',
+      };
+
+      expect(isMovimientoCajaReal(movimiento)).toBe(true);
+      expect(calcularCuentasPorCobrar([movimiento])).toHaveLength(0);
+    });
+
+    it('VENTA_PT pagada no cuenta caja real por sí sola si la cobranza se registra aparte', () => {
+      const movimientos: MovimientoFinanciero[] = [
+        {
+          uid: 'venta-pagada',
+          fecha: '2026-07-02',
+          tipo: 'INGRESO',
+          origen_operativo: 'VENTA_PT',
+          descripcion: 'Factura venta pagada',
+          monto: 500000,
+          comprobante_tipo: 'FACTURA_VENTA',
+          comprobante_estado: 'PAGADO',
+          comprobante_saldo: 0,
+          estado: 'CONFIRMADO',
+          estado_financiero: 'COBRADO',
+          fecha_cobro_pago: '2026-07-02',
+        },
+        {
+          uid: 'recibo-1',
+          fecha: '2026-07-02',
+          tipo: 'INGRESO',
+          origen_operativo: 'COBRANZA',
+          descripcion: 'Recibo asociado',
+          monto: 500000,
+          comprobante_tipo: 'RECIBO',
+          comprobante_estado: 'PAGADO',
+          comprobante_saldo: 0,
+          estado: 'CONFIRMADO',
+          estado_financiero: 'COBRADO',
+          fecha_cobro_pago: '2026-07-02',
+        },
+      ];
+
+      expect(isMovimientoCajaReal(movimientos[0])).toBe(false);
+      expect(isMovimientoCajaReal(movimientos[1])).toBe(true);
+    });
+
+    it('COMPRA_MP pagada sí cuenta como egreso real', () => {
+      const movimiento: MovimientoFinanciero = {
+        uid: 'cmp-pagada',
+        fecha: '2026-07-02',
+        tipo: 'EGRESO',
+        origen_operativo: 'COMPRA_MP',
+        descripcion: 'Compra MP pagada',
+        monto: 1200000,
+        estado: 'CONFIRMADO',
+        estado_financiero: 'PAGADO',
+        fecha_cobro_pago: '2026-07-03',
+      };
+
+      expect(isMovimientoCajaReal(movimiento)).toBe(true);
+      expect(calcularCuentasPorPagar([movimiento])).toHaveLength(0);
+    });
+
+    it('COMPRA_MP pendiente suma CxP y no egreso real', () => {
+      const movimiento: MovimientoFinanciero = {
+        uid: 'cmp-pendiente',
+        fecha: '2026-07-02',
+        tipo: 'EGRESO',
+        origen_operativo: 'COMPRA_MP',
+        descripcion: 'Compra MP pendiente',
+        monto: 1200000,
+        estado: 'PENDIENTE',
+        estado_financiero: 'PENDIENTE_PAGO',
+      };
+
+      expect(isMovimientoCajaReal(movimiento)).toBe(false);
+      expect(calcularCuentasPorPagar([movimiento])).toHaveLength(1);
+    });
+
+    it('COMPRA_MP confirmada con estado_financiero null no cuenta egreso real automáticamente', () => {
+      const movimiento: MovimientoFinanciero = {
+        uid: 'cmp-ambigua',
+        fecha: '2026-07-02',
+        tipo: 'EGRESO',
+        origen_operativo: 'COMPRA_MP',
+        descripcion: 'Compra MP ambigua',
+        monto: 1200000,
+        estado: 'CONFIRMADO',
+      };
+
+      expect(isMovimientoCajaReal(movimiento)).toBe(false);
+      expect(calcularCuentasPorPagar([movimiento])).toHaveLength(0);
     });
   });
 });

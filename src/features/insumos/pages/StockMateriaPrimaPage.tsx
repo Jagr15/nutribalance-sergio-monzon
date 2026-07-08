@@ -11,6 +11,7 @@ import type { Proveedor } from '../../proveedores/types';
 import Swal from 'sweetalert2';
 import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { buildStockMPResumen } from '../utils/stockResumen';
+import { usePermissions } from '../../auth/usePermissions';
 
 const formatterNumero = new Intl.NumberFormat('es-AR', {
   maximumFractionDigits: 3,
@@ -24,6 +25,7 @@ const DEFAULT_PAGE_SIZE = 10;
 type StockModalMode = 'COMPRA' | 'AJUSTE';
 
 const StockMateriaPrimaPage: React.FC = () => {
+  const { canSeeFinancials } = usePermissions();
   const { lotes, isLoading, loadError, getAll, remove } = useStockMateriaPrima();
   const [modalMode, setModalMode] = useState<StockModalMode | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -174,7 +176,7 @@ const StockMateriaPrimaPage: React.FC = () => {
           </div>
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className={`grid gap-4 md:grid-cols-2 ${canSeeFinancials ? 'xl:grid-cols-5' : 'xl:grid-cols-3'}`}>
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Ingresos registrados</p>
             <p className="mt-3 text-3xl font-black text-slate-900">{showLoadingCards ? '—' : comprasRegistradas}</p>
@@ -190,20 +192,24 @@ const StockMateriaPrimaPage: React.FC = () => {
             <p className="mt-3 text-3xl font-black text-slate-900">{showLoadingCards ? '—' : insumosActivos}</p>
             <p className="mt-2 text-xs text-slate-500">Fuente real desde la tabla `insumos`.</p>
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Valor inventario MP</p>
-            <p className="mt-3 text-3xl font-black text-slate-900">
-              {showLoadingCards ? '—' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(valorInventarioMp)}
-            </p>
-            <p className="mt-2 text-xs text-slate-500">Valorizado con costo real por lote.</p>
-          </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Costo promedio MP</p>
-            <p className="mt-3 text-3xl font-black text-slate-900">
-              {showLoadingCards ? '—' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(costoPromedioVisible)}
-            </p>
-            <p className="mt-2 text-xs text-slate-500">Promedio ponderado visible por insumo.</p>
-          </div>
+          {canSeeFinancials && (
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Valor inventario MP</p>
+              <p className="mt-3 text-3xl font-black text-slate-900">
+                {showLoadingCards ? '—' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(valorInventarioMp)}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">Valorizado con costo real por lote.</p>
+            </div>
+          )}
+          {canSeeFinancials && (
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500 font-bold">Costo promedio MP</p>
+              <p className="mt-3 text-3xl font-black text-slate-900">
+                {showLoadingCards ? '—' : new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(costoPromedioVisible)}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">Promedio ponderado visible por insumo.</p>
+            </div>
+          )}
         </div>
 
       </section>

@@ -1,13 +1,12 @@
 // src/infrastructure/api/mocks/mockFormulaService.ts
 import type { Formula } from '../../../../features/formulas/types';
 import formulasData from '../data/formulas.json';
-import insumosData from '../data/insumos.json';
-import stockData from '../data/stockMateriaPrima.json';
 import { mockApiCall } from '../mockClient';
 import { calculateFormulaNutrition } from '../../../../features/formulas/utils/nutritionCalculator';
 import { calculateFormulaCost } from '../../../../features/formulas/utils/costCalculator';
-import type { Insumo, StockMateriaPrima } from '../../../../features/insumos/types/insumo';
 import { mockOrdenService } from './mockOrdenService';
+import { getMockInsumosLocal } from './mockInsumoService';
+import { getMockStockLocal } from './mockMateriaPrimaService';
 
 type FormulaRaw = Omit<Formula, 'ultima_edicion'> & { ultima_edicion: string };
 type FormulaEnriched = Formula & {
@@ -19,10 +18,9 @@ type FormulaEnriched = Formula & {
   advertencias_costos?: string[];
 };
 
-const maestroInsumos: Insumo[] = insumosData as unknown as Insumo[];
-const maestroStock: StockMateriaPrima[] = stockData as unknown as StockMateriaPrima[];
-
 const withSnapshots = (formula: Formula): FormulaEnriched => {
+  const maestroInsumos = getMockInsumosLocal();
+  const maestroStock = getMockStockLocal();
   const nutrition = calculateFormulaNutrition(formula.ingredientes, maestroInsumos);
   const cost = calculateFormulaCost(formula.ingredientes, maestroStock, maestroInsumos);
 
@@ -53,7 +51,7 @@ const withSnapshots = (formula: Formula): FormulaEnriched => {
 };
 
 // Mapeo inicial para asegurar que las fechas sean objetos Date
-let mockFormulas: Formula[] = (formulasData as unknown as FormulaRaw[]).map((f) => withSnapshots({
+let mockFormulas: Formula[] = (formulasData as unknown as FormulaRaw[]).map((f) => ({
   ...f,
   ultima_edicion: new Date(f.ultima_edicion)
 }));
@@ -61,13 +59,14 @@ let mockFormulas: Formula[] = (formulasData as unknown as FormulaRaw[]).map((f) 
 export const mockFormulaService = {
   // Obtener todas las recetas
   findAll: async (): Promise<Formula[]> => {
-    return mockApiCall(mockFormulas.filter(f => !(f as any).deletedAt));
+    const list = mockFormulas.filter(f => !(f as any).deletedAt);
+    return mockApiCall(list.map(f => withSnapshots(f)));
   },
 
   // Obtener una receta específica
   getById: async (uid: string): Promise<Formula | undefined> => {
     const formula = mockFormulas.find((f) => f.uid === uid && !(f as any).deletedAt);
-    return mockApiCall(formula);
+    return mockApiCall(formula ? withSnapshots(formula) : undefined);
   },
 
   // Crear una nueva fórmula manteniendo solo validaciones estructurales mínimas.
@@ -86,21 +85,20 @@ export const mockFormulaService = {
       ultima_edicion: new Date()
     };
 
-    const enriched = withSnapshots(newFormula);
-    mockFormulas = [enriched, ...mockFormulas];
-    return mockApiCall(enriched);
+    mockFormulas = [newFormula, ...mockFormulas];
+    return mockApiCall(withSnapshots(newFormula));
   },
 
   // Actualizar datos de la receta sin bloquear por advertencias de composición.
   update: async (uid: string, data: Partial<Formula>): Promise<Formula> => {
     mockFormulas = mockFormulas.map((f) =>
-      f.uid === uid ? withSnapshots({ ...f, ...data, ultima_edicion: new Date() }) : f
+      f.uid === uid ? { ...f, ...data, ultima_edicion: new Date() } : f
     );
     
     const updated = mockFormulas.find((f) => f.uid === uid);
     if (!updated) throw new Error("Fórmula no encontrada");
     
-    return mockApiCall(updated);
+    return mockApiCall(withSnapshots(updated));
   },
 
   // Borrado lógico (según el requerimiento: desactivar en lugar de eliminar físicamente)

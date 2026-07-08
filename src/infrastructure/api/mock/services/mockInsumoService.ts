@@ -10,6 +10,8 @@ import { contabilidadOperativaService } from '../../../../features/finanzas/serv
 let mockInsumos: Insumo[] = (insumosData as unknown) as Insumo[];
 let mockStock: StockMateriaPrima[] = (stockData as unknown) as StockMateriaPrima[];
 
+export const getMockInsumosLocal = () => mockInsumos;
+
 const getMetadataString = (meta: unknown, key: string): string | undefined => {
   if (!meta || typeof meta !== 'object') return undefined;
   const val = (meta as Record<string, unknown>)[key];

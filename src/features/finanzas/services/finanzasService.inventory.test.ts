@@ -118,9 +118,9 @@ describe('finanzasService inventory', () => {
       cliente_nombre: 'Estancia La Esperanza',
       saldo_pendiente: 21600,
     });
-    expect(result.kpis.ingresos_mes).toBeGreaterThan(0);
+    expect(result.kpis.ingresos_mes).toBe(0);
     expect(result.kpis.cuentas_por_cobrar).toBeGreaterThan(0);
-    expect(result.reportes.flujo_caja_mensual.some((row) => row.ingresos > 0)).toBe(true);
+    expect(result.reportes.flujo_caja_mensual.some((row) => row.ingresos > 0)).toBe(false);
   });
 
   it('no convierte una carga de stock en cuentas por pagar sin movimiento financiero asociado', async () => {
@@ -152,5 +152,91 @@ describe('finanzasService inventory', () => {
 
     expect(result.movimientos.some((mov) => mov.origen_operativo === 'COMPRA_MP' && mov.monto === 1500)).toBe(true);
     expect(result.kpis.cuentas_por_pagar).toBe(1500);
+  });
+
+  it('cuenta una cobranza real como ingreso de caja sin inflar la venta pendiente', async () => {
+    localStorage.setItem('nutribalance_contabilidad_operativa_v1', JSON.stringify([
+      {
+        legacy_uid: 'fcm-venta-pt-1',
+        fecha: '2026-06-18',
+        tipo: 'INGRESO',
+        origen_operativo: 'VENTA_PT',
+        descripcion: 'Venta PT Pellet',
+        monto: 21600,
+        comprobante_id: 'comp-1',
+        comprobante_tipo: 'FACTURA_VENTA',
+        comprobante_estado: 'PENDIENTE',
+        comprobante_saldo: 21600,
+        estado: 'CONFIRMADO',
+        estado_financiero: 'CONFIRMADO',
+      },
+      {
+        legacy_uid: 'fcm-cobranza-comp-1',
+        fecha: '2026-06-19',
+        tipo: 'INGRESO',
+        origen_operativo: 'COBRANZA',
+        descripcion: 'Cobranza recibida',
+        monto: 21600,
+        comprobante_id: 'comp-1',
+        comprobante_tipo: 'RECIBO',
+        comprobante_estado: 'PAGADO',
+        comprobante_saldo: 0,
+        estado: 'CONFIRMADO',
+        estado_financiero: 'COBRADO',
+        fecha_cobro_pago: '2026-06-19',
+      },
+    ]));
+
+    const result = await finanzasService.getOperationalFallback();
+
+    expect(result.kpis.ingresos_mes).toBe(21600);
+    expect(result.kpis.flujo_neto).toBe(21600 - result.kpis.egresos_mes);
+  });
+
+  it('trata una compra MP confirmada sin estado_financiero como no pagada automáticamente', async () => {
+    const base = await finanzasService.getOperationalFallback();
+
+    localStorage.setItem('nutribalance_contabilidad_operativa_v1', JSON.stringify([
+      {
+        legacy_uid: 'fcm-compra-ambigua',
+        fecha: '2026-06-18',
+        tipo: 'EGRESO',
+        origen_operativo: 'COMPRA_MP',
+        descripcion: 'Compra MP sin estado financiero',
+        monto: 3000,
+        estado: 'CONFIRMADO',
+        metadata: {
+          lote: 'L-009',
+          proveedor: 'Proveedor SA',
+        },
+      },
+    ]));
+
+    const result = await finanzasService.getOperationalFallback();
+
+    expect(result.kpis.egresos_mes).toBe(base.kpis.egresos_mes);
+    expect(result.kpis.cuentas_por_pagar).toBe(base.kpis.cuentas_por_pagar);
+  });
+
+  it('cuenta una compra MP pagada como egreso real', async () => {
+    const base = await finanzasService.getOperationalFallback();
+
+    localStorage.setItem('nutribalance_contabilidad_operativa_v1', JSON.stringify([
+      {
+        legacy_uid: 'fcm-compra-pagada',
+        fecha: '2026-06-18',
+        tipo: 'EGRESO',
+        origen_operativo: 'COMPRA_MP',
+        descripcion: 'Compra MP pagada',
+        monto: 4000,
+        estado: 'CONFIRMADO',
+        estado_financiero: 'PAGADO',
+        fecha_cobro_pago: '2026-06-18',
+      },
+    ]));
+
+    const result = await finanzasService.getOperationalFallback();
+
+    expect(result.kpis.egresos_mes).toBe(base.kpis.egresos_mes + 4000);
   });
 });

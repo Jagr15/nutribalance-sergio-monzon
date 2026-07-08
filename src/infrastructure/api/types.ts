@@ -96,6 +96,7 @@ export interface StockMPCreateData {
   id_usuario: string;
   fecha_ingreso: Date;
   ubicacion: string;
+  silo_id?: string;
 }
 
 export interface StockMPService {

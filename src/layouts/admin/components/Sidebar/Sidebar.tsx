@@ -4,7 +4,7 @@ import { ROUTES } from "../../../../app/config/routes"; // Tus constantes de rut
 import {
   FiGrid, FiUsers, FiPackage, FiTruck, FiBarChart2,
    FiLogOut,FiInbox,FiDatabase,FiDollarSign,
-  FiLayers, FiArchive, FiChevronDown, FiChevronRight, FiGitMerge, FiBell,
+  FiLayers, FiArchive, FiChevronDown, FiChevronRight, FiGitMerge, FiBell, FiFileText
 } from "react-icons/fi";
 import type { IconType } from "react-icons";
 import { clearSession, getSessionUser } from "../../../../features/auth/session";
@@ -57,6 +57,7 @@ const menuItems: SidebarGroup[] = [
     items: [
       { name: "Costos", icon: FiBarChart2, path: ROUTES.COSTOS, module: "finanzas" },
       { name: "Estados financieros", icon: FiBarChart2, path: ROUTES.ESTADOS_FINANCIEROS, module: "finanzas" },
+      { name: "Comprobantes", icon: FiFileText, path: ROUTES.COMPROBANTES, module: "finanzas" },
       { name: "Tesorería", icon: FiDollarSign, path: ROUTES.TESORERIA, module: "tesoreria" },
     ],
   },

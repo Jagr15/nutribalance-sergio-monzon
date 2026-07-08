@@ -170,8 +170,8 @@ export const mockClienteService = {
         unidad: orden.unidad_cantidad,
         importe: total,
         saldo,
-        referencia: orden.referencia || orden.numero_expedicion,
-        estado: saldo <= 0 ? 'PAGADO' : 'PENDIENTE',
+        referencia: total === 0 ? 'Sin cargo / Bonificación' : (orden.referencia || orden.numero_expedicion),
+        estado: total === 0 ? 'SIN DEUDA' : (saldo <= 0 ? 'PAGADO' : 'PENDIENTE'),
         comprobanteNumero: orden.numero_expedicion,
       };
     });
@@ -329,3 +329,6 @@ export const mockClienteService = {
     return mockApiCall(pagos);
   },
 };
+
+export const getMockClientesLocal = () => mockClientes;
+export const setMockClientesLocal = (val: Cliente[]) => { mockClientes = val; };

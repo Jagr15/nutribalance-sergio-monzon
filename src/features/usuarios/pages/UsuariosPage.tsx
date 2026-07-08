@@ -277,8 +277,19 @@ const UsuariosPage = () => {
           </button>
           <button
             type="button"
-            onClick={() => window.alert('TODO: el panel de permisos personalizados se implementará en una fase posterior.')}
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+            onClick={() => {
+              void Swal.fire({
+                icon: 'info',
+                title: 'Configuración de Permisos',
+                text: 'La edición personalizada de permisos se encuentra deshabilitada temporalmente hasta la definición de la matriz final de accesos. Los accesos actuales están determinados estrictamente por el rol asignado a cada usuario.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#2563eb',
+                background: '#ffffff',
+                color: '#0f172a',
+                customClass: { popup: 'border border-slate-200 rounded-2xl' }
+              });
+            }}
+            className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15 cursor-not-allowed opacity-80"
           >
             Configurar permisos
           </button>

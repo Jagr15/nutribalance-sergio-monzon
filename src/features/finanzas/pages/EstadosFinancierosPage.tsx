@@ -39,6 +39,23 @@ const getPresetRange = (periodo: PeriodoFiltro) => {
 const DEMO_PATTERN = /prueba|test|demo|www|tttt/i;
 const isDemoText = (value?: string | null) => Boolean(value && DEMO_PATTERN.test(value));
 
+const buildDuplicateSafeKey = (base: string, occurrence: number) => (
+  occurrence === 0 ? base : `${base}#${occurrence}`
+);
+
+const withStableKeys = <T,>(items: T[], getBaseKey: (item: T) => string) => {
+  const seen = new Map<string, number>();
+  return items.map((item) => {
+    const base = getBaseKey(item);
+    const occurrence = seen.get(base) ?? 0;
+    seen.set(base, occurrence + 1);
+    return {
+      item,
+      key: buildDuplicateSafeKey(base, occurrence),
+    };
+  });
+};
+
 const PeriodoSelect = ({ value, onChange }: { value: PeriodoFiltro; onChange: (value: PeriodoFiltro) => void }) => (
   <select className="ui-input rounded-2xl px-4 py-3 text-sm" value={value} onChange={(event) => onChange(event.target.value as PeriodoFiltro)}>
     <option value="MES_ACTUAL">Mes actual</option>
@@ -104,6 +121,27 @@ const EstadosFinancierosPage = () => {
     auxiliarIngresos: data.libros.auxiliarIngresos.filter((row) => !isDemoText(row.label)),
     auxiliarEgresos: data.libros.auxiliarEgresos.filter((row) => !isDemoText(row.label)),
   }), [data.libros.auxiliarEgresos, data.libros.auxiliarIngresos, data.libros.libroMayor]);
+
+  const libroMayorRows = useMemo(() => (
+    withStableKeys(
+      librosFiltrados.libroMayor.slice(0, 12),
+      (row) => `lm:${row.fecha}:${row.cuenta}:${row.descripcion}:${row.debito}:${row.credito}`
+    )
+  ), [librosFiltrados.libroMayor]);
+
+  const flujoCajaRows = useMemo(() => (
+    withStableKeys(
+      flujoCajaMovimientosPaginados,
+      (row) => `fc:${row.id}:${row.fecha}:${row.tipo}:${row.ingreso}:${row.egreso}:${row.saldo_acumulado}`
+    )
+  ), [flujoCajaMovimientosPaginados]);
+
+  const importPreviewRows = useMemo(() => (
+    withStableKeys(
+      importPreview,
+      (row) => `hist:${row.legacy_uid ?? 'sin-uid'}:${row.fecha}:${row.tipo}:${row.descripcion}:${row.monto}:${row.origen_operativo ?? 'sin-origen'}`
+    )
+  ), [importPreview]);
 
   const rangoInvalido = Boolean(rangoVisible.desde && rangoVisible.hasta && rangoVisible.desde > rangoVisible.hasta);
 
@@ -265,8 +303,8 @@ const EstadosFinancierosPage = () => {
               {importPreview.length > 0 ? (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Vista previa</p>
-                  {importPreview.map((row) => (
-                    <div key={`${row.legacy_uid ?? ''}-${row.fecha}-${row.tipo}-${row.descripcion}-${row.monto}-${row.origen_operativo ?? ''}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
+                  {importPreviewRows.map(({ item: row, key }) => (
+                    <div key={key} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
                       <p className="font-semibold text-slate-900">{row.descripcion}</p>
                       <p className="text-slate-500">{row.fecha} · {row.tipo} · {row.origen_operativo} · {row.monto}</p>
                     </div>
@@ -340,7 +378,7 @@ const EstadosFinancierosPage = () => {
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Libro mayor</p>
               <div className="mt-2 space-y-2 max-h-72 overflow-auto pr-1">
-                {librosFiltrados.libroMayor.length > 0 ? librosFiltrados.libroMayor.slice(0, 12).map((row) => <div key={`${row.fecha}-${row.descripcion}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-semibold">{row.cuenta}</span><span>{dateLabel(row.fecha)}</span></div><p className="mt-1 text-slate-700">{row.descripcion}</p><div className="mt-2 flex items-center justify-between"><span>Débito {money(row.debito)}</span><span>Crédito {money(row.credito)}</span></div></div>) : <EmptyState title="Sin libro mayor" description="No hay movimientos confirmados para mostrar." />}
+                {libroMayorRows.length > 0 ? libroMayorRows.map(({ item: row, key }) => <div key={key} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-semibold">{row.cuenta}</span><span>{dateLabel(row.fecha)}</span></div><p className="mt-1 text-slate-700">{row.descripcion}</p><div className="mt-2 flex items-center justify-between"><span>Débito {money(row.debito)}</span><span>Crédito {money(row.credito)}</span></div></div>) : <EmptyState title="Sin libro mayor" description="No hay movimientos confirmados para mostrar." />}
               </div>
             </div>
             <div>
@@ -447,11 +485,11 @@ const EstadosFinancierosPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {flujoCajaMovimientosPaginados.map((m) => {
+                  {flujoCajaRows.map(({ item: m, key }) => {
                     const isIngreso = m.tipo === 'INGRESO';
                     return (
                       <tr 
-                        key={m.id} 
+                        key={key} 
                         className={`hover:bg-slate-50/80 transition-colors ${
                           isIngreso ? 'bg-emerald-50/10' : 'bg-rose-50/10'
                         }`}

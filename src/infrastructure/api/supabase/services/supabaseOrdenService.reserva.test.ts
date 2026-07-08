@@ -132,6 +132,7 @@ const makeTableMock = (table: string) => {
       return {
         select: vi.fn(() => ({
           in: vi.fn(async () => ({ data: scenario.detalleRows, error: null })),
+          eq: vi.fn(async () => ({ count: 0, error: null })),
         })),
       };
     case 'formulas':
@@ -183,6 +184,12 @@ const makeTableMock = (table: string) => {
               maybeSingle: vi.fn(async () => ({ data: { id: 'silo-db-1', legacy_uid: 'silo-1' }, error: null })),
             })),
           })),
+        })),
+      };
+    case 'stock_pt':
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(async () => ({ count: 0, error: null })),
         })),
       };
     default:

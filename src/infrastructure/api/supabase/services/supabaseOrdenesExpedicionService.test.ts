@@ -28,34 +28,36 @@ describe('supabaseOrdenesExpedicionService', () => {
       if (table === 'ordenes_expedicion') {
         return {
           select: () => ({
-            order: async () => ({
-              data: [{
-                id: 'id-1',
-                legacy_uid: 'exp-1',
-                numero_expedicion: 'EXP-2026-000001',
-                stock_pt_id: 'pt-1',
-                producto_id: 'prod-1',
-                nombre_producto: 'Producto 1',
-                lote_pt: 'L-1',
-                cliente_id: 'cli-db-1',
-                clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
-                presentacion_key: 'GRANEL_KG',
-                presentacion: 'GRANEL',
-                cantidad: 25,
-                cantidad_original: 25,
-                unidad_cantidad: 'kg',
-                cantidad_kg: 25,
-                precio_unitario_venta: 150,
-                total_venta: 3750,
-                moneda: 'ARS',
-                kilos_reales_cargados: 24.8,
-                estado: 'pendiente',
-                motivo: 'Venta',
-                referencia: 'R-1',
-                created_at: '2026-06-18T10:00:00Z',
-                updated_at: '2026-06-18T10:00:00Z',
-              }],
-              error: null,
+            is: () => ({
+              order: async () => ({
+                data: [{
+                  id: '00000000-0000-0000-0000-000000000001',
+                  legacy_uid: 'exp-1',
+                  numero_expedicion: 'EXP-2026-000001',
+                  stock_pt_id: 'pt-1',
+                  producto_id: 'prod-1',
+                  nombre_producto: 'Producto 1',
+                  lote_pt: 'L-1',
+                  cliente_id: 'cli-db-1',
+                  clientes: { legacy_uid: 'cli-001', nombre: 'Cliente Demo' },
+                  presentacion_key: 'GRANEL_KG',
+                  presentacion: 'GRANEL',
+                  cantidad: 25,
+                  cantidad_original: 25,
+                  unidad_cantidad: 'kg',
+                  cantidad_kg: 25,
+                  precio_unitario_venta: 150,
+                  total_venta: 3750,
+                  moneda: 'ARS',
+                  kilos_reales_cargados: 24.8,
+                  estado: 'pendiente',
+                  motivo: 'Venta',
+                  referencia: 'R-1',
+                  created_at: '2026-06-18T10:00:00Z',
+                  updated_at: '2026-06-18T10:00:00Z',
+                }],
+                error: null,
+              }),
             }),
           }),
         };
@@ -103,7 +105,7 @@ describe('supabaseOrdenesExpedicionService', () => {
 
     mockRpc.mockResolvedValue({
       data: [{
-        id: 'id-1',
+        id: '00000000-0000-0000-0000-000000000001',
         legacy_uid: 'exp-1',
         numero_expedicion: 'EXP-2026-000001',
         stock_pt_id: 'pt-db-1',
@@ -222,7 +224,7 @@ describe('supabaseOrdenesExpedicionService', () => {
 
     mockRpc.mockResolvedValue({
       data: [{
-        id: 'id-1',
+        id: '00000000-0000-0000-0000-000000000001',
         legacy_uid: 'exp-1',
         numero_expedicion: 'EXP-2026-000001',
         stock_pt_id: 'pt-db-1',
@@ -249,7 +251,7 @@ describe('supabaseOrdenesExpedicionService', () => {
       error: null,
     });
 
-    const row = await supabaseOrdenesExpedicionService.update('id-1', {
+    const row = await supabaseOrdenesExpedicionService.update('00000000-0000-0000-0000-000000000001', {
       cantidad: 1.25,
       unidad_cantidad: 'tonelada',
       presentacion_key: 'TONELADA',
@@ -258,7 +260,7 @@ describe('supabaseOrdenesExpedicionService', () => {
     });
 
     expect(mockRpc).toHaveBeenCalledWith('actualizar_orden_expedicion', expect.objectContaining({
-      p_orden_id: 'id-1',
+      p_orden_id: '00000000-0000-0000-0000-000000000001',
       p_presentacion_key: 'TONELADA',
       p_cantidad_original: 1.25,
       p_unidad_cantidad: 'kg',
@@ -271,7 +273,7 @@ describe('supabaseOrdenesExpedicionService', () => {
   it('marca una orden como lista registrando los kilos reales', async () => {
     mockRpc.mockResolvedValueOnce({
       data: [{
-        id: 'id-1',
+        id: '00000000-0000-0000-0000-000000000001',
         legacy_uid: 'exp-1',
         numero_expedicion: 'EXP-2026-000001',
         stock_pt_id: 'pt-db-1',
@@ -299,9 +301,9 @@ describe('supabaseOrdenesExpedicionService', () => {
       error: null,
     });
 
-    const row = await supabaseOrdenesExpedicionService.marcarLista('id-1', 24.8);
+    const row = await supabaseOrdenesExpedicionService.marcarLista('00000000-0000-0000-0000-000000000001', 24.8);
     expect(mockRpc).toHaveBeenCalledWith('marcar_lista_orden_expedicion', {
-      p_orden_id: 'id-1',
+      p_orden_id: '00000000-0000-0000-0000-000000000001',
       p_kilos_reales_cargados: 24.8,
     });
     expect(row.estado).toBe('lista');
@@ -310,7 +312,7 @@ describe('supabaseOrdenesExpedicionService', () => {
 
   it('despacha una orden', async () => {
     const ordenDespachada = {
-      id: 'id-1',
+      id: '00000000-0000-0000-0000-000000000001',
       legacy_uid: 'exp-1',
       numero_expedicion: 'EXP-2026-000001',
       stock_pt_id: 'pt-db-1',
@@ -361,14 +363,14 @@ describe('supabaseOrdenesExpedicionService', () => {
       throw new Error(`tabla inesperada: ${table}`);
     });
 
-    const row = await supabaseOrdenesExpedicionService.despachar('id-1');
-    expect(mockRpc).toHaveBeenCalledWith('despachar_orden_expedicion', { p_orden_id: 'id-1' });
+    const row = await supabaseOrdenesExpedicionService.despachar('00000000-0000-0000-0000-000000000001');
+    expect(mockRpc).toHaveBeenCalledWith('despachar_orden_expedicion', { p_orden_id: '00000000-0000-0000-0000-000000000001' });
     expect(row.estado).toBe('despachada');
   });
 
   it('cancela una orden pendiente', async () => {
     const ordenCancelada = {
-      id: 'id-1',
+      id: '00000000-0000-0000-0000-000000000001',
       legacy_uid: 'exp-1',
       numero_expedicion: 'EXP-2026-000001',
       stock_pt_id: 'pt-db-1',
@@ -415,14 +417,14 @@ describe('supabaseOrdenesExpedicionService', () => {
       throw new Error(`tabla inesperada: ${table}`);
     });
 
-    const row = await supabaseOrdenesExpedicionService.cancelar('id-1');
-    expect(mockRpc).toHaveBeenCalledWith('cancelar_orden_expedicion', { p_orden_id: 'id-1' });
+    const row = await supabaseOrdenesExpedicionService.cancelar('00000000-0000-0000-0000-000000000001');
+    expect(mockRpc).toHaveBeenCalledWith('cancelar_orden_expedicion', { p_orden_id: '00000000-0000-0000-0000-000000000001' });
     expect(row.estado).toBe('cancelada');
   });
 
   it('permite crear y luego cancelar una orden pendiente', async () => {
     const ordenCreada = {
-      id: 'id-1',
+      id: '00000000-0000-0000-0000-000000000001',
       legacy_uid: 'exp-1',
       numero_expedicion: 'EXP-2026-000001',
       stock_pt_id: 'pt-db-1',
@@ -514,14 +516,14 @@ describe('supabaseOrdenesExpedicionService', () => {
       error: null,
     });
 
-    const cancelada = await supabaseOrdenesExpedicionService.cancelar('id-1');
-    expect(mockRpc).toHaveBeenLastCalledWith('cancelar_orden_expedicion', { p_orden_id: 'id-1' });
+    const cancelada = await supabaseOrdenesExpedicionService.cancelar('00000000-0000-0000-0000-000000000001');
+    expect(mockRpc).toHaveBeenLastCalledWith('cancelar_orden_expedicion', { p_orden_id: '00000000-0000-0000-0000-000000000001' });
     expect(cancelada.estado).toBe('cancelada');
   });
 
   it('permite cancelar una orden en lista', async () => {
     const ordenLista = {
-      id: 'id-1',
+      id: '00000000-0000-0000-0000-000000000001',
       legacy_uid: 'exp-1',
       numero_expedicion: 'EXP-2026-000001',
       stock_pt_id: 'pt-db-1',
@@ -569,8 +571,8 @@ describe('supabaseOrdenesExpedicionService', () => {
       error: null,
     });
 
-    const cancelada = await supabaseOrdenesExpedicionService.cancelar('id-1');
-    expect(mockRpc).toHaveBeenCalledWith('cancelar_orden_expedicion', { p_orden_id: 'id-1' });
+    const cancelada = await supabaseOrdenesExpedicionService.cancelar('00000000-0000-0000-0000-000000000001');
+    expect(mockRpc).toHaveBeenCalledWith('cancelar_orden_expedicion', { p_orden_id: '00000000-0000-0000-0000-000000000001' });
     expect(cancelada.estado).toBe('cancelada');
   });
 });

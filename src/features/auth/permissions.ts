@@ -92,7 +92,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
     productos: ['view'],
     stock_general: ['view'],
     ordenes: ['view', 'start_order', 'finish_order'],
-    tesoreria: ['view'],
+    tesoreria: [],
   },
 
   supervisor: {
@@ -123,7 +123,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<AppModule, AppAction[]>> 
     productos: ['view'],
     stock_general: ['view'],
     ordenes: ['view', 'start_order', 'finish_order', 'cancel_order'],
-    tesoreria: ['view'],
+    tesoreria: [],
     usuarios: [],
     finanzas: [],
   },

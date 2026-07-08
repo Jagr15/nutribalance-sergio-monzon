@@ -7,6 +7,13 @@ import type {
 import type { StockMPCreateData } from '../../types';
 import { supabaseClient } from '../client';
 import { runtimeConfig } from '../../runtimeConfig';
+import {
+  getStockLotesMpSelect,
+  hasStockLotesMpSiloIdColumn,
+  isMissingStockLotesMpSiloIdError,
+  STOCK_LOTES_MP_SELECT_LEGACY,
+  STOCK_LOTES_MP_SELECT_WITH_SILO_ID,
+} from './stockLotesMpSiloSupport';
 
 interface StockLoteRow {
   legacy_uid: string | null;
@@ -14,6 +21,7 @@ interface StockLoteRow {
   lote: string;
   remito_nro: string;
   ubicacion: string;
+  silo_id: string | null;
   cantidad_actual: number;
   cantidad_inicial: number;
   cantidad_comprometida: number;
@@ -276,20 +284,34 @@ const mapStock = (row: StockLoteRow): StockMateriaPrima => ({
   fecha_ingreso: new Date(row.fecha_ingreso),
   remito_nro: row.remito_nro,
   ubicacion: row.ubicacion,
+  silo_id: row.silo_id ?? undefined,
   id_usuario: row.usuarios?.legacy_uid ?? 'usr-admin-01',
   createdAt: new Date(row.created_at),
   updatedAt: new Date(row.updated_at),
 });
 
-export const supabaseStockMPService = {
-  async getAllLotes(): Promise<StockMateriaPrima[]> {
-    const { data, error } = await supabaseClient
+const runStockLotesMpSelect = async () => {
+  const select = await getStockLotesMpSelect();
+  const result = await supabaseClient
+    .from('stock_lotes_mp')
+    .select(select)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+
+  if (result.error && select === STOCK_LOTES_MP_SELECT_WITH_SILO_ID && isMissingStockLotesMpSiloIdError(result.error)) {
+    return supabaseClient
       .from('stock_lotes_mp')
-      .select(
-        'legacy_uid,insumo_id,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid,nombre),proveedores(legacy_uid),usuarios(legacy_uid)'
-      )
+      .select(STOCK_LOTES_MP_SELECT_LEGACY)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
+  }
+
+  return result;
+};
+
+export const supabaseStockMPService = {
+  async getAllLotes(): Promise<StockMateriaPrima[]> {
+    const { data, error } = await runStockLotesMpSelect();
 
     if (error) throw error;
     return (data ?? [])
@@ -299,13 +321,7 @@ export const supabaseStockMPService = {
 
   async getResumen(): Promise<StockMateriaPrimaResumen[]> {
     const [lotesResult, insumos] = await Promise.all([
-      supabaseClient
-        .from('stock_lotes_mp')
-        .select(
-          'legacy_uid,insumo_id,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid,nombre),proveedores(legacy_uid),usuarios(legacy_uid)'
-        )
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false }),
+      runStockLotesMpSelect(),
       supabaseClient
         .from('insumos')
         .select('id,legacy_uid,nombre,unidad_medida,umbral_alerta,costo_por_kg,deleted_at,esta_activo')
@@ -415,30 +431,53 @@ export const supabaseStockMPService = {
       .maybeSingle<{ id: string }>();
     if (usuarioError) throw usuarioError;
 
-    const { data, error } = await supabaseClient
-      .from('stock_lotes_mp')
-      .insert({
-        legacy_uid: `stk-${Math.random().toString(36).slice(2, 11)}`,
-        insumo_id: insumo.id,
-        proveedor_id: proveedor.id,
-        lote: payload.lote.toUpperCase(),
-        remito_nro: payload.remito_nro,
-        ubicacion: payload.ubicacion,
-        cantidad_inicial: payload.cantidad,
-        cantidad_actual: payload.cantidad,
-        cantidad_comprometida: 0,
-        costo_unitario: costoUnitario,
-        costo_total: costoTotal,
-        fecha_ingreso: payload.fecha_ingreso.toISOString(),
-        id_usuario: usuario?.id ?? null,
-      })
-      .select(
-        'legacy_uid,insumo_id,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid,nombre),proveedores(legacy_uid),usuarios(legacy_uid)'
-      )
-      .single();
+    let siloId: string | null = null;
+    if (payload.silo_id || payload.ubicacion) {
+      const query = supabaseClient.from('silos').select('id');
+      const { data: sData } = payload.silo_id
+        ? await query.eq('id', payload.silo_id).maybeSingle()
+        : await query.eq('nombre', payload.ubicacion).maybeSingle();
+      if (sData) siloId = sData.id;
+    }
 
-    if (error) throw error;
-    return mapStock(data as unknown as StockLoteRow);
+    const legacyUid = `stk-${Math.random().toString(36).slice(2, 11)}`;
+    const supportsSiloId = await hasStockLotesMpSiloIdColumn();
+    const insertPayload = {
+      legacy_uid: legacyUid,
+      insumo_id: insumo.id,
+      proveedor_id: proveedor.id,
+      lote: payload.lote.toUpperCase(),
+      remito_nro: payload.remito_nro,
+      ubicacion: payload.ubicacion,
+      ...(supportsSiloId ? { silo_id: siloId } : {}),
+      cantidad_inicial: payload.cantidad,
+      cantidad_actual: payload.cantidad,
+      cantidad_comprometida: 0,
+      costo_unitario: costoUnitario,
+      costo_total: costoTotal,
+      fecha_ingreso: payload.fecha_ingreso.toISOString(),
+      id_usuario: usuario?.id ?? null,
+    };
+
+    const { error } = await supabaseClient
+      .from('stock_lotes_mp')
+      .insert(insertPayload);
+
+    if (error) {
+      if (supportsSiloId || !isMissingStockLotesMpSiloIdError(error)) throw error;
+      const { error: legacyError } = await supabaseClient
+        .from('stock_lotes_mp')
+        .insert({
+          ...insertPayload,
+          silo_id: undefined,
+        });
+      if (legacyError) throw legacyError;
+    }
+
+    const rows = await this.getAllLotes();
+    const created = rows.find((row) => row.uid === legacyUid);
+    if (!created) throw new Error('No se pudo recuperar el lote creado.');
+    return created;
   },
 
   async update(uid: string, payload: Partial<StockMateriaPrima>): Promise<StockMateriaPrima> {
@@ -446,6 +485,7 @@ export const supabaseStockMPService = {
       lote: payload.lote,
       remito_nro: payload.remito_nro,
       ubicacion: payload.ubicacion,
+      silo_id: payload.silo_id,
       cantidad_inicial: payload.cantidad_inicial,
       cantidad_actual: payload.cantidad_actual,
       cantidad_comprometida: payload.cantidad_comprometida,
@@ -457,16 +497,28 @@ export const supabaseStockMPService = {
       Object.entries(rawInput).filter(([, value]) => value !== undefined)
     );
 
+    const supportsSiloId = await hasStockLotesMpSiloIdColumn();
+    const { silo_id: maybeSiloId, ...legacyUpdateInput } = updateInput;
+    const persistedUpdateInput = supportsSiloId ? updateInput : legacyUpdateInput;
+
     const { data, error } = await supabaseClient
       .from('stock_lotes_mp')
-      .update(updateInput)
+      .update(persistedUpdateInput)
       .eq('legacy_uid', uid)
-      .select(
-        'legacy_uid,lote,remito_nro,ubicacion,cantidad_actual,cantidad_inicial,cantidad_comprometida,costo_unitario,costo_total,fecha_ingreso,created_at,updated_at,insumos(legacy_uid,nombre),proveedores(legacy_uid),usuarios(legacy_uid)'
-      )
+      .select(await getStockLotesMpSelect())
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (supportsSiloId || !isMissingStockLotesMpSiloIdError(error)) throw error;
+      const legacyResult = await supabaseClient
+        .from('stock_lotes_mp')
+        .update(legacyUpdateInput)
+        .eq('legacy_uid', uid)
+        .select(STOCK_LOTES_MP_SELECT_LEGACY)
+        .single();
+      if (legacyResult.error) throw legacyResult.error;
+      return mapStock(legacyResult.data as unknown as StockLoteRow);
+    }
     return mapStock(data as unknown as StockLoteRow);
   },
 

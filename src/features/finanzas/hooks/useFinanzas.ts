@@ -71,13 +71,15 @@ export const useFinanzas = () => {
 
     const finalMovimientos = movimientosResult.status === 'fulfilled' ? movimientosResult.value : [];
     let finalKpis = kpisResult.status === 'fulfilled' ? kpisResult.value : EMPTY_KPIS;
-    const finalCtasCobrar = calcularCuentasPorCobrar(finalMovimientos);
-    const finalCtasPagar = calcularCuentasPorPagar(finalMovimientos);
-    finalKpis = {
-      ...finalKpis,
-      cuentas_por_cobrar: finalCtasCobrar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0),
-      cuentas_por_pagar: finalCtasPagar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0),
-    };
+    if (kpisResult.status !== 'fulfilled') {
+      const finalCtasCobrar = calcularCuentasPorCobrar(finalMovimientos);
+      const finalCtasPagar = calcularCuentasPorPagar(finalMovimientos);
+      finalKpis = {
+        ...finalKpis,
+        cuentas_por_cobrar: finalCtasCobrar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0),
+        cuentas_por_pagar: finalCtasPagar.reduce((acc, m) => acc + obtenerMontoPendiente(m), 0),
+      };
+    }
 
     setKpis(finalKpis);
     setMovimientos(finalMovimientos);

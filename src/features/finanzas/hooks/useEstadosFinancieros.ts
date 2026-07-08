@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 import { finanzasService } from '../services/finanzasService';
 import type { FinanzasInventarioResumen, FinanzasKPIs, FinanzasTesoreriaInsights, MovimientoFinanciero } from '../types';
 import { buildEstadosFinancieros, type PeriodoFiltro, type RangoFechas } from '../utils/estadosFinancieros';
@@ -111,6 +112,21 @@ export const useEstadosFinancieros = () => {
         centro_costo: undefined,
         estado: row.estado ?? 'CONFIRMADO',
       }));
+      const useMocks = runtimeConfig.mode === 'mock';
+      if (useMocks || criticalFailures > 0) {
+        try {
+          const fallback = await finanzasService.getOperationalFallback();
+          setMovimientos([...fallback.movimientos, ...historical]);
+          setKpis(fallback.kpis);
+          setTesoreria(fallback.tesoreria);
+          setInventario(fallback.inventario);
+          setLoading(false);
+          return;
+        } catch (fallbackError) {
+          console.warn('No se pudo cargar el fallback operativo para estados financieros.', fallbackError);
+        }
+      }
+
       setMovimientos([...movimientos, ...historical]);
       setKpis(kpis);
       setTesoreria(tesoreria);

@@ -127,7 +127,7 @@ describe('buildTrazabilidadHistoria', () => {
 
     expect(result).not.toBeNull();
     expect(result?.sentido).toBe('ADELANTE');
-    expect(result?.movimientos.map((m) => m.tipo)).toEqual(['INGRESO_MP', 'CONSUMO_MP', 'INGRESO_PT', 'SALIDA']);
+    expect(result?.movimientos.map((m) => m.tipo)).toEqual(['INGRESO_MP', 'ALMACENAMIENTO_SILO', 'CONSUMO_MP', 'INGRESO_PT', 'SALIDA']);
     expect(result?.trazabilidad_completa).toBe(true);
   });
 

@@ -1,5 +1,9 @@
 import type { Silo } from '../../../../features/silos/types';
 import { supabaseClient } from '../client';
+import {
+  hasStockLotesMpSiloIdColumn,
+  isMissingStockLotesMpSiloIdError,
+} from './stockLotesMpSiloSupport';
 
 interface SiloRow {
   id: string;
@@ -34,11 +38,18 @@ const mapSilo = (row: SiloRow, stockActualTon = 0): Silo => ({
 });
 
 const buildStockActualBySilo = async () => {
+  const supportsMpSiloId = await hasStockLotesMpSiloIdColumn();
+  const mpSelect = supportsMpSiloId
+    ? 'ubicacion,silo_id,cantidad_actual,cantidad_comprometida,insumo_id,insumos(unidad_medida)'
+    : 'ubicacion,cantidad_actual,cantidad_comprometida,insumo_id,insumos(unidad_medida)';
+
+  const mpQuery = supabaseClient
+    .from('stock_lotes_mp')
+    .select(mpSelect)
+    .is('deleted_at', null);
+
   const [mpResult, ptResult, silosResult] = await Promise.all([
-    supabaseClient
-      .from('stock_lotes_mp')
-      .select('ubicacion,cantidad_actual,cantidad_comprometida,insumo_id,insumos(unidad_medida)')
-      .is('deleted_at', null),
+    mpQuery,
     supabaseClient
       .from('stock_pt')
       .select('silo_id,id_silo_legacy,nombre_silo,cantidad_total')
@@ -49,16 +60,27 @@ const buildStockActualBySilo = async () => {
       .is('deleted_at', null),
   ]);
 
-  if (mpResult.error) throw mpResult.error;
+  let mpRows = (mpResult.data ?? []) as any[];
+
+  if (mpResult.error) {
+    if (!supportsMpSiloId || !isMissingStockLotesMpSiloIdError(mpResult.error)) throw mpResult.error;
+    const legacyMpResult = await supabaseClient
+      .from('stock_lotes_mp')
+      .select('ubicacion,cantidad_actual,cantidad_comprometida,insumo_id,insumos(unidad_medida)')
+      .is('deleted_at', null);
+    if (legacyMpResult.error) throw legacyMpResult.error;
+    mpRows = (legacyMpResult.data ?? []) as any[];
+  }
   if (ptResult.error) throw ptResult.error;
   if (silosResult.error) throw silosResult.error;
 
+  const mpStockByDbId = new Map<string, number>();
   const mpStockByName = new Map<string, number>();
   const ptStockByUid = new Map<string, number>();
   const ptStockByName = new Map<string, number>();
   const ptStockByDbId = new Map<string, number>();
 
-  (mpResult.data ?? []).forEach((row) => {
+  mpRows.forEach((row) => {
     const mp = row as any;
     const location = mp.ubicacion?.trim();
     if (!location) return;
@@ -66,6 +88,11 @@ const buildStockActualBySilo = async () => {
     // Las cantidades en stock_lotes_mp ya se guardan normalizadas en kilogramos (KG),
     // por lo que no es necesario volver a multiplicarlas por 1000 si el insumo está en toneladas.
     const availableKg = Math.max(0, toNumber(mp.cantidad_actual) - toNumber(mp.cantidad_comprometida));
+
+    if (typeof mp.silo_id === 'string' && mp.silo_id.trim()) {
+      mpStockByDbId.set(mp.silo_id, (mpStockByDbId.get(mp.silo_id) ?? 0) + availableKg);
+      return;
+    }
 
     mpStockByName.set(normalizeText(location), (mpStockByName.get(normalizeText(location)) ?? 0) + availableKg);
   });
@@ -89,7 +116,7 @@ const buildStockActualBySilo = async () => {
     const silo = row as SiloRow;
     let stockKg = 0;
     if (silo.tipo_uso === 'MATERIA_PRIMA') {
-      stockKg = mpStockByName.get(normalizeText(silo.nombre)) ?? 0;
+      stockKg = mpStockByDbId.get(silo.id) ?? mpStockByName.get(normalizeText(silo.nombre)) ?? 0;
     } else if (silo.tipo_uso === 'PRODUCTO_TERMINADO') {
       stockKg = (
         ptStockByDbId.get(silo.id) ??
@@ -175,29 +202,45 @@ export const supabaseSiloService = {
     if (siloErr) throw siloErr;
     if (!silo) throw new Error('Silo no encontrado');
 
-    // Check if silo name is used in active raw material stock lots
-    const { count: lotCount, error: lotErr } = await supabaseClient
+    const supportsMpSiloId = await hasStockLotesMpSiloIdColumn();
+    const lotCountBySiloPromise = supportsMpSiloId
+      ? supabaseClient
+          .from('stock_lotes_mp')
+          .select('id', { count: 'exact', head: true })
+          .eq('silo_id', silo.id)
+          .is('deleted_at', null)
+      : Promise.resolve({ count: 0, error: null } as const);
+    const lotCountLegacyPromise = supabaseClient
       .from('stock_lotes_mp')
       .select('id', { count: 'exact', head: true })
       .eq('ubicacion', silo.nombre)
       .is('deleted_at', null);
-    if (lotErr) throw lotErr;
 
     // Check if silo is used in production orders
-    const { count: orderCount, error: orderErr } = await supabaseClient
+    const orderCountPromise = supabaseClient
       .from('ordenes_produccion')
       .select('id', { count: 'exact', head: true })
       .eq('silo_id', silo.id);
-    if (orderErr) throw orderErr;
 
     // Check if silo is used in finished product stock
-    const { count: ptCount, error: ptErr } = await supabaseClient
+    const ptCountPromise = supabaseClient
       .from('stock_pt')
       .select('id', { count: 'exact', head: true })
       .eq('silo_id', silo.id);
+
+    const [
+      { count: lotCountBySilo, error: lotBySiloErr },
+      { count: lotCountLegacy, error: lotLegacyErr },
+      { count: orderCount, error: orderErr },
+      { count: ptCount, error: ptErr },
+    ] = await Promise.all([lotCountBySiloPromise, lotCountLegacyPromise, orderCountPromise, ptCountPromise]);
+
+    if (lotBySiloErr) throw lotBySiloErr;
+    if (lotLegacyErr) throw lotLegacyErr;
+    if (orderErr) throw orderErr;
     if (ptErr) throw ptErr;
 
-    if ((lotCount ?? 0) > 0 || (orderCount ?? 0) > 0 || (ptCount ?? 0) > 0) {
+    if ((lotCountBySilo ?? 0) > 0 || (lotCountLegacy ?? 0) > 0 || (orderCount ?? 0) > 0 || (ptCount ?? 0) > 0) {
       throw new Error('No se puede eliminar el silo porque está asociado a lotes de stock u órdenes de producción.');
     }
 

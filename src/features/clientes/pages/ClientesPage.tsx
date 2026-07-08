@@ -505,11 +505,16 @@ const buildDetalleHtml = (cliente: Cliente) => `
         </div>
         <p style="margin:8px 0 0; color:rgba(255,255,255,0.82); font-size:13px; font-weight:600;">${normalizeText(cliente.segmento)}</p>
       </div>
-      ${cliente.saldoPendienteArs > 0 ? `
-        <button id="btn-registrar-pago-detalle" style="flex-shrink:0; background:#22c55e; color:#fff; border:none; padding:10px 16px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(34,197,94,0.3); transition:background .15s;">
-          Registrar Pago
+      <div style="display:flex; gap:8px; flex-shrink:0;">
+        ${cliente.saldoPendienteArs > 0 ? `
+          <button id="btn-registrar-pago-detalle" style="background:#22c55e; color:#fff; border:none; padding:10px 16px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(34,197,94,0.3); transition:background .15s;">
+            Registrar Pago
+          </button>
+        ` : ''}
+        <button id="btn-ver-expediciones-detalle" style="background:#3b82f6; color:#fff; border:none; padding:10px 16px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(59,130,246,0.3); transition:background .15s;">
+          Ver Expediciones
         </button>
-      ` : ''}
+      </div>
     </div>
 
     <div style="display:grid; gap:14px;">
@@ -1172,6 +1177,13 @@ const ClientesPage = () => {
                                     btn.addEventListener("click", () => {
                                       Swal.close();
                                       openRegistrarPago(cliente);
+                                    });
+                                  }
+                                  const btnExp = document.getElementById("btn-ver-expediciones-detalle");
+                                  if (btnExp) {
+                                    btnExp.addEventListener("click", () => {
+                                      Swal.close();
+                                      window.location.href = `/ordenes-salida?search=${encodeURIComponent(cliente.nombre)}`;
                                     });
                                   }
                                 }

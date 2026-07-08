@@ -11,13 +11,75 @@ describe('finanzasService', () => {
 
   it('obtiene kpis financieros', async () => {
     mockFrom.mockImplementation((table: string) => {
-      if (table === 'vw_finanzas_kpis') return { select: () => ({ single: async () => ({ data: { saldo_actual: 1000, ingresos_mes: 800, egresos_mes: 300 }, error: null }) }) };
+      if (table === 'flujo_caja_movimientos') {
+        return {
+          select: () => ({
+            is: () => ({
+              order: () => ({
+                order: async () => ({
+                  data: [
+                    {
+                      legacy_uid: 'fcm-cobranza-1',
+                      categoria_id: 'cat-1',
+                      comprobante_id: 'comp-1',
+                      fecha: '2026-07-01',
+                      tipo: 'INGRESO',
+                      origen_operativo: 'COBRANZA',
+                      descripcion: 'Cobranza real',
+                      monto: 800,
+                      estado: 'CONFIRMADO',
+                      categorias_financieras: { nombre: 'Ventas' },
+                      centros_costo: { nombre: 'Planta' },
+                      comprobantes: { id: 'comp-1', legacy_uid: 'comp-1', numero: 'REC-1', tercero: 'Cliente', tipo: 'RECIBO', estado: 'PAGADO', saldo: 0, total: 800 },
+                      fecha_operacion: '2026-07-01',
+                      fecha_vencimiento: '2026-07-10',
+                      estado_financiero: 'COBRADO',
+                      fecha_cobro_pago: '2026-07-01',
+                      metadata: {},
+                      created_at: '2026-07-01T10:00:00Z',
+                    },
+                    {
+                      legacy_uid: 'fcm-pago-1',
+                      categoria_id: 'cat-2',
+                      comprobante_id: 'comp-2',
+                      fecha: '2026-07-02',
+                      tipo: 'EGRESO',
+                      origen_operativo: 'PAGO',
+                      descripcion: 'Pago real',
+                      monto: 300,
+                      estado: 'CONFIRMADO',
+                      categorias_financieras: { nombre: 'Compras' },
+                      centros_costo: { nombre: 'Planta' },
+                      comprobantes: { id: 'comp-2', legacy_uid: 'comp-2', numero: 'PAG-1', tercero: 'Proveedor', tipo: 'PAGO', estado: 'PAGADO', saldo: 0, total: 300 },
+                      fecha_operacion: '2026-07-02',
+                      fecha_vencimiento: '2026-07-12',
+                      estado_financiero: 'PAGADO',
+                      fecha_cobro_pago: '2026-07-02',
+                      metadata: {},
+                      created_at: '2026-07-02T10:00:00Z',
+                    },
+                  ],
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'cuentas_bancarias') {
+        return {
+          select: () => ({
+            is: async () => ({ data: [{ saldo_actual: 1000 }], error: null }),
+          }),
+        };
+      }
       throw new Error('tabla inesperada');
     });
 
     const k = await finanzasService.getKPIs();
     expect(k.flujo_neto).toBe(500);
     expect(k.margen_operativo).toBeCloseTo(62.5, 6);
+    expect(k.saldo_actual).toBe(1000);
   });
 
   it('obtiene reportes financieros', async () => {

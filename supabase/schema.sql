@@ -110,6 +110,7 @@ create table if not exists public.stock_lotes_mp (
   lote text not null,
   remito_nro text not null,
   ubicacion text not null,
+  silo_id uuid references public.silos(id),
   cantidad_inicial numeric(14,3) not null,
   cantidad_actual numeric(14,3) not null,
   cantidad_comprometida numeric(14,3) not null default 0,
@@ -127,6 +128,8 @@ create table if not exists public.stock_lotes_mp (
   constraint stock_lotes_mp_costo_total_non_negative check (costo_total >= 0),
   constraint stock_lotes_mp_comprometida_lte_actual check (cantidad_comprometida <= cantidad_actual)
 );
+
+create index if not exists idx_stock_lotes_mp_silo_id on public.stock_lotes_mp(silo_id);
 
 create table if not exists public.stock_movimientos (
   id uuid primary key default gen_random_uuid(),

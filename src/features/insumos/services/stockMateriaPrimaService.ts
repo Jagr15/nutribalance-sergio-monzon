@@ -36,13 +36,8 @@ export interface NewStockEntryData {
   condicion_pago?: string;
 }
 
-const COMPRA_MARKERS = new Set(['COMPRA']);
-
 const shouldRegisterFinancialPurchase = (data: NewStockEntryData) => {
-  if (data.registrarCompraFinanciera === true) return true;
-  if (COMPRA_MARKERS.has(data.origen ?? '')) return true;
-  if (COMPRA_MARKERS.has(data.tipoOperacion ?? '')) return true;
-  return false;
+  return data.registrarCompraFinanciera === true;
 };
 
 export const stockMateriaPrimaService = {

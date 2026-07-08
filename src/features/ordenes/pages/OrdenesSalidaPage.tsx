@@ -12,6 +12,7 @@ import { puedeMostrarAccionesOrdenSalida } from '../utils/ordenesExpedicion';
 import { openConfiguracionEmpaquesModal } from '../../productos/utils/openConfiguracionEmpaquesModal';
 import { getPresentacionExpedicionKeyFromOrder, getPresentacionExpedicionOption } from '../utils/presentacionExpedicion';
 import { usePermissions } from '../../auth/usePermissions';
+import type { Cliente } from '../../clientes/types/cliente';
 
 const formatKg = (value: number) => `${value.toLocaleString('es-AR')} kg`;
 const formatKgDiff = (value: number) => `${value > 0 ? '+' : ''}${value.toLocaleString('es-AR')} kg`;
@@ -79,24 +80,33 @@ const OrdenesSalidaPage: React.FC = () => {
   const [ordenesSalida, setOrdenesSalida] = useState<OrdenExpedicion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => {
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    return params.get('search') || '';
+  });
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clientFilter, setClientFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [ordenEnEdicion, setOrdenEnEdicion] = useState<OrdenExpedicion | null>(null);
   const [ordenParaLista, setOrdenParaLista] = useState<OrdenExpedicion | null>(null);
   const [ordenParaProgramar, setOrdenParaProgramar] = useState<OrdenExpedicion | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const { canAccess } = usePermissions();
+  const { canAccess, canSeeFinancials } = usePermissions();
   const canCreateOrder = canAccess('ordenes', 'create');
   const canEditOrder = canAccess('ordenes', 'edit');
-  const canSeeSalePrice = canCreateOrder || canEditOrder;
+  const canSeeSalePrice = (canCreateOrder || canEditOrder) && canSeeFinancials;
 
   const load = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await ApiService.ordenesExpedicion.getAll();
+      const [data, clientsData] = await Promise.all([
+        ApiService.ordenesExpedicion.getAll(),
+        ApiService.clientes.getAll(),
+      ]);
       setOrdenesSalida(data);
+      setClientes(clientsData);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'No se pudieron cargar las órdenes de salida.');
     } finally {
@@ -112,20 +122,30 @@ const OrdenesSalidaPage: React.FC = () => {
   }, [load]);
 
   const filtered = useMemo(() => {
+    let result = ordenesSalida;
+    if (clientFilter) {
+      result = result.filter((item) => {
+        const clientMatch = clientes.find((c) => (c.id === clientFilter || c.uid === clientFilter));
+        return (
+          item.cliente_id === clientFilter ||
+          (clientMatch && item.cliente_nombre?.toLowerCase() === clientMatch.nombre.toLowerCase())
+        );
+      });
+    }
     const q = searchTerm.trim().toLowerCase();
-    if (!q) return ordenesSalida;
-    return ordenesSalida.filter((item) => [
+    if (!q) return result;
+    return result.filter((item) => [
       item.numero_expedicion,
       item.nombre_producto,
       item.lote_pt,
       item.cliente_nombre,
       item.referencia,
     ].some((value) => (value ?? '').toLowerCase().includes(q)));
-  }, [ordenesSalida, searchTerm]);
+  }, [ordenesSalida, searchTerm, clientFilter, clientes]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, clientFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
   const paginated = useMemo(() => {
@@ -302,14 +322,30 @@ const OrdenesSalidaPage: React.FC = () => {
         </Card>
       </div>
 
-      <div className="relative max-w-md">
-        <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="Buscar por cliente, producto o comprobante..."
-          className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 outline-none"
-        />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="relative flex-1 max-w-md">
+          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Buscar por cliente, producto o comprobante..."
+            className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 outline-none shadow-sm"
+          />
+        </div>
+        <div className="w-full sm:w-64">
+          <select
+            value={clientFilter}
+            onChange={(event) => setClientFilter(event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 bg-white py-3 px-4 text-sm text-slate-900 outline-none shadow-sm"
+          >
+            <option value="">Todos los clientes</option>
+            {clientes.map((c, idx) => (
+              <option key={`${c.id ?? c.uid}-${idx}`} value={c.id ?? c.uid}>
+                {c.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}

@@ -3,6 +3,8 @@ import { supabaseClient } from '../../../infrastructure/api/supabase/client';
 import { runtimeConfig } from '../../../infrastructure/api/runtimeConfig';
 import { finanzasService } from '../../finanzas/services/finanzasService';
 import type { AlertaOperativa, EstadoAlerta } from '../types/alerta';
+import { alertaConfiguracionService } from './alertaConfiguracionService';
+import { ApiService } from '../../../infrastructure/api';
 
 type PersistedAlertState = 'PENDIENTE' | 'EN_SEGUIMIENTO' | 'ATENDIDA' | 'DESCARTADA';
 type AlertMeta = { prioridad: string; origen: string };
@@ -110,12 +112,57 @@ const persistSupabaseState = async (
 };
 
 export const getAlertasOperativas = async (): Promise<AlertaOperativa[]> => {
-  const [rows, treasury] = await Promise.all([
+  const [rows, treasury, configs, insumos, lotes] = await Promise.all([
     dashboardOperativoService.getAlertasOperativas(),
     finanzasService.getTreasuryInsights().catch(() => ({ alertasTesoreria: [] })),
+    alertaConfiguracionService.getAll().catch(() => []),
+    ApiService.insumos.getAllInsumos().catch(() => []),
+    ApiService.stockMP.getAllLotes().catch(() => []),
   ]);
+
+  // Evaluate stock alerts dynamically using alerta_configuraciones
+  const calculatedStockAlerts: any[] = [];
+  insumos.forEach((insumo) => {
+    const activeConfig = configs.find(
+      (c) =>
+        c.modulo === 'stock' &&
+        c.entidad_tipo === 'insumo' &&
+        c.entidad_id === insumo.uid &&
+        c.esta_activa
+    );
+
+    const lotesInsumo = lotes.filter((l) => l.id_insumo === insumo.uid || l.insumo_id === insumo.uid);
+    const totalStock = lotesInsumo.reduce((acc, l) => acc + Number(l.cantidad_actual ?? 0), 0);
+    const comprometido = lotesInsumo.reduce((acc, l) => acc + Number(l.cantidad_comprometida ?? 0), 0);
+    const disponible = totalStock - comprometido;
+
+    let umbralWarning = insumo.umbral_alerta;
+    let umbralCritico = insumo.umbral_alerta * 0.5;
+
+    if (activeConfig) {
+      umbralWarning = activeConfig.umbral_minimo ?? insumo.umbral_alerta;
+      umbralCritico = activeConfig.umbral_critico ?? (umbralWarning * 0.5);
+    }
+
+    if (umbralWarning > 0 && disponible <= umbralWarning) {
+      const prioridad = disponible <= umbralCritico ? 'critica' : 'media';
+      calculatedStockAlerts.push({
+        alerta_id: `stock-${insumo.uid}`,
+        tipo: 'Stock por debajo del umbral',
+        prioridad,
+        area: 'stock',
+        titulo: `${insumo.nombre} en nivel bajo`,
+        dato_asociado: { lote: 'Consolidado', disponible_kg: disponible, umbral_kg: umbralWarning },
+        fecha_evento: new Date().toISOString(),
+      });
+    }
+  });
+
+  // Filter out any stock alerts from dashboard service and merge calculated ones if insumos exist
+  const filteredRows = insumos.length > 0 ? rows.filter((r) => r.area !== 'stock') : rows;
   const mergedRows = [
-    ...rows,
+    ...filteredRows,
+    ...(insumos.length > 0 ? calculatedStockAlerts : []),
     ...treasury.alertasTesoreria,
   ];
 

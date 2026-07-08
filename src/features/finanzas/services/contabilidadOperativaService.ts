@@ -38,7 +38,7 @@ const ensureRequiredText = (value: string | undefined, label: string) => {
 
 const getStorage = () => {
   if (typeof globalThis === 'undefined') return null;
-  return globalThis.localStorage ?? null;
+  return globalThis.localStorage ?? (globalThis as any).window?.localStorage ?? null;
 };
 
 const readMock = (): Array<MovimientoContablePayload & { id?: string }> => {
@@ -70,6 +70,26 @@ const resolveCategoriaIdByLegacy = async (legacyUid: string) => {
 
   if (error) throw error;
   return data?.id ?? null;
+};
+
+const resolveComprobanteByLegacy = async (legacyUid: string) => {
+  const { data, error } = await supabaseClient
+    .from('comprobantes')
+    .select('id,estado,saldo,total,fecha_emision,fecha_vencimiento,tipo')
+    .eq('legacy_uid', legacyUid)
+    .is('deleted_at', null)
+    .maybeSingle<{
+      id: string;
+      estado: string | null;
+      saldo: number | null;
+      total: number | null;
+      fecha_emision: string | null;
+      fecha_vencimiento: string | null;
+      tipo: string | null;
+    }>();
+
+  if (error) throw error;
+  return data ?? null;
 };
 
 const normalizeBase = (payload: MovimientoContablePayload): MovimientoContablePayload => ({
@@ -159,6 +179,18 @@ export const contabilidadOperativaService = {
       ? await resolveCategoriaIdByLegacy('cat-compras')
       : null;
 
+    let stockLoteMpId: string | null = null;
+    if (runtimeConfig.mode === 'supabase') {
+      const { data } = await supabaseClient
+        .from('stock_lotes_mp')
+        .select('id')
+        .eq('legacy_uid', payload.stock_lote_legacy_uid)
+        .maybeSingle();
+      if (data) {
+        stockLoteMpId = data.id;
+      }
+    }
+
     await contabilidadOperativaService.ensureMovimiento({
       legacy_uid: `fcm-compra-${payload.stock_lote_legacy_uid}`,
       fecha: payload.fecha,
@@ -169,6 +201,7 @@ export const contabilidadOperativaService = {
       categoria_id: categoriaId,
       estado: 'PENDIENTE',
       estado_financiero: 'PENDIENTE_PAGO',
+      stock_lote_mp_id: stockLoteMpId,
       metadata: {
         lote: payload.lote,
         insumo: payload.insumo,
@@ -194,15 +227,26 @@ export const contabilidadOperativaService = {
     const categoriaId = runtimeConfig.mode === 'supabase'
       ? await resolveCategoriaIdByLegacy('cat-ventas')
       : null;
+    const comprobante = runtimeConfig.mode === 'supabase'
+      ? await resolveComprobanteByLegacy(payload.comprobante_legacy_uid)
+      : null;
+    const saldoComprobante = Number(comprobante?.saldo ?? payload.monto);
+    const ventaPendiente = saldoComprobante > 0 && (comprobante?.tipo ?? 'FACTURA_VENTA') === 'FACTURA_VENTA';
 
     await contabilidadOperativaService.ensureMovimiento({
       legacy_uid: `fcm-venta-${payload.stock_pt_legacy_uid}-${payload.comprobante_legacy_uid}`,
-      fecha: payload.fecha,
+      fecha: comprobante?.fecha_emision ?? payload.fecha,
       tipo: 'INGRESO',
       origen_operativo: 'VENTA_PT',
       descripcion: payload.referencia?.trim() || `Venta PT ${payload.nombre_producto}`,
       monto: payload.monto,
       categoria_id: categoriaId,
+      comprobante_id: comprobante?.id ?? null,
+      estado: ventaPendiente ? 'PENDIENTE' : 'CONFIRMADO',
+      estado_financiero: ventaPendiente ? 'PENDIENTE_COBRO' : 'COBRADO',
+      fecha_operacion: comprobante?.fecha_emision ?? payload.fecha,
+      fecha_vencimiento: comprobante?.fecha_vencimiento ?? null,
+      fecha_cobro_pago: ventaPendiente ? null : payload.fecha,
       metadata: {
         comprobante_legacy_uid: payload.comprobante_legacy_uid,
         stock_pt_legacy_uid: payload.stock_pt_legacy_uid,
@@ -224,6 +268,9 @@ export const contabilidadOperativaService = {
     referencia?: string | null;
   }): Promise<void> {
     ensurePositive(payload.monto, 'La cobranza');
+    const comprobante = runtimeConfig.mode === 'supabase'
+      ? await resolveComprobanteByLegacy(payload.comprobante_legacy_uid)
+      : null;
     await contabilidadOperativaService.ensureMovimiento({
       legacy_uid: `fcm-cobranza-${payload.comprobante_legacy_uid}`,
       fecha: payload.fecha,
@@ -231,6 +278,12 @@ export const contabilidadOperativaService = {
       origen_operativo: 'COBRANZA',
       descripcion: payload.referencia?.trim() || `Cobranza ${payload.tercero}`,
       monto: payload.monto,
+      comprobante_id: comprobante?.id ?? null,
+      estado: 'CONFIRMADO',
+      estado_financiero: 'COBRADO',
+      fecha_operacion: comprobante?.fecha_emision ?? payload.fecha,
+      fecha_vencimiento: comprobante?.fecha_vencimiento ?? null,
+      fecha_cobro_pago: payload.fecha,
       metadata: {
         comprobante_legacy_uid: payload.comprobante_legacy_uid,
         tercero: payload.tercero,
@@ -305,6 +358,9 @@ export const contabilidadOperativaService = {
     referencia?: string | null;
   }): Promise<void> {
     ensurePositive(payload.monto, 'El pago');
+    const comprobante = runtimeConfig.mode === 'supabase'
+      ? await resolveComprobanteByLegacy(payload.comprobante_legacy_uid)
+      : null;
     await contabilidadOperativaService.ensureMovimiento({
       legacy_uid: `fcm-pago-${payload.comprobante_legacy_uid}`,
       fecha: payload.fecha,
@@ -312,6 +368,12 @@ export const contabilidadOperativaService = {
       origen_operativo: 'PAGO',
       descripcion: payload.referencia?.trim() || `Pago ${payload.tercero}`,
       monto: payload.monto,
+      comprobante_id: comprobante?.id ?? null,
+      estado: 'CONFIRMADO',
+      estado_financiero: 'PAGADO',
+      fecha_operacion: comprobante?.fecha_emision ?? payload.fecha,
+      fecha_vencimiento: comprobante?.fecha_vencimiento ?? null,
+      fecha_cobro_pago: payload.fecha,
       metadata: {
         comprobante_legacy_uid: payload.comprobante_legacy_uid,
         tercero: payload.tercero,
@@ -421,7 +483,24 @@ export const contabilidadOperativaService = {
       if (current.estado === 'CONFIRMADO') {
         throw new Error('No se puede eliminar un movimiento confirmado.');
       }
-      
+
+      const { getMockStockLocal } = await import('../../../infrastructure/api/mock/services/mockMateriaPrimaService');
+      const { getMockStockPTRows } = await import('../../../infrastructure/api/mock/services/mockStockPTService');
+
+      if (current.stock_lote_mp_id || current.metadata?.stock_lote_legacy_uid) {
+        const lotId = current.stock_lote_mp_id || current.metadata?.stock_lote_legacy_uid;
+        const lot = getMockStockLocal().find(l => l.uid === lotId);
+        if (lot && !(lot as any).deletedAt) {
+          throw new Error('No se puede eliminar este movimiento porque está vinculado a una transacción operativa de stock o producción activa.');
+        }
+      }
+      if (current.stock_pt_id) {
+        const pt = getMockStockPTRows().find(p => p.uid === current.stock_pt_id || p.id === current.stock_pt_id);
+        if (pt && !(pt as any).deletedAt) {
+          throw new Error('No se puede eliminar este movimiento porque está vinculado a una transacción operativa de stock o producción activa.');
+        }
+      }
+
       const updated = rows.map((row) => {
         if (row.legacy_uid === legacyUid) {
           return { ...row, deletedAt: new Date().toISOString() };
@@ -480,5 +559,21 @@ export const contabilidadOperativaService = {
 
   getMovimientosMock(): Array<MovimientoContablePayload & { id?: string }> {
     return readMock().filter((m: any) => !m.deletedAt && !m.deleted_at);
+  },
+
+  eliminarMovimientosPendientesDeLoteMock(loteLegacyUid: string): void {
+    if (runtimeConfig.mode !== 'mock') return;
+    const rows = readMock();
+    const updated = rows.map((row) => {
+      const meta = row.metadata || {};
+      if (
+        (meta.stock_lote_legacy_uid === loteLegacyUid || row.legacy_uid === `fcm-compra-${loteLegacyUid}`) &&
+        row.estado === 'PENDIENTE'
+      ) {
+        return { ...row, deletedAt: new Date().toISOString() };
+      }
+      return row;
+    });
+    writeMock(updated);
   },
 };

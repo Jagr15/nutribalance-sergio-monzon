@@ -57,6 +57,7 @@ export interface StockMateriaPrima {
     fecha_ingreso: Date; // Fecha del documento (Remito/Factura)
     remito_nro: string;
     ubicacion: string;
+    silo_id?: string;
     operaciones?: OperacionLote;
     stock_transito?: StockEnTransito;
     id_usuario: string;  

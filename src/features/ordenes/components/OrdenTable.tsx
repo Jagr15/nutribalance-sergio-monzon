@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../../shared/components/table';
+import { usePermissions } from '../../auth/usePermissions';
 
 interface OrdenTableProps {
   data: OrdenProduccion[];
@@ -28,6 +29,7 @@ interface OrdenTableProps {
 }
 
 const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, onEliminar, actionOrderId, hasActiveFilter }) => {
+  const { canSeeFinancials } = usePermissions();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [formulas, setFormulas] = useState<Formula[]>([]);
@@ -159,21 +161,28 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
                             <p>Silo destino: <strong>{orden.destino_silo || 'Sin dato'}</strong></p>
                             <p>Proteína objetivo: <strong>{getProteinaObjetivo(orden)}</strong></p>
                             <p>Merma manual: <strong>{orden.merma_manual ? `${orden.merma_manual.toFixed(2)}%` : 'Sin dato'}</strong></p>
-                            <p>Costo estimado: <strong>ARS {orden.costo_total_insumos.toFixed(2)}</strong></p>
+                            {canSeeFinancials && <p>Costo estimado: <strong>ARS {orden.costo_total_insumos.toFixed(2)}</strong></p>}
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
                           <table className="w-full text-sm">
-                            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-3 py-2 text-left">Insumo</th><th className="px-3 py-2 text-left">Lote Origen</th><th className="px-3 py-2 text-right">Cantidad</th><th className="px-3 py-2 text-right">Subtotal</th></tr></thead>
+                            <thead className="bg-slate-50 text-slate-600">
+                              <tr>
+                                <th className="px-3 py-2 text-left">Insumo</th>
+                                <th className="px-3 py-2 text-left">Lote Origen</th>
+                                <th className="px-3 py-2 text-right">Cantidad</th>
+                                {canSeeFinancials && <th className="px-3 py-2 text-right">Subtotal</th>}
+                              </tr>
+                            </thead>
                             <tbody className="divide-y divide-slate-100">
                               {orden.detalle_insumos && orden.detalle_insumos.length > 0 ? orden.detalle_insumos.map((lote, i) => (
                                 <tr key={i} className="hover:bg-slate-50">
                                   <td className="px-3 py-2 text-slate-900 font-medium">{lote.nombre_insumo}</td>
                                   <td className="px-3 py-2 text-slate-500">{lote.id_lote}</td>
                                   <td className="px-3 py-2 text-right text-slate-700">{lote.cantidad_usada} {lote.tipo_unidad}</td>
-                                  <td className="px-3 py-2 text-right text-emerald-700 font-semibold">ARS {lote.costo_total.toFixed(2)}</td>
+                                  {canSeeFinancials && <td className="px-3 py-2 text-right text-emerald-700 font-semibold">ARS {lote.costo_total.toFixed(2)}</td>}
                                 </tr>
-                              )) : <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-500">Sin registros de consumo</td></tr>}
+                              )) : <tr><td colSpan={canSeeFinancials ? 4 : 3} className="px-3 py-6 text-center text-slate-500">Sin registros de consumo</td></tr>}
                             </tbody>
                           </table>
                         </div>
