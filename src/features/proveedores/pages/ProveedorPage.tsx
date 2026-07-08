@@ -10,7 +10,7 @@ import Swal from 'sweetalert2';
 type EstadoFiltro = 'ACTIVOS' | 'INACTIVOS' | 'TODOS';
 
 const ProveedorPage: React.FC = () => {
-  const { proveedores, isLoading, getAll, toggleActive, loadError } = useProveedores();
+  const { proveedores, isLoading, getAll, toggleActive, remove, loadError } = useProveedores();
   const [searchTerm, setSearchTerm] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>('ACTIVOS');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -95,6 +95,45 @@ const ProveedorPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleDelete = async (proveedor: Proveedor) => {
+    const result = await Swal.fire({
+      title: `¿Eliminar a ${proveedor.nombre_empresa}?`,
+      text: "Esta acción no se puede deshacer. Se validarán las relaciones del proveedor en el sistema.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar",
+      background: "#ffffff",
+      color: "#0f172a",
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#334155",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await remove(proveedor.uid);
+      await Swal.fire({
+        icon: "success",
+        title: "Proveedor eliminado",
+        text: "El proveedor ha sido eliminado correctamente.",
+        background: "#ffffff",
+        color: "#0f172a",
+        confirmButtonColor: "#2563eb",
+      });
+      await getAll();
+    } catch (error: unknown) {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo eliminar",
+        text: error instanceof Error ? error.message : "Revisá la configuración de Supabase o el modo mock.",
+        background: "#ffffff",
+        color: "#0f172a",
+        confirmButtonColor: "#2563eb",
+      });
+    }
+  };
+
   const handleCreate = () => {
     setSelectedProveedor(undefined);
     setIsModalOpen(true);
@@ -160,6 +199,7 @@ const ProveedorPage: React.FC = () => {
             data={filtered} 
             onEdit={handleEdit} 
             onToggleActive={handleToggleActive} 
+            onDelete={handleDelete}
             emptyMessage={proveedores.length === 0 ? 'No hay proveedores registrados.' : 'No se encontraron proveedores para el filtro y búsqueda aplicados.'}
           />
         )}

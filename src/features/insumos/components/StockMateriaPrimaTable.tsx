@@ -250,7 +250,7 @@ const StockMateriaPrimaTable: React.FC<Props> = ({ resumen = [], lotes = [], pro
                                       <td className="px-4 py-3 text-right text-xs text-emerald-700 font-semibold">{disponible.toLocaleString()}</td>
                                       <td className="px-4 py-3 text-right">
                                         <TableActions>
-                                          <TableActionButton label="Desactivar" tone="danger" onClick={() => onDelete(lote.uid)} />
+                                          <TableActionButton label="Eliminar" tone="danger" onClick={() => onDelete(lote.uid)} />
                                         </TableActions>
                                       </td>
                                     </tr>

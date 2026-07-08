@@ -14,7 +14,7 @@ type EstadoFiltro = 'ACTIVOS' | 'INACTIVOS' | 'TODOS';
 
 const SiloPage: React.FC = () => {
   // Extraemos lógica y estado del Hook de Silos
-  const { silos, isLoading, getAll, toggleActive, loadError } = useSilos();
+  const { silos, isLoading, getAll, toggleActive, remove, loadError } = useSilos();
 
   // Estados locales de la UI
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,6 +38,55 @@ const SiloPage: React.FC = () => {
   };
 
   // Confirmación de eliminación con el estilo de la plataforma
+  const handleDeleteSilo = async (silo: Silo) => {
+    const result = await MySwal.fire({
+      title: '¿Eliminar silo?',
+      text: "Esta acción no se puede deshacer. Se validará que el silo no tenga stock de insumos o producto terminado, ni esté vinculado a órdenes de producción.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#1f2937',
+      confirmButtonText: 'SÍ, ELIMINAR',
+      cancelButtonText: 'CANCELAR',
+      background: '#ffffff',
+      color: '#0f172a',
+      customClass: {
+        popup: 'border border-slate-200 rounded-2xl',
+        title: 'text-sm font-bold uppercase tracking-widest',
+        htmlContainer: 'text-xs text-slate-500',
+        confirmButton: 'rounded-xl px-6 py-3 text-xs font-bold',
+        cancelButton: 'rounded-xl px-6 py-3 text-xs font-bold'
+      }
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await remove(silo.uid);
+        MySwal.fire({
+          title: 'Silo eliminado',
+          text: 'El silo ha sido eliminado correctamente.',
+          icon: 'success',
+          background: '#ffffff',
+          color: '#0f172a',
+          timer: 1500,
+          showConfirmButton: false,
+          customClass: { popup: 'border border-slate-200 rounded-2xl' }
+        });
+        await getAll();
+      } catch (error: unknown) {
+        MySwal.fire({
+          title: 'No se pudo eliminar',
+          text: error instanceof Error ? error.message : 'Ocurrió un error al eliminar el silo.',
+          icon: 'error',
+          background: '#ffffff',
+          color: '#0f172a',
+          confirmButtonColor: '#2563eb',
+          customClass: { popup: 'border border-slate-200 rounded-2xl' }
+        });
+      }
+    }
+  };
+
   const handleToggleActive = async (silo: Silo) => {
     const activar = !Boolean(silo.esta_activo);
     const result = await MySwal.fire({
@@ -219,6 +268,7 @@ const SiloPage: React.FC = () => {
             data={filteredSilos}
             onEdit={handleOpenModal}
             onToggleActive={handleToggleActive}
+            onDelete={handleDeleteSilo}
             emptyMessage={silos.length === 0 ? 'No hay silos registrados.' : 'No se encontraron silos para el filtro y búsqueda aplicados.'}
           />
         )}

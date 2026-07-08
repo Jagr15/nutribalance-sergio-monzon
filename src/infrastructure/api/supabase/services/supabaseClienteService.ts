@@ -335,11 +335,40 @@ export const supabaseClienteService = {
   },
 
   async delete(uid: string): Promise<boolean> {
+    const clienteDbId = await resolveClienteDbId(uid);
+    if (!clienteDbId) {
+      throw new Error('Cliente no encontrado');
+    }
+
+    // Check dependency in ordenes_expedicion
+    const { count: expCount, error: expErr } = await supabaseClient
+      .from('ordenes_expedicion')
+      .select('id', { count: 'exact', head: true })
+      .eq('cliente_id', clienteDbId);
+    if (expErr) throw expErr;
+
+    // Check dependency in comprobantes
+    const { count: compCount, error: compErr } = await supabaseClient
+      .from('comprobantes')
+      .select('id', { count: 'exact', head: true })
+      .eq('cliente_id', clienteDbId);
+    if (compErr) throw compErr;
+
+    // Check dependency in tesoreria_cheques
+    const { count: chequeCount, error: chequeErr } = await supabaseClient
+      .from('tesoreria_cheques')
+      .select('id', { count: 'exact', head: true })
+      .eq('cliente_id', clienteDbId);
+    if (chequeErr) throw chequeErr;
+
+    if ((expCount ?? 0) > 0 || (compCount ?? 0) > 0 || (chequeCount ?? 0) > 0) {
+      throw new Error('No se puede eliminar el cliente porque tiene comprobantes, órdenes de expedición o cheques asociados.');
+    }
+
     const { error } = await supabaseClient
       .from('clientes')
-      .update({ esta_activo: false, estado: 'Suspendido' })
-      .eq('legacy_uid', uid)
-      .is('deleted_at', null);
+      .update({ esta_activo: false, estado: 'Suspendido', deleted_at: new Date().toISOString() })
+      .eq('id', clienteDbId);
 
     if (error) throw error;
     return true;

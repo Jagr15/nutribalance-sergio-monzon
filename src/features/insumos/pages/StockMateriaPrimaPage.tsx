@@ -86,23 +86,24 @@ const StockMateriaPrimaPage: React.FC = () => {
 
   const handleDelete = async (uid: string) => {
     const result = await Swal.fire({
-      title: '¿DESACTIVAR LOTE?',
-      text: 'Se marcará como inactivo y dejará de estar disponible en listados operativos.',
+      title: '¿ELIMINAR LOTE?',
+      text: 'Esta acción no se puede deshacer. Se validarán los consumos y transacciones asociadas.',
       icon: 'warning',
       showCancelButton: true,
       background: '#ffffff',
       color: '#0f172a',
       confirmButtonColor: '#ef4444',
-      confirmButtonText: 'SÍ, DESACTIVAR',
+      confirmButtonText: 'SÍ, ELIMINAR',
       cancelButtonText: 'CANCELAR',
     });
 
     if (result.isConfirmed) {
       try {
         await remove(uid);
+        await refreshData();
         Swal.fire({
           icon: 'success',
-          title: 'Lote desactivado',
+          title: 'Lote eliminado',
           background: '#ffffff',
           color: '#0f172a',
           timer: 1500,
@@ -110,7 +111,7 @@ const StockMateriaPrimaPage: React.FC = () => {
         });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Error inesperado';
-        Swal.fire({ icon: 'error', title: 'Error', text: message, background: '#ffffff', color: '#0f172a' });
+        Swal.fire({ icon: 'error', title: 'No se pudo eliminar', text: message, background: '#ffffff', color: '#0f172a' });
       }
     }
   };

@@ -56,16 +56,15 @@ export const useSilos = () => {
   };
 
 // src/features/silos/hooks/useSilos.ts (o useInsumos.ts)
-  const remove = async (uid: string): Promise<boolean> => { // Agrega el tipo de retorno
+  const remove = async (uid: string): Promise<boolean> => {
     setLoadError(null);
     try {
-      await siloService.delete(uid); // Este servicio devuelve void
+      await siloService.delete(uid);
       setSilos((prev) => prev.filter((item) => item.uid !== uid));
-      return true; // <--- DEBES DEVOLVER TRUE
+      return true;
     } catch (error) {
       console.error("Error al eliminar:", error);
-      setLoadError("No se pudo desactivar el silo.");
-      return false; // <--- DEBES DEVOLVER FALSE
+      throw error;
     }
   };
 

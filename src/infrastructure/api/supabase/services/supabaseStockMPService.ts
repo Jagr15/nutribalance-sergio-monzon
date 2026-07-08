@@ -471,11 +471,49 @@ export const supabaseStockMPService = {
   },
 
   async delete(uid: string): Promise<void> {
-    const { error } = await supabaseClient
+    const { data: lot, error: lotErr } = await supabaseClient
+      .from('stock_lotes_mp')
+      .select('id, cantidad_actual, cantidad_inicial, cantidad_comprometida')
+      .eq('legacy_uid', uid)
+      .maybeSingle<{ id: string, cantidad_actual: number, cantidad_inicial: number, cantidad_comprometida: number }>();
+
+    if (lotErr) throw lotErr;
+    if (!lot) throw new Error('Lote no encontrado');
+
+    const isModified = Number(lot.cantidad_actual) !== Number(lot.cantidad_inicial) || Number(lot.cantidad_comprometida) > 0;
+
+    // Check if lot is used in any production orders
+    const { count: consumoCount, error: consumoErr } = await supabaseClient
+      .from('orden_consumo_lotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('lote_id', lot.id);
+    if (consumoErr) throw consumoErr;
+
+    // Check if lot is associated with a CONFIRMED financial entry
+    const { count: finCount, error: finErr } = await supabaseClient
+      .from('flujo_caja_movimientos')
+      .select('id', { count: 'exact', head: true })
+      .eq('stock_lote_mp_id', lot.id)
+      .eq('estado', 'CONFIRMADO');
+    if (finErr) throw finErr;
+
+    if (isModified || (consumoCount ?? 0) > 0 || (finCount ?? 0) > 0) {
+      throw new Error('No se puede eliminar el lote porque tiene consumos de stock o transacciones financieras confirmadas asociadas.');
+    }
+
+    // Soft delete the lot
+    const { error: deleteErr } = await supabaseClient
       .from('stock_lotes_mp')
       .update({ deleted_at: new Date().toISOString() })
-      .eq('legacy_uid', uid);
+      .eq('id', lot.id);
+    if (deleteErr) throw deleteErr;
 
-    if (error) throw error;
+    // Soft delete corresponding pending cashflow movements
+    const { error: finUpdateErr } = await supabaseClient
+      .from('flujo_caja_movimientos')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('stock_lote_mp_id', lot.id)
+      .eq('estado', 'PENDIENTE');
+    if (finUpdateErr) throw finUpdateErr;
   },
 };

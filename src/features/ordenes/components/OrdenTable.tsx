@@ -133,7 +133,7 @@ const OrdenTable: React.FC<OrdenTableProps> = ({ data, onFinalizar, onIniciar, o
                       {orden.estado === EstadoOrden.PENDIENTE ? (
                         <>
                           <TableActionButton label={actionOrderId === orden.id ? "Procesando..." : "Iniciar"} tone="primary" disabled={actionOrderId === orden.id} onClick={() => onIniciar?.(orden)} />
-                          <TableActionButton label={actionOrderId === orden.id ? "Procesando..." : "Anular"} tone="danger" disabled={actionOrderId === orden.id} onClick={() => onEliminar?.(orden)} />
+                          <TableActionButton label={actionOrderId === orden.id ? "Procesando..." : "Eliminar"} tone="danger" disabled={actionOrderId === orden.id} onClick={() => onEliminar?.(orden)} />
                         </>
                       ) : null}
                       {orden.estado === EstadoOrden.EN_PROCESO && onFinalizar ? (

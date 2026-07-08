@@ -30,6 +30,7 @@ export const supabaseProveedorService = {
     const { data, error } = await supabaseClient
       .from('proveedores')
       .select('legacy_uid,nombre_empresa,producto_que_provee,contacto_nombre,telefono,email,direccion,documento,esta_activo')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -41,6 +42,7 @@ export const supabaseProveedorService = {
       .from('proveedores')
       .select('legacy_uid,nombre_empresa,producto_que_provee,contacto_nombre,telefono,email,direccion,documento,esta_activo')
       .eq('legacy_uid', uid)
+      .is('deleted_at', null)
       .maybeSingle<ProveedorRow>();
 
     if (error) throw error;
@@ -93,10 +95,32 @@ export const supabaseProveedorService = {
   },
 
   async delete(uid: string): Promise<boolean> {
+    const { data: prov, error: provErr } = await supabaseClient
+      .from('proveedores')
+      .select('id')
+      .eq('legacy_uid', uid)
+      .maybeSingle<{ id: string }>();
+
+    if (provErr) throw provErr;
+    if (!prov) {
+      throw new Error('Proveedor no encontrado');
+    }
+
+    // Check dependency in stock_lotes_mp
+    const { count: lotCount, error: lotErr } = await supabaseClient
+      .from('stock_lotes_mp')
+      .select('id', { count: 'exact', head: true })
+      .eq('proveedor_id', prov.id);
+    if (lotErr) throw lotErr;
+
+    if ((lotCount ?? 0) > 0) {
+      throw new Error('No se puede eliminar el proveedor porque tiene lotes de materia prima asociados.');
+    }
+
     const { error } = await supabaseClient
       .from('proveedores')
       .update({ deleted_at: new Date().toISOString(), esta_activo: false })
-      .eq('legacy_uid', uid);
+      .eq('id', prov.id);
 
     if (error) throw error;
     return true;

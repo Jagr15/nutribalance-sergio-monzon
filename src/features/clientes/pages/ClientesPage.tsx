@@ -697,6 +697,42 @@ const ClientesPage = () => {
         icon: "error",
         title: "No se pudo actualizar el estado",
         text: error instanceof Error ? error.message : "Revisá la configuración de Supabase o el modo mock.",
+      });
+    }
+  };
+
+  const handleDeleteCliente = async (cliente: Cliente) => {
+    const result = await Swal.fire({
+      title: `¿Eliminar a ${cliente.nombre}?`,
+      text: "Esta acción no se puede deshacer. Se validarán las relaciones del cliente en el sistema.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar",
+      background: "#ffffff",
+      color: "#0f172a",
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#334155",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await clienteService.delete(cliente.uid);
+      await loadClientes();
+      await Swal.fire({
+        icon: "success",
+        title: "Cliente eliminado",
+        text: "El cliente ha sido eliminado correctamente.",
+        background: "#ffffff",
+        color: "#0f172a",
+        confirmButtonColor: "#2563eb",
+      });
+    } catch (error: unknown) {
+      await Swal.fire({
+        icon: "error",
+        title: "No se pudo eliminar",
+        text: error instanceof Error ? error.message : "Revisá la configuración de Supabase o el modo mock.",
         background: "#ffffff",
         color: "#0f172a",
         confirmButtonColor: "#2563eb",
@@ -1177,6 +1213,13 @@ const ClientesPage = () => {
                                 className="block w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50"
                               >
                                 {cliente.estado === EstadoCliente.SUSPENDIDO ? "Reactivar" : "Suspender"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteCliente(cliente)}
+                                className="block w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50/50 font-medium"
+                              >
+                                Eliminar
                               </button>
                             </div>
                           </details>

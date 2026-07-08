@@ -8,10 +8,11 @@ interface Props {
   data: Proveedor[];
   onEdit: (p: Proveedor) => void;
   onToggleActive: (p: Proveedor) => void;
+  onDelete: (p: Proveedor) => void;
   emptyMessage?: string;
 }
 
-const ProveedorTable: React.FC<Props> = ({ data, onEdit, onToggleActive, emptyMessage }) => {
+const ProveedorTable: React.FC<Props> = ({ data, onEdit, onToggleActive, onDelete, emptyMessage }) => {
   return (
     <DataTable minWidthClassName="min-w-[1100px]">
       <TableHeader>
@@ -57,6 +58,7 @@ const ProveedorTable: React.FC<Props> = ({ data, onEdit, onToggleActive, emptyMe
                     tone={p.esta_activo ? 'danger' : 'primary'}
                     onClick={() => onToggleActive(p)}
                   />
+                  <TableActionButton label="Eliminar" tone="danger" onClick={() => onDelete(p)} />
                 </TableActions>
               </TableCell>
             </TableRow>

@@ -102,7 +102,8 @@ export const mockOrdenService = {
       }
     });
 
-    const enrichedOrders = ordersDb.map((order) => ({
+    const activeOrders = ordersDb.filter((o: any) => !o.deletedAt);
+    const enrichedOrders = activeOrders.map((order) => ({
       ...order,
       stock_disponible: stockMap.get(order.id) ?? stockMap.get(order.lote) ?? null,
     }));
@@ -120,7 +121,7 @@ export const mockOrdenService = {
     });
 
     return new Promise((resolve) => {
-      const order = ordersDb.find(o => o.id === id);
+      const order = ordersDb.find(o => o.id === id && !(o as any).deletedAt);
       if (order) {
         const enriched = {
           ...order,
@@ -277,6 +278,12 @@ export const mockOrdenService = {
   },
 
   delete: async (id: string): Promise<boolean> => {
+    const stockPT = await mockStockPTService.getAll();
+    const hasPT = stockPT.some((st) => st.id_orden === id);
+    if (hasPT) {
+      throw new Error('No se puede eliminar la orden porque tiene producción registrada en stock de producto terminado.');
+    }
+
     return new Promise((resolve, reject) => {
       const current = ordersDb.find((o) => o.id === id);
       if (!current) {
@@ -284,7 +291,7 @@ export const mockOrdenService = {
         return;
       }
       if (current.estado === EstadoOrden.FINALIZADO) {
-        reject(new Error('No se puede cancelar una orden finalizada.'));
+        reject(new Error('No se puede eliminar una orden finalizada.'));
         return;
       }
 
@@ -295,7 +302,7 @@ export const mockOrdenService = {
         return;
       }
 
-      ordersDb = ordersDb.filter(o => o.id !== id);
+      ordersDb = ordersDb.map(o => o.id === id ? { ...o, deletedAt: new Date().toISOString() } : o);
       setTimeout(() => resolve(true), 400);
     });
   },

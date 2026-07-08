@@ -6,10 +6,11 @@ interface Props {
   data: Silo[];
   onEdit: (silo: Silo) => void;
   onToggleActive: (silo: Silo) => void;
+  onDelete: (silo: Silo) => void;
   emptyMessage?: string;
 }
 
-const SiloTable: React.FC<Props> = ({ data, onEdit, onToggleActive, emptyMessage }) => {
+const SiloTable: React.FC<Props> = ({ data, onEdit, onToggleActive, onDelete, emptyMessage }) => {
   const formatStockTon = (value?: number) => `${Number(value ?? 0).toFixed(2)} tn`;
 
   return (
@@ -49,6 +50,7 @@ const SiloTable: React.FC<Props> = ({ data, onEdit, onToggleActive, emptyMessage
               <TableActions>
                 <TableActionButton label="Editar" onClick={() => onEdit(silo)} />
                 <TableActionButton label={silo.esta_activo === false ? 'Activar' : 'Desactivar'} tone={silo.esta_activo === false ? 'primary' : 'danger'} onClick={() => onToggleActive(silo)} />
+                <TableActionButton label="Eliminar" tone="danger" onClick={() => onDelete(silo)} />
               </TableActions>
             </TableCell>
           </TableRow>

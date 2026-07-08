@@ -96,8 +96,9 @@ const getClienteFinancialSummary = async (clienteId: string) => {
 
 export const mockClienteService = {
   getAll: async (): Promise<Cliente[]> => {
+    const activeClientes = mockClientes.filter((c: any) => !c.deletedAt);
     const rows = await Promise.all(
-      mockClientes.map(async (cliente) => {
+      activeClientes.map(async (cliente) => {
         const summary = await getClienteFinancialSummary(cliente.uid);
         return {
           ...cliente,
@@ -212,8 +213,29 @@ export const mockClienteService = {
   },
 
   delete: async (uid: string): Promise<boolean> => {
+    const allExpediciones = await mockOrdenesExpedicionService.getAll();
+    const hasExpediciones = allExpediciones.some(o => o.cliente_id === uid);
+
+    const mockMovs = contabilidadOperativaService.getMovimientosMock();
+    const hasPayments = mockMovs.some(
+      (m) =>
+        (getMetadataString(m.metadata, 'cliente_legacy_uid') === uid || getMetadataString(m.metadata, 'cliente_id') === uid)
+    );
+
+    let hasCheques = false;
+    try {
+      const cheques = await tesoreriaService.getCheques();
+      hasCheques = cheques.some((c: any) => c.cliente_id === uid || c.clienteId === uid);
+    } catch (e) {
+      console.warn('Could not check cheques in mock delete', e);
+    }
+
+    if (hasExpediciones || hasPayments || hasCheques) {
+      throw new Error('No se puede eliminar el cliente porque tiene comprobantes, órdenes de expedición o cheques asociados.');
+    }
+
     mockClientes = mockClientes.map((cliente) =>
-      cliente.uid === uid ? { ...cliente, estaActivo: false, estado: 'Suspendido' } : cliente
+      cliente.uid === uid ? { ...cliente, estaActivo: false, estado: 'Suspendido', deletedAt: new Date().toISOString() } : cliente
     );
     return mockApiCall(true);
   },

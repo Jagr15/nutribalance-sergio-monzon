@@ -115,10 +115,47 @@ export const supabaseInsumoService = {
   },
 
   async deleteInsumo(uid: string): Promise<void> {
+    const { data: insumo, error: insumoErr } = await supabaseClient
+      .from('insumos')
+      .select('id')
+      .eq('legacy_uid', uid)
+      .maybeSingle<{ id: string }>();
+
+    if (insumoErr) throw insumoErr;
+    if (!insumo) {
+      throw new Error('Insumo no encontrado');
+    }
+
+    // Check dependency in stock_lotes_mp (only active lots)
+    const { count: lotCount, error: lotErr } = await supabaseClient
+      .from('stock_lotes_mp')
+      .select('id', { count: 'exact', head: true })
+      .eq('insumo_id', insumo.id)
+      .is('deleted_at', null);
+    if (lotErr) throw lotErr;
+
+    // Check dependency in formula_ingredientes
+    const { count: ingredientCount, error: ingredientErr } = await supabaseClient
+      .from('formula_ingredientes')
+      .select('id', { count: 'exact', head: true })
+      .eq('insumo_id', insumo.id);
+    if (ingredientErr) throw ingredientErr;
+
+    // Check dependency in orden_consumo_lotes
+    const { count: consumoCount, error: consumoErr } = await supabaseClient
+      .from('orden_consumo_lotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('insumo_id', insumo.id);
+    if (consumoErr) throw consumoErr;
+
+    if ((lotCount ?? 0) > 0 || (ingredientCount ?? 0) > 0 || (consumoCount ?? 0) > 0) {
+      throw new Error('No se puede eliminar el insumo porque está siendo utilizado en recetas, lotes de stock u órdenes de producción.');
+    }
+
     const { error } = await supabaseClient
       .from('insumos')
       .update({ deleted_at: new Date().toISOString(), esta_activo: false })
-      .eq('legacy_uid', uid);
+      .eq('id', insumo.id);
 
     if (error) throw error;
   },

@@ -392,7 +392,72 @@ export const contabilidadOperativaService = {
     if (error) throw error;
   },
 
+  async deleteMovimiento(legacyUid: string): Promise<void> {
+    if (runtimeConfig.mode === 'mock') {
+      const rows = readMock();
+      const current = rows.find(r => r.legacy_uid === legacyUid);
+      if (!current) return;
+      if (current.estado === 'CONFIRMADO') {
+        throw new Error('No se puede eliminar un movimiento confirmado.');
+      }
+      
+      const updated = rows.map((row) => {
+        if (row.legacy_uid === legacyUid) {
+          return { ...row, deletedAt: new Date().toISOString() };
+        }
+        return row;
+      });
+      writeMock(updated);
+      return;
+    }
+
+    const { data: current, error: getErr } = await supabaseClient
+      .from('flujo_caja_movimientos')
+      .select('estado, stock_lote_mp_id, stock_pt_id, comprobante_id')
+      .eq('legacy_uid', legacyUid)
+      .maybeSingle();
+
+    if (getErr) throw getErr;
+    if (!current) throw new Error('Movimiento no encontrado');
+
+    if (current.estado === 'CONFIRMADO') {
+      throw new Error('No se puede eliminar un movimiento confirmado.');
+    }
+
+    // Check if linked to non-deleted critical operations
+    if (current.stock_lote_mp_id) {
+      const { count: lotCount, error: lotErr } = await supabaseClient
+        .from('stock_lotes_mp')
+        .select('id', { count: 'exact', head: true })
+        .eq('id', current.stock_lote_mp_id)
+        .is('deleted_at', null);
+      if (lotErr) throw lotErr;
+      if ((lotCount ?? 0) > 0) {
+        throw new Error('No se puede eliminar este movimiento porque está vinculado a una transacción operativa de stock o producción activa.');
+      }
+    }
+
+    if (current.stock_pt_id) {
+      const { count: ptCount, error: ptErr } = await supabaseClient
+        .from('stock_pt')
+        .select('id', { count: 'exact', head: true })
+        .eq('id', current.stock_pt_id)
+        .is('deleted_at', null);
+      if (ptErr) throw ptErr;
+      if ((ptCount ?? 0) > 0) {
+        throw new Error('No se puede eliminar este movimiento porque está vinculado a una transacción operativa de stock o producción activa.');
+      }
+    }
+
+    const { error } = await supabaseClient
+      .from('flujo_caja_movimientos')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('legacy_uid', legacyUid);
+
+    if (error) throw error;
+  },
+
   getMovimientosMock(): Array<MovimientoContablePayload & { id?: string }> {
-    return readMock();
+    return readMock().filter((m: any) => !m.deletedAt && !m.deleted_at);
   },
 };

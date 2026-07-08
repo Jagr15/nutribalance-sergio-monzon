@@ -53,13 +53,13 @@ const FormulaPage: React.FC = () => {
 
   const handleDelete = async (uid: string) => {
     const result = await MySwal.fire({
-      title: '¿Desactivar fórmula?',
-      text: "La fórmula ya no podrá usarse en nuevas órdenes de producción.",
+      title: '¿Eliminar fórmula?',
+      text: "Esta acción no se puede deshacer. Se validarán las relaciones con las órdenes de producción.",
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#3b82f6',
-      cancelButtonColor: '#ef4444',
-      confirmButtonText: 'Sí, desactivar',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#334155',
+      confirmButtonText: 'Sí, eliminar',
       cancelButtonText: 'Cancelar',
       background: '#ffffff',
       color: '#0f172a'
@@ -70,8 +70,8 @@ const FormulaPage: React.FC = () => {
         const success = await remove(uid);
         if (success) {
           MySwal.fire({
-            title: 'Desactivada',
-            text: 'La fórmula ha sido marcada como inactiva.',
+            title: 'Eliminada',
+            text: 'La fórmula ha sido eliminada correctamente.',
             icon: 'success',
             background: '#ffffff',
             color: '#0f172a'
@@ -79,8 +79,8 @@ const FormulaPage: React.FC = () => {
         }
       } catch (error: unknown) {
         MySwal.fire({
-          title: 'Error',
-          text: error instanceof Error ? error.message : 'No se pudo desactivar la fórmula.',
+          title: 'No se pudo eliminar',
+          text: error instanceof Error ? error.message : 'No se pudo eliminar la fórmula.',
           icon: 'error',
           background: '#ffffff',
           color: '#0f172a'

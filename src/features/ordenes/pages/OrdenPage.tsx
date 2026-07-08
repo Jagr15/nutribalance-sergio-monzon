@@ -80,7 +80,7 @@ const OrdenPage: React.FC = () => {
   const onDeleteOrder = async (orden: OrdenProduccion) => {
     const result = await Swal.fire({
       title: '¿Eliminar orden?',
-      text: `Se eliminará ${orden.lote}. Esta acción no se puede revertir.`,
+      text: `Se eliminará ${orden.lote}. Esta acción no se puede revertir. Se validará que no tenga stock registrado.`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Sí, eliminar',
@@ -93,6 +93,23 @@ const OrdenPage: React.FC = () => {
     setActionOrderId(orden.id);
     try {
       await handleDeleteOrder(orden.id);
+      await Swal.fire({
+        icon: 'success',
+        title: 'Orden eliminada',
+        background: '#ffffff',
+        color: '#0f172a',
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err: any) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo eliminar',
+        text: err instanceof Error ? err.message : 'Error inesperado al eliminar la orden.',
+        background: '#ffffff',
+        color: '#0f172a',
+        confirmButtonColor: '#2563eb',
+      });
     } finally {
       setActionOrderId(null);
     }

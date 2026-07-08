@@ -43,13 +43,13 @@ const InsumoPage: React.FC = () => {
 
   const handleDelete = async (uid: string) => {
     const result = await MySwal.fire({
-      title: '¿Desactivar insumo?',
-      text: "Se marcará como inactivo en el catálogo.",
+      title: '¿Eliminar insumo?',
+      text: "Esta acción no se puede deshacer. Se validarán las relaciones del insumo en el sistema.",
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#2563eb',
+      confirmButtonColor: '#ef4444',
       cancelButtonColor: '#1f2937',
-      confirmButtonText: 'SÍ, DESACTIVAR',
+      confirmButtonText: 'SÍ, ELIMINAR',
       cancelButtonText: 'CANCELAR',
       background: '#ffffff',
       color: '#0f172a',
@@ -63,10 +63,10 @@ const InsumoPage: React.FC = () => {
     });
   
     if (result.isConfirmed) {
-      const success = await remove(uid);
-      if (success) {
+      try {
+        await remove(uid);
         MySwal.fire({
-          title: 'Desactivado',
+          title: 'Eliminado',
           icon: 'success',
           background: '#ffffff',
           color: '#0f172a',
@@ -74,10 +74,10 @@ const InsumoPage: React.FC = () => {
           showConfirmButton: false,
           customClass: { popup: 'border border-slate-200 rounded-2xl' }
         });
-      } else {
+      } catch (error: any) {
         MySwal.fire({
-          title: 'No se pudo desactivar',
-          text: 'Ocurrió un error al desactivar el insumo.',
+          title: 'No se pudo eliminar',
+          text: error instanceof Error ? error.message : 'Ocurrió un error al eliminar el insumo.',
           icon: 'error',
           background: '#ffffff',
           color: '#0f172a',

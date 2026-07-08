@@ -168,10 +168,45 @@ export const supabaseSiloService = {
   },
 
   async delete(uid: string): Promise<boolean> {
+    const { data: silo, error: siloErr } = await supabaseClient
+      .from('silos')
+      .select('id, nombre')
+      .eq('legacy_uid', uid)
+      .maybeSingle<{ id: string, nombre: string }>();
+
+    if (siloErr) throw siloErr;
+    if (!silo) throw new Error('Silo no encontrado');
+
+    // Check if silo name is used in active raw material stock lots
+    const { count: lotCount, error: lotErr } = await supabaseClient
+      .from('stock_lotes_mp')
+      .select('id', { count: 'exact', head: true })
+      .eq('ubicacion', silo.nombre)
+      .is('deleted_at', null);
+    if (lotErr) throw lotErr;
+
+    // Check if silo is used in production orders
+    const { count: orderCount, error: orderErr } = await supabaseClient
+      .from('ordenes_produccion')
+      .select('id', { count: 'exact', head: true })
+      .eq('silo_id', silo.id);
+    if (orderErr) throw orderErr;
+
+    // Check if silo is used in finished product stock
+    const { count: ptCount, error: ptErr } = await supabaseClient
+      .from('stock_pt')
+      .select('id', { count: 'exact', head: true })
+      .eq('silo_id', silo.id);
+    if (ptErr) throw ptErr;
+
+    if ((lotCount ?? 0) > 0 || (orderCount ?? 0) > 0 || (ptCount ?? 0) > 0) {
+      throw new Error('No se puede eliminar el silo porque está asociado a lotes de stock u órdenes de producción.');
+    }
+
     const { error } = await supabaseClient
       .from('silos')
       .update({ deleted_at: new Date().toISOString(), esta_activo: false })
-      .eq('legacy_uid', uid);
+      .eq('id', silo.id);
 
     if (error) throw error;
     return true;

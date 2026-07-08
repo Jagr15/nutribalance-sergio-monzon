@@ -72,7 +72,7 @@ export const useFormulas = () => {
       const success = await formulaService.delete(uid);
       if (success) {
         setFormulas((prev) =>
-          prev.map((f) => (f.uid === uid ? { ...f, esta_activa: false } : f))
+          prev.filter((f) => f.uid !== uid)
         );
       }
       return success;

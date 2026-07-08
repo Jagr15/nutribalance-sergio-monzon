@@ -72,11 +72,17 @@ export const useProveedores = () => {
   };
 
   const remove = async (uid: string) => {
+    setIsLoading(true);
+    setLoadError(null);
     try {
-      await toggleActive(uid, false);
+      await proveedorService.delete(uid);
+      setProveedores(prev => prev.filter(p => p.uid !== uid));
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      console.error("Error al eliminar proveedor:", error);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 

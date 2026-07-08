@@ -54,7 +54,7 @@ const InsumoTable: React.FC<Props> = ({ data, onEdit, onDelete, emptyMessage }) 
             <TableCell className="text-right">
               <TableActions>
                 <TableActionButton label="Editar" tone="secondary" onClick={() => onEdit(insumo)} />
-                <TableActionButton label="Desactivar" tone="danger" onClick={() => onDelete(insumo.uid)} />
+                <TableActionButton label="Eliminar" tone="danger" onClick={() => onDelete(insumo.uid)} />
               </TableActions>
             </TableCell>
           </TableRow>

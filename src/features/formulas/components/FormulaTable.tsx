@@ -145,7 +145,7 @@ const FormulaTable: React.FC<Props> = ({ data = [], onEdit, onDelete, enableSear
                 <TableCell className="text-right">
                   <TableActions>
                     {canEdit ? <TableActionButton label="Editar" tone="secondary" onClick={() => onEdit(formula)} /> : null}
-                    {canDelete ? <TableActionButton label="Desactivar" tone="danger" onClick={() => onDelete(formula.uid)} /> : null}
+                    {canDelete ? <TableActionButton label="Eliminar" tone="danger" onClick={() => onDelete(formula.uid)} /> : null}
                   </TableActions>
                 </TableCell>
               </TableRow>

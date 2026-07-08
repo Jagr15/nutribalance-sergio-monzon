@@ -75,8 +75,7 @@ export const useInsumos = () => {
       return true;
     } catch (error) {
       console.error("Error al eliminar:", error);
-      setLoadError("No se pudo desactivar el insumo.");
-      return false;
+      throw error;
     }
   };
 

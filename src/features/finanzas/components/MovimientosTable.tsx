@@ -5,6 +5,7 @@ import { formatDateDDMMYYYY } from '../../../shared/utils/formatters';
 import { finanzasService } from '../services/finanzasService';
 import { parseNumericInput } from '../../../shared/utils/formatters';
 import { FiX, FiEdit } from 'react-icons/fi';
+import Swal from 'sweetalert2';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
@@ -139,6 +140,45 @@ export const MovimientosTable = ({
     }
   };
 
+  const handleDelete = async (uid: string, desc: string) => {
+    const result = await Swal.fire({
+      title: '¿Eliminar movimiento?',
+      text: `Se eliminará "${desc}". Esta acción no se puede deshacer. Se validarán las relaciones del movimiento.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      background: '#ffffff',
+      color: '#0f172a',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#334155',
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      await finanzasService.deleteMovimiento(uid);
+      await Swal.fire({
+        icon: 'success',
+        title: 'Movimiento eliminado',
+        background: '#ffffff',
+        color: '#0f172a',
+        timer: 1500,
+        showConfirmButton: false,
+      });
+      if (onRefresh) await onRefresh();
+    } catch (err: any) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo eliminar',
+        text: err instanceof Error ? err.message : 'Error inesperado al eliminar el movimiento.',
+        background: '#ffffff',
+        color: '#0f172a',
+        confirmButtonColor: '#2563eb',
+      });
+    }
+  };
+
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMov) return;
@@ -266,6 +306,13 @@ export const MovimientosTable = ({
                           >
                             <FiEdit size={12} />
                             Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(m.uid, m.descripcion)}
+                            className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold py-1 px-2.5 rounded-lg transition inline-flex items-center gap-1"
+                          >
+                            Eliminar
                           </button>
                         </>
                       ) : (

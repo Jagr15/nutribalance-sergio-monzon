@@ -1002,4 +1002,12 @@ export const finanzasService = {
       window.dispatchEvent(new CustomEvent('finanzas-updated'));
     }
   },
+
+  async deleteMovimiento(uid: string): Promise<void> {
+    assertPermission('finanzas', 'register_financial_movement');
+    await contabilidadOperativaService.deleteMovimiento(uid);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('finanzas-updated'));
+    }
+  },
 };

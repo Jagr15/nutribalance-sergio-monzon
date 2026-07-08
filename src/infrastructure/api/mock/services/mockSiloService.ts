@@ -4,6 +4,7 @@ import initialData from '../data/silo.json';
 import { getMockStockSnapshot } from './mockMateriaPrimaService';
 import { getMockStockPTRows } from './mockStockPTService';
 import { mockInsumoService } from './mockInsumoService';
+import { mockOrdenService } from './mockOrdenService';
 
 type StockMateriaPrimaRow = {
   cantidad_actual?: number;
@@ -81,10 +82,12 @@ export const mockSiloService = {
    */
   getAll: async (): Promise<Silo[]> => {
     const { mpByLocation, ptBySilo } = await buildMockStockBySilo();
-    const updated = silosDb.map(s => ({
-      ...s,
-      stock_actual_ton: getMockSiloStockTon(s, mpByLocation, ptBySilo)
-    }));
+    const updated = silosDb
+      .filter((s: any) => !s.deletedAt)
+      .map(s => ({
+        ...s,
+        stock_actual_ton: getMockSiloStockTon(s, mpByLocation, ptBySilo)
+      }));
     return new Promise((resolve) => {
       setTimeout(() => resolve(updated), 500);
     });
@@ -96,7 +99,7 @@ export const mockSiloService = {
   getById: async (uid: string): Promise<Silo | undefined> => {
     const { mpByLocation, ptBySilo } = await buildMockStockBySilo();
     return new Promise((resolve) => {
-      const silo = silosDb.find(s => s.uid === uid);
+      const silo = silosDb.find(s => s.uid === uid && !(s as any).deletedAt);
       if (!silo) return setTimeout(() => resolve(undefined), 300);
       const updated = {
         ...silo,
@@ -146,9 +149,35 @@ export const mockSiloService = {
    * Elimina un silo del sistema
    */
   delete: async (uid: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      silosDb = silosDb.map((s) => (s.uid === uid ? { ...s, esta_activo: false } : s));
-      setTimeout(() => resolve(true), 500);
+    return new Promise((resolve, reject) => {
+      const silo = silosDb.find(s => s.uid === uid);
+      if (!silo) {
+        setTimeout(() => resolve(true), 100);
+        return;
+      }
+
+      const stockMateriaPrima = getMockStockSnapshot().stockDB as StockMateriaPrimaRow[];
+      const hasStock = stockMateriaPrima.some(
+        l => l.ubicacion?.trim().toLowerCase() === silo.nombre.trim().toLowerCase() && !(l as any).deletedAt
+      );
+
+      const stockPT = getMockStockPTRows() as StockPTRow[];
+      const hasPT = stockPT.some(
+        row => (row.id_silo === uid || row.nombre_silo?.trim().toLowerCase() === silo.nombre.trim().toLowerCase())
+      );
+
+      mockOrdenService.getAll().then((orders) => {
+        const hasOrders = orders.some(o => o.id_silo === uid || o.destino_silo?.trim().toLowerCase() === silo.nombre.trim().toLowerCase());
+        if (hasStock || hasPT || hasOrders) {
+          reject(new Error('No se puede eliminar el silo porque está asociado a lotes de stock u órdenes de producción.'));
+          return;
+        }
+
+        silosDb = silosDb.map((s) => (s.uid === uid ? { ...s, esta_activo: false, deletedAt: new Date().toISOString() } : s));
+        setTimeout(() => resolve(true), 500);
+      }).catch((e) => {
+        reject(e);
+      });
     });
   },
 

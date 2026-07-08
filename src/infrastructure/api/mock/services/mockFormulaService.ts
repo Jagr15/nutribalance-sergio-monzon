@@ -7,6 +7,7 @@ import { mockApiCall } from '../mockClient';
 import { calculateFormulaNutrition } from '../../../../features/formulas/utils/nutritionCalculator';
 import { calculateFormulaCost } from '../../../../features/formulas/utils/costCalculator';
 import type { Insumo, StockMateriaPrima } from '../../../../features/insumos/types/insumo';
+import { mockOrdenService } from './mockOrdenService';
 
 type FormulaRaw = Omit<Formula, 'ultima_edicion'> & { ultima_edicion: string };
 type FormulaEnriched = Formula & {
@@ -60,12 +61,12 @@ let mockFormulas: Formula[] = (formulasData as unknown as FormulaRaw[]).map((f) 
 export const mockFormulaService = {
   // Obtener todas las recetas
   findAll: async (): Promise<Formula[]> => {
-    return mockApiCall([...mockFormulas]);
+    return mockApiCall(mockFormulas.filter(f => !(f as any).deletedAt));
   },
 
   // Obtener una receta específica
   getById: async (uid: string): Promise<Formula | undefined> => {
-    const formula = mockFormulas.find((f) => f.uid === uid);
+    const formula = mockFormulas.find((f) => f.uid === uid && !(f as any).deletedAt);
     return mockApiCall(formula);
   },
 
@@ -104,8 +105,14 @@ export const mockFormulaService = {
 
   // Borrado lógico (según el requerimiento: desactivar en lugar de eliminar físicamente)
   delete: async (uid: string): Promise<boolean> => {
+    const orders = await mockOrdenService.getAll();
+    const isFormulaUsed = orders.some(o => o.id_formula === uid);
+    if (isFormulaUsed) {
+      throw new Error('No se puede eliminar la fórmula porque está asociada a órdenes de producción existentes.');
+    }
+
     mockFormulas = mockFormulas.map((f) =>
-      f.uid === uid ? { ...f, esta_activa: false, ultima_edicion: new Date() } : f
+      f.uid === uid ? { ...f, esta_activa: false, ultima_edicion: new Date(), deletedAt: new Date().toISOString() } : f
     );
     return mockApiCall(true);
   }

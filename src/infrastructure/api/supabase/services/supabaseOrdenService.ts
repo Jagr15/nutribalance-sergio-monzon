@@ -635,13 +635,38 @@ export const supabaseOrdenService = {
   async delete(id: string): Promise<boolean> {
     const current = await getOrdenByLegacy(id);
     if (current.estado === 'FINALIZADO') {
-      throw new Error('No se puede cancelar una orden finalizada.');
+      throw new Error('No se puede eliminar una orden finalizada.');
+    }
+
+    // Check if there is finished goods stock (stock_pt) referencing this order
+    const { count: ptCount, error: ptErr } = await supabaseClient
+      .from('stock_pt')
+      .select('id', { count: 'exact', head: true })
+      .eq('orden_id', current.id);
+    if (ptErr) throw ptErr;
+
+    // Check if there are consumed lots (orden_consumo_lotes) referencing this order
+    const { count: consumoCount, error: consumoErr } = await supabaseClient
+      .from('orden_consumo_lotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('orden_id', current.id);
+    if (consumoErr) throw consumoErr;
+
+    if ((ptCount ?? 0) > 0 || (consumoCount ?? 0) > 0) {
+      throw new Error('No se puede eliminar la orden porque tiene consumo de stock o producción registrada.');
     }
 
     const { error: releaseError } = await supabaseClient.rpc('anular_orden_produccion_con_liberacion', {
       p_orden_id: current.id,
     });
     if (releaseError) throw releaseError;
+
+    const { error } = await supabaseClient
+      .from('ordenes_produccion')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', current.id);
+    if (error) throw error;
+
     return true;
   },
 };

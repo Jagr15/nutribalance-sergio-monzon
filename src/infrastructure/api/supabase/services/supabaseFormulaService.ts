@@ -413,13 +413,33 @@ export const supabaseFormulaService = {
   },
 
   async delete(uid: string): Promise<boolean> {
+    const { data: formula, error: formErr } = await supabaseClient
+      .from('formulas')
+      .select('id')
+      .eq('legacy_uid', uid)
+      .maybeSingle<{ id: string }>();
+
+    if (formErr) throw formErr;
+    if (!formula) throw new Error('Fórmula no encontrada');
+
+    // Check if formula is used in any production orders
+    const { count: orderCount, error: orderErr } = await supabaseClient
+      .from('ordenes_produccion')
+      .select('id', { count: 'exact', head: true })
+      .eq('formula_id', formula.id);
+    if (orderErr) throw orderErr;
+
+    if ((orderCount ?? 0) > 0) {
+      throw new Error('No se puede eliminar la fórmula porque está asociada a órdenes de producción existentes.');
+    }
+
     const { error } = await supabaseClient
       .from('formulas')
       .update({
         esta_activa: false,
         deleted_at: new Date().toISOString(),
       })
-      .eq('legacy_uid', uid);
+      .eq('id', formula.id);
 
     if (error) throw error;
     return true;
